@@ -10,6 +10,8 @@ import urllib.parse
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 
+from reader_shell_contract import validate_reader_page_payload
+
 BASE_URL = os.environ.get("MIKU_BLACKBOX_URL", "http://127.0.0.1:3000").rstrip("/")
 TIMEOUT = float(os.environ.get("MIKU_UX_SMOKE_TIMEOUT_SECONDS", "10"))
 
@@ -60,6 +62,12 @@ def main() -> int:
         expect(status, {200}, encoded_page(page))
         if "text/html" not in content_type or '<link rel="icon"' not in body:
             raise AssertionError(f"{page}: rendered page is missing HTML/favicon contract")
+
+    status, content_type, body = get("/api/v1/pages/Index")
+    expect(status, {200}, "/api/v1/pages/Index")
+    if "application/json" not in content_type:
+        raise AssertionError("reader page API must return JSON")
+    validate_reader_page_payload(json.loads(body))
 
     expect(get("/p/__miku_missing_smoke_page__")[0], {200}, "/p/missing")
     expect(get("/p/%2E%2E/%2E%2E/Cargo.toml")[0], {400, 404}, "/p/traversal")

@@ -19,8 +19,22 @@ def assert_visible(page: Page, selector: str, label: str) -> None:
 
 
 def check_shell(page: Page) -> None:
+    editor_imports: list[str] = []
+
+    def record_reader_import(request) -> None:
+        if "esm.sh/" in request.url and request.resource_type == "script":
+            editor_imports.append(request.url)
+
+    page.on("request", record_reader_import)
     page.goto(f"{BASE_URL}{PAGE_PATH}", wait_until="domcontentloaded", timeout=10_000)
     page.wait_for_function("window.Alpine && document.body._x_dataStack", timeout=10_000)
+    page.wait_for_timeout(250)
+    page.remove_listener("request", record_reader_import)
+    if editor_imports:
+        raise AssertionError(
+            "reader mode must not load external editor modules: "
+            + ", ".join(editor_imports[:3])
+        )
     page.locator("link[rel='icon']").wait_for(state="attached")
     assert_visible(page, ".mk-topbar", "shell topbar")
     assert_visible(page, ".mk-sidebar", "shell sidebar")
@@ -104,13 +118,24 @@ def check_zen_mode(page: Page) -> None:
 
 def check_navigation(page: Page) -> None:
     tree_link = page.locator(".tree-link[href='/p/Features']").first
-    if tree_link.get_attribute("hx-boost") != "false":
-        raise AssertionError("tree page links must use full navigation")
+    if tree_link.get_attribute("data-reader-nav") != "true":
+        raise AssertionError("tree page links must use persistent reader navigation")
+    document_requests: list[str] = []
+
+    def record_document(request) -> None:
+        if request.resource_type == "document":
+            document_requests.append(request.url)
+
+    page.on("request", record_document)
     tree_link.click()
     page.wait_for_url("**/p/Features")
+    page.wait_for_timeout(250)
+    page.remove_listener("request", record_document)
+    if document_requests:
+        raise AssertionError(f"reader navigation reloaded the document: {document_requests}")
     if "Features" not in page.locator(".mk-h1").inner_text():
         raise AssertionError("page navigation did not render Features")
-    page.go_back(wait_until="domcontentloaded")
+    page.go_back()
     page.wait_for_url(f"**{PAGE_PATH}")
 
 
