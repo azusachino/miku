@@ -473,9 +473,11 @@ a { color: var(--teal); }
 .mk-prose h2 { margin: 34px 0 14px; font-family: var(--font-display); font-weight: 700; font-size: 27px; letter-spacing: 0; }
 .mk-prose h3 { margin: 26px 0 10px; font-family: var(--font-display); font-weight: 700; font-size: 21px; }
 .mk-prose p  { margin: 0 0 16px; }
-.mk-prose ul { margin: 0 0 26px; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 12px; }
-.mk-prose ul li { display: flex; gap: 12px; }
-.mk-prose ul li::before { content: ''; flex-shrink: 0; margin-top: 7px; width: 7px; height: 7px; border-radius: 2px; background: var(--grad); }
+.mk-prose ul { margin: 0 0 26px; padding-left: 1.35rem; list-style: none; }
+.mk-prose ul li { position: relative; margin: 0 0 .7rem; }
+.mk-prose ul li::before { content: ''; position: absolute; left: -1.2rem; top: .72em; width: 6px; height: 6px; border-radius: 2px; background: var(--teal); }
+.mk-prose ol { margin: 0 0 26px; padding-left: 1.5rem; }
+.mk-prose ol li { margin: 0 0 .7rem; padding-left: .2rem; }
 .mk-prose a { color: var(--teal); font-weight: 800; text-decoration: none; border-bottom: 2px solid var(--tealsoft); }
 .mk-prose code { font-family: var(--font-mono); font-size: 13px; padding: 2px 6px; border-radius: 6px; background: var(--code); color: var(--code-text); }
 .mk-prose pre  { margin: 0 0 26px; padding: 18px; border-radius: 14px; background: var(--code); border: 1px solid var(--border); overflow-x: auto; }
@@ -974,15 +976,17 @@ pre.mermaid svg {
 
 .mk-brand { width: 220px; }
 .mk-sidebar { background: color-mix(in srgb, var(--sidebar) 92%, var(--bg)); }
-.mk-main { background: var(--bg2); }
+.mk-main { background: var(--bg); }
 
 .mk-read {
-  grid-template-columns: minmax(0, var(--read-w)) 8px var(--rail-w);
+  grid-template-columns: minmax(0, 72ch) 24px minmax(220px, 260px);
   justify-content: center;
-  gap: clamp(18px, 3vw, 34px);
-  padding: 34px var(--space-page) 100px;
+  gap: 0;
+  width: min(100%, 1180px);
+  margin-inline: auto;
+  padding: 48px var(--space-page) 120px;
 }
-.mk-article { width: 100%; max-width: var(--read-w); }
+.mk-article { width: 100%; max-width: 72ch; }
 .mk-prose { font-size: 16px; line-height: 1.72; }
 .mk-prose p { margin: 0 0 var(--space-block); }
 .mk-prose h2 { margin-top: 2.4em; margin-bottom: .65em; line-height: 1.25; }
@@ -1004,7 +1008,7 @@ pre.mermaid svg {
 .mk-card { box-shadow: 0 8px 24px color-mix(in srgb, var(--bg) 70%, transparent); }
 
 @media (max-width: 1100px) {
-  .mk-read { grid-template-columns: minmax(0, var(--read-w)); }
+  .mk-read { grid-template-columns: minmax(0, 72ch); width: 100%; }
   .mk-rail, .mk-rail-resizer { display: none; }
 }
 
