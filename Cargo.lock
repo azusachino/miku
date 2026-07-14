@@ -1901,7 +1901,7 @@ dependencies = [
 
 [[package]]
 name = "miku-app"
-version = "0.1.0"
+version = "0.0.2"
 dependencies = [
  "async-trait",
  "miku-cache-valkey",
@@ -1917,7 +1917,7 @@ dependencies = [
 
 [[package]]
 name = "miku-cache-valkey"
-version = "0.1.0"
+version = "0.0.2"
 dependencies = [
  "redis",
  "serde",
@@ -1926,7 +1926,7 @@ dependencies = [
 
 [[package]]
 name = "miku-domain"
-version = "0.1.0"
+version = "0.0.2"
 dependencies = [
  "async-trait",
  "serde",
@@ -1936,7 +1936,7 @@ dependencies = [
 
 [[package]]
 name = "miku-index-memory"
-version = "0.1.0"
+version = "0.0.2"
 dependencies = [
  "async-trait",
  "miku-domain",
@@ -1947,7 +1947,7 @@ dependencies = [
 
 [[package]]
 name = "miku-index-postgres"
-version = "0.1.0"
+version = "0.0.2"
 dependencies = [
  "async-trait",
  "miku-domain",
@@ -1958,7 +1958,7 @@ dependencies = [
 
 [[package]]
 name = "miku-index-turso"
-version = "0.1.0"
+version = "0.0.2"
 dependencies = [
  "async-trait",
  "miku-domain",
@@ -1970,7 +1970,7 @@ dependencies = [
 
 [[package]]
 name = "miku-indexer"
-version = "0.1.0"
+version = "0.0.2"
 dependencies = [
  "miku-domain",
  "miku-markdown",
@@ -1981,7 +1981,7 @@ dependencies = [
 
 [[package]]
 name = "miku-markdown"
-version = "0.1.0"
+version = "0.0.2"
 dependencies = [
  "comrak",
  "lazy_static",
