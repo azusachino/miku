@@ -42,7 +42,7 @@ For `GET /p/Index`:
 2. The handler reads the Markdown source from `miku_docs/` and renders the page directly; it does not wait for `index_ready`.
 3. Relationship data is read through the backend-neutral `IndexApi`.
 4. Unlinked-mention candidates use backend search, then the handler confirms the match against the source Markdown before rendering it.
-5. If the indexer is currently writing, Turso durable access waits briefly on the backend mutex rather than returning `concurrent use forbidden`.
+5. If the indexer is currently writing, Turso search falls back to the in-process projection rather than waiting on the backend mutex or returning `concurrent use forbidden`.
 6. The response is returned independently of whether the background reconcile has finished. New index events are delivered to browsers through SSE at `/events`.
 
 The important distinction is that the page source is filesystem-owned, while search, backlinks, tags, and navigation metadata are projection-backed. A partially rebuilt projection can be temporarily

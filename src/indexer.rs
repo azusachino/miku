@@ -16,7 +16,8 @@ use tokio::task::JoinHandle;
 use tracing::error;
 
 const RECONCILE_SENTINEL: &str = "__reconcile__";
-const RECONCILE_BATCH_SIZE: usize = 128;
+const BULK_INDEX_REFRESH: &str = "__miku_bulk_index_refresh__";
+const DEFAULT_RECONCILE_BATCH_SIZE: usize = 512;
 
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
 pub enum WatcherEvent {
@@ -76,7 +77,8 @@ async fn reconcile_store(
         .map(|page| (page.path.clone(), page))
         .collect::<HashMap<String, PageSummary>>();
     let mut seen = HashSet::with_capacity(files.len());
-    let mut pages = Vec::with_capacity(RECONCILE_BATCH_SIZE);
+    let batch_size = IndexerQueue::reconcile_batch_size();
+    let mut pages = Vec::with_capacity(batch_size);
     for file in files {
         let relative = file
             .strip_prefix(content_root)
@@ -97,16 +99,20 @@ async fn reconcile_store(
             continue;
         }
         pages.push(build_page_index(&relative.to_string_lossy(), &bytes, mtime));
-        if pages.len() == RECONCILE_BATCH_SIZE {
+        if pages.len() == batch_size {
             flush_reconcile_batch(writer, events, std::mem::take(&mut pages)).await?;
         }
     }
     if !pages.is_empty() {
         flush_reconcile_batch(writer, events, pages).await?;
     }
+    let mut deleted = false;
     for path in existing.keys().filter(|path| !seen.contains(*path)) {
         writer.delete_page(path).await?;
-        let _ = events.send(path.strip_suffix(".md").unwrap_or(path).to_string());
+        deleted = true;
+    }
+    if deleted {
+        let _ = events.send(BULK_INDEX_REFRESH.to_string());
     }
     Ok(())
 }
@@ -116,11 +122,8 @@ async fn flush_reconcile_batch(
     events: &broadcast::Sender<String>,
     pages: Vec<PageIndex>,
 ) -> miku_domain::StoreResult<()> {
-    for event in writer.replace_pages(pages).await? {
-        if let miku_domain::IndexEvent::PageIndexed { path } = event {
-            let _ = events.send(path.strip_suffix(".md").unwrap_or(&path).to_string());
-        }
-    }
+    writer.replace_pages(pages).await?;
+    let _ = events.send(BULK_INDEX_REFRESH.to_string());
     Ok(())
 }
 
@@ -268,6 +271,14 @@ impl IndexerQueue {
             .map_or_else(|| Duration::from_secs(30), Duration::from_secs)
     }
 
+    fn reconcile_batch_size() -> usize {
+        env::var("MIKU_RECONCILE_BATCH_SIZE")
+            .ok()
+            .and_then(|value| value.parse::<usize>().ok())
+            .filter(|size| *size > 0)
+            .unwrap_or(DEFAULT_RECONCILE_BATCH_SIZE)
+    }
+
     fn try_queue_reconcile(
         sender: &mpsc::Sender<WatcherEvent>,
         reconcile_queued: &AtomicBool,
@@ -300,5 +311,10 @@ mod tests {
         env::set_var("MIKU_RECONCILE_INTERVAL_SECS", "45");
         assert_eq!(IndexerQueue::reconcile_interval(), Duration::from_secs(45));
         env::remove_var("MIKU_RECONCILE_INTERVAL_SECS");
+        env::remove_var("MIKU_RECONCILE_BATCH_SIZE");
+        assert_eq!(IndexerQueue::reconcile_batch_size(), 512);
+        env::set_var("MIKU_RECONCILE_BATCH_SIZE", "1000");
+        assert_eq!(IndexerQueue::reconcile_batch_size(), 1000);
+        env::remove_var("MIKU_RECONCILE_BATCH_SIZE");
     }
 }

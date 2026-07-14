@@ -57,6 +57,7 @@ PGHOST  := $(abspath $(PGDATA))
 DATABASE_URL ?= postgres://miku@localhost:$(PGPORT)/miku
 MIKU_INDEX_BACKEND ?= turso
 MIKU_INDEX_PATH ?= miku_docs/.miku-index.turso
+MIKU_RECONCILE_BATCH_SIZE ?= 512
 
 # One-time cluster init. Superuser is `miku` and auth is trust (local dev only),
 # so the DATABASE_URL needs no password and is username-agnostic across hosts.
@@ -93,7 +94,7 @@ dev-tmux: db-up
 	tmux attach -t miku
 
 run:
-	MIKU_INDEX_BACKEND="$(MIKU_INDEX_BACKEND)" MIKU_INDEX_PATH="$(MIKU_INDEX_PATH)" $(NIX_RUN)cargo run
+	MIKU_INDEX_BACKEND="$(MIKU_INDEX_BACKEND)" MIKU_INDEX_PATH="$(MIKU_INDEX_PATH)" MIKU_RECONCILE_BATCH_SIZE="$(MIKU_RECONCILE_BATCH_SIZE)" $(NIX_RUN)cargo run
 
 clean:
 	$(NIX_RUN)cargo clean
