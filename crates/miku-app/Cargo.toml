@@ -9,6 +9,17 @@ description = "Backend-neutral application index API for Miku"
 [dependencies]
 async-trait.workspace = true
 miku-domain = { path = "../miku-domain" }
+miku-index-memory = { path = "../miku-index-memory", optional = true }
+miku-index-postgres = { path = "../miku-index-postgres", optional = true }
+miku-index-turso = { path = "../miku-index-turso", optional = true }
+sqlx = { version = "0.8", optional = true, features = ["postgres", "runtime-tokio-rustls"] }
+tokio.workspace = true
+
+[features]
+default = ["memory", "sqlite"]
+memory = ["dep:miku-index-memory"]
+sqlite = ["dep:miku-index-turso"]
+postgres = ["dep:miku-index-postgres", "dep:sqlx"]
 
 [dev-dependencies]
 miku-index-memory = { path = "../miku-index-memory" }

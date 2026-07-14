@@ -11,6 +11,17 @@ use miku_domain::{
 };
 use std::sync::Arc;
 
+/// Explicitly selected deployment tier and primary index.
+#[derive(Debug, Clone)]
+pub enum IndexConfig {
+    /// Disposable in-process backend for tests and temporary runs.
+    Memory,
+    /// Durable local SQLite-compatible backend.
+    LocalSqlite { path: String },
+    /// Durable Postgres backend for the scale tier.
+    Postgres { database_url: String },
+}
+
 /// Backend-neutral operations consumed by Miku's HTTP and indexing layers.
 #[derive(Clone)]
 pub struct IndexApi {
@@ -79,6 +90,59 @@ impl IndexApi {
     pub async fn delete_page(&self, path: &str) -> StoreResult<IndexEvent> {
         self.writer.delete_page(path).await
     }
+}
+
+/// Compose one backend without exposing driver types to routes.
+pub async fn compose_index(config: IndexConfig) -> StoreResult<IndexApi> {
+    match config {
+        IndexConfig::Memory => {
+            #[cfg(feature = "memory")]
+            {
+                Ok(IndexApi::from_store(Arc::new(
+                    miku_index_memory::MemoryIndex::new(),
+                )))
+            }
+            #[cfg(not(feature = "memory"))]
+            {
+                Err(missing_feature("memory", "memory"))
+            }
+        }
+        IndexConfig::LocalSqlite { path } => {
+            #[cfg(feature = "sqlite")]
+            {
+                let store = miku_index_turso::TursoIndex::open(&path).await?;
+                Ok(IndexApi::from_store(Arc::new(store)))
+            }
+            #[cfg(not(feature = "sqlite"))]
+            {
+                let _ = path;
+                Err(missing_feature("SQLite", "sqlite"))
+            }
+        }
+        IndexConfig::Postgres { database_url } => {
+            #[cfg(feature = "postgres")]
+            {
+                let pool = sqlx::PgPool::connect(&database_url)
+                    .await
+                    .map_err(|error| miku_domain::StoreError::Unavailable(error.to_string()))?;
+                Ok(IndexApi::from_store(Arc::new(
+                    miku_index_postgres::PostgresIndex::new(pool),
+                )))
+            }
+            #[cfg(not(feature = "postgres"))]
+            {
+                let _ = database_url;
+                Err(missing_feature("Postgres", "postgres"))
+            }
+        }
+    }
+}
+
+#[allow(dead_code)]
+fn missing_feature(backend: &str, feature: &str) -> miku_domain::StoreError {
+    miku_domain::StoreError::Unsupported(format!(
+        "{backend} backend requires the `{feature}` Cargo feature"
+    ))
 }
 
 #[cfg(test)]
