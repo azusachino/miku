@@ -1333,10 +1333,12 @@ name = "miku-app"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "miku-cache-valkey",
  "miku-domain",
  "miku-index-memory",
  "miku-index-postgres",
  "miku-index-turso",
+ "serde",
  "serde_json",
  "sqlx",
  "tokio",
