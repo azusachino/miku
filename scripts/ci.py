@@ -4,10 +4,11 @@
 Run through uv:
 
     uv run python scripts/ci.py check
-    uv run python scripts/ci.py all-features
-    uv run python scripts/ci.py integration
+    uv run python scripts/ci.py check-all-features
+    uv run python scripts/ci.py check-integration
     uv run python scripts/ci.py release
-    uv run python scripts/ci.py blackbox
+    uv run python scripts/ci.py check-blackbox
+    uv run python scripts/ci.py benchmark
 
 The default path never needs Postgres or Valkey. Service-backed checks are
 opt-in through environment variables so local development stays lightweight.
@@ -81,11 +82,11 @@ def validate() -> None:
 
 COMMANDS = {
     "check": check,
-    "all-features": all_features,
-    "integration": integration,
+    "check-all-features": all_features,
+    "check-integration": integration,
     "release": release,
-    "scale": scale,
-    "blackbox": blackbox,
+    "benchmark": scale,
+    "check-blackbox": blackbox,
     "validate": validate,
 }
 

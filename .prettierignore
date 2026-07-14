@@ -2,3 +2,4 @@
 target/
 .pgdata/
 .claude/
+miku_docs/

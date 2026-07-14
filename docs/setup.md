@@ -54,12 +54,12 @@ export MIKU_INDEX_BACKEND=postgres
 nix develop       # enter the devShell (provisions all tools)
 make run          # run the server with the default local SQLite/Turso index
 make check                             # default fmt + lint + tests
-make all-features                      # all Cargo features
-make integration                       # optional service-backed probes
+make check-all-features                # all Cargo features
+make check-integration                 # optional service-backed probes
 make release                           # crates.io package dry-runs
 make validate                          # check + release build
-make blackbox                          # live HTTP checks against a running app
-MIKU_BENCH_BACKEND=sqlite make bench   # benchmark a running local Turso app
+make check-blackbox                    # live HTTP checks against a running app
+MIKU_BENCH_BACKEND=sqlite make benchmark # benchmark a running local Turso app
 ```
 
 All quality targets are thin Make wrappers around `uv run python scripts/ci.py`,
@@ -68,7 +68,7 @@ be invoked directly when debugging a single matrix slice.
 
 The `scripts/` suite is a first-class non-Rust test surface: `pytest` covers
 black-box validation helpers, and `ruff` checks/lints the automation code. The
-HTTP black-box probe requires a running app and is invoked with `make blackbox`.
+HTTP black-box probe requires a running app and is invoked with `make check-blackbox`.
 
 Project automation/scripts are Python run via `uv run python scripts/<x>.py`
 (root `pyproject.toml`), not bash.

@@ -8,7 +8,7 @@ NIX_RUN := $(if $(IN_NIX_SHELL),,nix develop --command )
 # On macOS with podman, start the VM first: `podman machine init && podman machine start`.
 COMPOSE ?= podman compose
 
-.PHONY: fmt fmt-check lint test check all-features integration release validate blackbox bench run clean daily stack-up stack-down stack-build stack-logs db-init db-up db-down db-reset db-psql dev dev-tmux
+.PHONY: fmt fmt-check lint test check check-all-features check-integration check-blackbox release validate benchmark run clean daily stack-up stack-down stack-build stack-logs db-init db-up db-down db-reset db-psql dev dev-tmux
 
 fmt:
 	$(NIX_RUN)cargo fmt --all
@@ -27,14 +27,14 @@ test:
 check:
 	$(NIX_RUN)uv run python scripts/ci.py check
 
-all-features:
-	$(NIX_RUN)uv run python scripts/ci.py all-features
+check-all-features:
+	$(NIX_RUN)uv run python scripts/ci.py check-all-features
 
-integration:
-	$(NIX_RUN)uv run python scripts/ci.py integration
+check-integration:
+	$(NIX_RUN)uv run python scripts/ci.py check-integration
 
-blackbox:
-	$(NIX_RUN)uv run python scripts/ci.py blackbox
+check-blackbox:
+	$(NIX_RUN)uv run python scripts/ci.py check-blackbox
 
 release:
 	$(NIX_RUN)uv run python scripts/ci.py release
@@ -42,8 +42,8 @@ release:
 validate:
 	$(NIX_RUN)uv run python scripts/ci.py validate
 
-bench:
-	$(NIX_RUN)uv run python scripts/ci.py scale
+benchmark:
+	$(NIX_RUN)uv run python scripts/ci.py benchmark
 
 # --- Native (no-container) local dev stack ---------------------------------
 # Runs Postgres directly from the nix devShell against a project-local cluster
