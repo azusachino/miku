@@ -68,15 +68,19 @@ async fn reconcile_store(
     events: &broadcast::Sender<String>,
 ) -> miku_domain::StoreResult<()> {
     let reconcile_started = Instant::now();
+    let walk_started = Instant::now();
     let mut files = Vec::new();
     walk_store_tree(content_root, &mut files)
         .map_err(|error| miku_domain::StoreError::Operation(error.to_string()))?;
+    let walk_duration = walk_started.elapsed();
+    let existing_started = Instant::now();
     let existing = reader
         .list_pages()
         .await?
         .into_iter()
         .map(|page| (page.path.clone(), page))
         .collect::<HashMap<String, PageSummary>>();
+    let existing_duration = existing_started.elapsed();
     let scanned_files = files.len();
     let mut seen = HashSet::with_capacity(files.len());
     let batch_size = IndexerQueue::reconcile_batch_size();
@@ -86,10 +90,12 @@ async fn reconcile_store(
     let mut batches = 0usize;
     let mut parse_duration = Duration::ZERO;
     let mut write_duration = Duration::ZERO;
+    let mut metadata_duration = Duration::ZERO;
     for file in files {
         let relative = file
             .strip_prefix(content_root)
             .map_err(|error| miku_domain::StoreError::Operation(error.to_string()))?;
+        let metadata_started = Instant::now();
         let metadata = fs::metadata(&file)
             .map_err(|error| miku_domain::StoreError::Operation(error.to_string()))?;
         let mtime = metadata
@@ -97,6 +103,7 @@ async fn reconcile_store(
             .ok()
             .and_then(|time| time.duration_since(std::time::UNIX_EPOCH).ok())
             .map_or(0, |duration| duration.as_secs() as i64);
+        metadata_duration += metadata_started.elapsed();
         let path = relative.to_string_lossy().into_owned();
         seen.insert(path.clone());
         if existing
@@ -139,6 +146,9 @@ async fn reconcile_store(
         unchanged_pages,
         deleted_pages,
         batches,
+        walk_ms = walk_duration.as_secs_f64() * 1000.0,
+        existing_ms = existing_duration.as_secs_f64() * 1000.0,
+        metadata_ms = metadata_duration.as_secs_f64() * 1000.0,
         parse_ms = parse_duration.as_secs_f64() * 1000.0,
         write_ms = write_duration.as_secs_f64() * 1000.0,
         total_ms = reconcile_started.elapsed().as_secs_f64() * 1000.0,

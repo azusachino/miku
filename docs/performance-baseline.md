@@ -54,17 +54,18 @@ MIKU_INDEX_LOG=/tmp/miku-index.log \
 ```
 
 The Rust indexer emits `startup index reconcile ready elapsed_ms=...`, one `index reconcile batch committed ... write_ms=...` event per batch, and an
-`index reconcile finished ... indexed_pages=... unchanged_pages=... parse_ms=... write_ms=... total_ms=...` summary. A same-directory no-op restart should show all source files under `unchanged_pages`
-and `indexed_pages=0`; it still walks the tree and stats files, but it does not reread or reparse unchanged Markdown. Use `oha` for the HTTP latency distribution and `hyperfine` for repeatable
-read-path comparisons while the server is running:
+`index reconcile finished ... indexed_pages=... unchanged_pages=... walk_ms=... existing_ms=... metadata_ms=... parse_ms=... write_ms=... total_ms=...` summary. The phase fields separate directory
+traversal, loading the durable projection into memory, source metadata checks, changed-file projection building, and backend writes. A same-directory no-op restart should show all source files under
+`unchanged_pages` and `indexed_pages=0`; it still walks the tree and stats files, but it does not reread or reparse unchanged Markdown. Use `oha` for the HTTP latency distribution and `hyperfine` for
+repeatable read-path comparisons while the server is running:
 
 ```bash
 hyperfine --warmup 2 --runs 10 'curl -fsS http://127.0.0.1:3000/p/Index'
 MIKU_BENCH_REQUESTS=1000 MIKU_BENCH_CONCURRENCY=32 make benchmark
 ```
 
-Record at minimum: time until `index_ready=true`, reconcile parse/write/total time, per-batch write p50/p95 if available, effective Tantivy commit frequency, page-request success rate/latency while
-not ready, final index size, and restart convergence time. Do not compare only final database size.
+Record at minimum: time until `index_ready=true`, each reconcile phase, per-batch write p50/p95 if available, effective Tantivy commit frequency, page-request success rate/latency while not ready,
+final index size, and restart convergence time. Do not compare only final database size.
 
 ## Implemented batching change
 
