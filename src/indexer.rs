@@ -143,13 +143,18 @@ async fn reconcile_store(
     if deleted {
         let _ = events.send(BULK_INDEX_REFRESH.to_string());
     }
-    writer.rebuild_search_index().await?;
+    let search_index_needs_rebuild = writer.search_index_needs_rebuild().await?;
+    let search_rebuilt = indexed_pages > 0 || deleted_pages > 0 || search_index_needs_rebuild;
+    if search_rebuilt {
+        writer.rebuild_search_index().await?;
+    }
     info!(
         scanned_files,
         indexed_pages,
         unchanged_pages,
         deleted_pages,
         batches,
+        search_rebuilt,
         parse_concurrency,
         walk_ms = walk_duration.as_secs_f64() * 1000.0,
         existing_ms = existing_duration.as_secs_f64() * 1000.0,

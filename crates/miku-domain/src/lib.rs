@@ -222,6 +222,12 @@ pub trait IndexWriter: Send + Sync {
         Ok(())
     }
 
+    /// Report whether a derived full-text structure is currently missing or
+    /// stale and should be rebuilt even when no source pages changed.
+    async fn search_index_needs_rebuild(&self) -> StoreResult<bool> {
+        Ok(false)
+    }
+
     /// Delete one page projection and return the resulting event.
     async fn delete_page(&self, path: &str) -> StoreResult<IndexEvent>;
 }
