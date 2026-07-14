@@ -21,11 +21,22 @@ import os
 import shutil
 import subprocess
 import sys
+import time
+import urllib.error
+import urllib.request
 
 
-def run(command: list[str]) -> None:
+def run(command: list[str], environment: dict[str, str] | None = None) -> None:
     print("+ " + " ".join(command), flush=True)
-    subprocess.run(command, check=True)
+    subprocess.run(command, check=True, env=environment)
+
+
+def server_ready(url: str) -> bool:
+    try:
+        with urllib.request.urlopen(f"{url}/healthz", timeout=1) as response:
+            return response.status == 200
+    except (urllib.error.URLError, TimeoutError):
+        return False
 
 
 def cargo(*args: str) -> None:
@@ -76,11 +87,46 @@ def blackbox() -> None:
 
 
 def ux_smoke() -> None:
-    run([sys.executable, "scripts/ux_smoke.py"])
+    run_ux_script("scripts/ux_smoke.py")
 
 
 def ux_soak() -> None:
-    run([sys.executable, "scripts/ux_soak.py"])
+    run_ux_script("scripts/ux_soak.py")
+
+
+def run_ux_script(script: str) -> None:
+    environment = os.environ.copy()
+    base_url = environment.get("MIKU_BLACKBOX_URL", "http://127.0.0.1:3000").rstrip("/")
+    if server_ready(base_url):
+        run([sys.executable, script], environment)
+        return
+
+    if environment.get("MIKU_UX_AUTOSTART") != "1":
+        run([sys.executable, script], environment)
+        return
+
+    port = environment.get("MIKU_UX_AUTOSTART_PORT", "3001")
+    base_url = f"http://127.0.0.1:{port}"
+    environment["MIKU_BIND"] = f"127.0.0.1:{port}"
+    environment["MIKU_BLACKBOX_URL"] = base_url
+    print(f"+ cargo run (default features) on {base_url}", flush=True)
+    server = subprocess.Popen(["cargo", "run"], env=environment)
+    try:
+        deadline = time.monotonic() + 60
+        while not server_ready(base_url):
+            if server.poll() is not None:
+                raise subprocess.CalledProcessError(server.returncode or 1, ["cargo", "run"])
+            if time.monotonic() >= deadline:
+                raise TimeoutError(f"Miku did not become ready at {base_url}")
+            time.sleep(0.5)
+        run([sys.executable, script], environment)
+    finally:
+        if server.poll() is None:
+            server.terminate()
+            try:
+                server.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                server.kill()
 
 
 def validate() -> None:

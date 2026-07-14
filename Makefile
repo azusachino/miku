@@ -38,10 +38,10 @@ check-blackbox:
 	$(NIX_RUN)uv run python scripts/ci.py check-blackbox
 
 check-ux-smoke:
-	uv run python scripts/ci.py check-ux-smoke
+	MIKU_UX_AUTOSTART=1 uv run python scripts/ci.py check-ux-smoke
 
 check-ux-soak:
-	uv run python scripts/ci.py check-ux-soak
+	MIKU_UX_AUTOSTART=1 uv run python scripts/ci.py check-ux-soak
 
 release:
 	$(NIX_RUN)uv run python scripts/ci.py release
