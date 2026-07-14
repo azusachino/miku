@@ -265,7 +265,7 @@ async fn main() -> Result<()> {
 
     // 6. Initialize background indexer
     let indexer =
-        miku::indexer::IndexerQueue::new(pool, std::path::PathBuf::from("miku"), events_tx)
+        miku::indexer::IndexerQueue::new(pool, std::path::PathBuf::from("miku_docs"), events_tx)
             .context("Failed to initialize background indexer")?;
 
     // 7. Build Router & Configure axum routes
@@ -305,7 +305,7 @@ fn app(state: AppState) -> Router {
         .route("/api/nav/children", get(nav_children_handler))
         .route("/api/quickswitch", get(quickswitch))
         .nest_service("/static", ServeDir::new("static"))
-        .nest_service("/assets", ServeDir::new("miku/assets"))
+        .nest_service("/assets", ServeDir::new("miku_docs/assets"))
         .layer(TraceLayer::new_for_http())
         .with_state(state)
 }
@@ -331,7 +331,7 @@ async fn events(
     Sse::new(stream).keep_alive(KeepAlive::default())
 }
 
-// Helper to get safe path under miku/ and check for directory traversal
+// Helper to get safe path under miku_docs/ and check for directory traversal
 fn safe_file_path(path: &str) -> Result<PathBuf, AppError> {
     if path.contains("..") || path.starts_with('/') {
         return Err(anyhow::anyhow!("Invalid path: path traversal detected").into());
@@ -1212,7 +1212,7 @@ struct TrashIdForm {
 
 // Sidecar manifest written next to each trashed `.md` (as `<id>.json`) so a
 // soft-deleted page can be restored to its original location. Lives under
-// `miku/.trash`, which the indexer skips via `is_hidden_rel`, so manifests
+// `miku_docs/.trash`, which the indexer skips via `is_hidden_rel`, so manifests
 // never enter the index.
 #[derive(serde::Serialize, serde::Deserialize)]
 struct TrashManifest {
@@ -1234,7 +1234,7 @@ fn trash_dir() -> PathBuf {
     StdPath::new("miku").join(".trash")
 }
 
-// A trash id is a bare filename stem we join onto `miku/.trash`; reject anything
+// A trash id is a bare filename stem we join onto `miku_docs/.trash`; reject anything
 // that could escape that directory.
 fn safe_trash_id(id: &str) -> Result<(), AppError> {
     if id.is_empty() || id.contains('/') || id.contains('\\') || id.contains("..") {
@@ -1243,7 +1243,7 @@ fn safe_trash_id(id: &str) -> Result<(), AppError> {
     Ok(())
 }
 
-// Handle trashing a page: move it into `miku/.trash/<id>.md` and write a sidecar
+// Handle trashing a page: move it into `miku_docs/.trash/<id>.md` and write a sidecar
 // `<id>.json` manifest recording its original path so it can be restored. Returns
 // JSON (no redirect) so the UI can offer an Undo without navigating away.
 async fn page_trash(Json(form): Json<TrashForm>) -> Result<Response, AppError> {

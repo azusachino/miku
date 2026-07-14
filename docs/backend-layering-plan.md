@@ -17,7 +17,7 @@ An isolated in-memory backend still exists for tests and disposable runs, but it
 is not the normal default because it loses the rebuildable index on restart.
 
 The Markdown tree remains the only source of truth. Every backend stores a
-rebuildable projection of `miku/**/*.md`.
+rebuildable projection of `miku_docs/**/*.md`.
 
 ## Current constraint
 
@@ -273,7 +273,7 @@ combinations should fail with an actionable configuration error.
 
 - `make check` passes with the memory backend and no database service.
 - The same fixture suite passes for SQLite/Turso and Postgres.
-- Deleting and rebuilding the index from `miku/` produces the same page,
+- Deleting and rebuilding the index from `miku_docs/` produces the same page,
   relationship, tag, and search results.
 - A backend outage has an explicit health/error response and does not corrupt
   Markdown files.

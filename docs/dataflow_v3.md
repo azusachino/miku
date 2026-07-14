@@ -34,9 +34,9 @@ anywhere" thesis. App-originated saves don't strictly need it, but routing them
 through the same watcher keeps a single index trigger and no save↔index race
 (v1's core property). Both are cheap at folder granularity, so v3 keeps them.
 
-**Core invariant unchanged.** Markdown files under `miku/` are the source of
+**Core invariant unchanged.** Markdown files under `miku_docs/` are the source of
 truth; Postgres is the sole disposable index, rebuildable from
-`miku/**/*.md`.
+`miku_docs/**/*.md`.
 
 ---
 
@@ -52,7 +52,7 @@ flowchart LR
     Indexer["Background indexer<br/>(sole Postgres writer)"]
   end
 
-  FS[("miku/ Markdown<br/>source of truth")]
+  FS[("miku_docs/ Markdown<br/>source of truth")]
   PG[("Postgres<br/>disposable index")]
 
   Browser -->|"GET view / edit"| HTTP
@@ -77,7 +77,7 @@ no save↔index race.
 sequenceDiagram
   participant B as Browser
   participant H as axum handler
-  participant FS as miku/*.md
+  participant FS as miku_docs/*.md
   participant W as notify watcher
   participant I as Indexer
   participant PG as Postgres
@@ -139,7 +139,7 @@ git/rsync).
 
 ```mermaid
 flowchart TD
-  A["startup"] --> B["scan miku/**/*.md"]
+  A["startup"] --> B["scan miku_docs/**/*.md"]
   B --> C{"mtime changed?"}
   C -- no --> E["skip"]
   C -- yes --> D{"content-hash ≠ pages.hash?"}

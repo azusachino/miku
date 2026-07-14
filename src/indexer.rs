@@ -373,7 +373,7 @@ impl IndexerQueue {
             notify::Config::default(),
         )?;
 
-        // Exclude .git and .trash if they exist in content_root (they shouldn't be under miku/ but let's be safe)
+        // Exclude .git and .trash if they exist in content_root (they shouldn't be under miku_docs/ but let's be safe)
         if content_root.exists() {
             watcher.watch(&content_root, notify::RecursiveMode::Recursive)?;
             info!(

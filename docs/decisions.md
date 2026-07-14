@@ -112,7 +112,7 @@ confirmation before committing.
 fire fs events → normal reindex. No handler indexes directly.
 
 **Delete = soft-delete with a 7-day archive.** Deleting never `rm`s immediately.
-The file is **moved to `miku/.trash/<original-path>@<deleted-at>.md`**, and
+The file is **moved to `miku_docs/.trash/<original-path>@<deleted-at>.md`**, and
 `.trash/` is **excluded from the watcher and index** — so the page vanishes from
 search/backlinks at once (its row is removed; inbound links go dangling via
 `ON DELETE SET NULL`), while the bytes survive. A periodic GC purges trash
@@ -121,7 +121,7 @@ file back → `notify` → reindex. Trash lives *inside* the content root (so it
 travels with backups and the k8s PVC) but is ignore-listed, keeping the live
 index pure. UX: a "N backlinks will dangle" warning before deleting.
 
-**Assets.** Live in `miku/assets/`. Upload (roadmap): `POST /assets` writes
+**Assets.** Live in `miku_docs/assets/`. Upload (roadmap): `POST /assets` writes
 atomically, keeping the original name but **deduping by content hash**
 (`name-<short-hash>.ext`) to avoid collisions. `![[image.png]]` resolves by
 basename in `assets/`; served with caching headers.

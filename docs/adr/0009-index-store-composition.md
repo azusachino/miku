@@ -19,7 +19,7 @@ tags: [backend, index, cache, architecture]
 
 ## Decision
 
-Markdown files under `miku/` remain the only source of truth. The database is a
+Markdown files under `miku_docs/` remain the only source of truth. The database is a
 rebuildable index projection.
 
 Miku composes one durable `IndexStore` with zero or more read/cache layers:

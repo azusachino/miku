@@ -9,7 +9,7 @@
 Knowledge scattered across Confluence, Notion, Slack DMs, and a `~/notes`
 folder. Nothing links. During an incident she follows `[[postgres-failover]]`
 backlinks to the runbook, the postmortem, and the capacity note, fixes the doc,
-and commits all of `miku/` to a private git repo — versioned, diffable notes.
+and commits all of `miku_docs/` to a private git repo — versioned, diffable notes.
 - **Leans on:** backlinks, FTS, plain `.md` on disk (git/rg/sed still work), no lock-in.
 - **Before:** real knowledge, unsearchable across five silos; lost on every tool migration.
 

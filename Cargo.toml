@@ -67,7 +67,7 @@ tower = "0.5"
 tower-http = { version = "0.6", features = ["fs", "trace"] }
 minijinja = { version = "2", features = ["loader"] }
 
-# postgres index cache (disposable; source of truth is miku/**/*.md)
+# postgres index cache (disposable; source of truth is miku_docs/**/*.md)
 sqlx = { version = "0.8", features = [
   "postgres",
   "runtime-tokio-rustls",

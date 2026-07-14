@@ -421,7 +421,7 @@
                       </section>
 
                       {# Trash view: lazy-loads GET /api/trash on first open; Restore/Delete
-                         wire to $store.tree. Trashed files live under miku/.trash and are
+                         wire to $store.tree. Trashed files live under miku_docs/.trash and are
                          excluded from the index. #}
                       <section id="sidebar-trash" class="mk-sidebar-panel mk-sidebar-tools" role="tabpanel"
                                x-show="sidebarTab === 'trash'" :hidden="sidebarTab !== 'trash'">

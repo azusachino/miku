@@ -23,7 +23,7 @@ services:
     build: .
     container_name: miku-app
     # Run as the host user (rootless podman keep-id) so the app can write the
-    # bind-mounted miku/ files while they stay owned by you on the host. The
+    # bind-mounted miku_docs/ files while they stay owned by you on the host. The
     # wiki is filesystem-owned: you edit the same .md files from host or browser.
     # MIKU_UID/MIKU_GID default to 1000 (typical Linux); on macOS set them to
     # your host ids (`id -u`/`id -g`, usually 501). `keep-id` is podman-only —

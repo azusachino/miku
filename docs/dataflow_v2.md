@@ -26,10 +26,10 @@ durably, so:
 - External edits (git pull, another editor) are caught by a **periodic
   reconcile** scan rather than a live per-file watch.
 
-**Core invariant preserved.** Markdown files under `miku/` remain the source of
+**Core invariant preserved.** Markdown files under `miku_docs/` remain the source of
 truth — saves still atomic-write the file (temp + `fsync` + `rename`) *before*
 enqueuing. **RocksDB and Postgres are both disposable caches**, fully
-rebuildable from `miku/**/*.md`; deleting either loses nothing but rebuild
+rebuildable from `miku_docs/**/*.md`; deleting either loses nothing but rebuild
 time. RocksDB holds two column families: a durable `queue` CF (pending index
 work) and an optional `body` read-cache CF (`slug → body + content-hash + mtime`)
 that speeds reads and cheap change-detection.
@@ -50,7 +50,7 @@ flowchart LR
     Reconcile["Reconcile task<br/>(periodic / manual)"]
   end
 
-  FS[("miku/ Markdown<br/>source of truth")]
+  FS[("miku_docs/ Markdown<br/>source of truth")]
   PG[("Postgres<br/>disposable index")]
 
   Browser -->|"GET view / edit"| HTTP
@@ -103,7 +103,7 @@ is also drained on startup, so nothing is lost across a crash.
 sequenceDiagram
   participant B as Browser
   participant H as axum handler
-  participant FS as miku/*.md
+  participant FS as miku_docs/*.md
   participant R as RocksDB (queue + cache)
   participant I as Indexer
   participant PG as Postgres
@@ -154,7 +154,7 @@ enqueues anything whose content changed. mtime is a cheap pre-filter only;
 
 ```mermaid
 flowchart TD
-  A["reconcile (startup / periodic / manual)"] --> B["scan miku/**/*.md"]
+  A["reconcile (startup / periodic / manual)"] --> B["scan miku_docs/**/*.md"]
   B --> C{"mtime changed?"}
   C -- no --> E["skip"]
   C -- yes --> D{"content-hash ≠ cached hash?"}

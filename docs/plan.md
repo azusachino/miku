@@ -11,7 +11,7 @@ v0 — vertical slice (skeleton → CRUD edit/save/render loop).
 
 In:
 
-1. Markdown page CRUD (content root `miku/`)
+1. Markdown page CRUD (content root `miku_docs/`)
 2. `[[wiki links]]` parse / resolve / render
 3. Backlinks
 4. Tags (`#tag`)

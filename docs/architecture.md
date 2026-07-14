@@ -6,13 +6,13 @@ full-text search.
 
 ## Core invariant
 
-Markdown files and assets under `miku/` are the **source of truth**. Postgres
+Markdown files and assets under `miku_docs/` are the **source of truth**. Postgres
 holds only a **disposable index** that is fully rebuildable from
-`miku/**/*.md`. Deleting the database loses nothing but rebuild time.
+`miku_docs/**/*.md`. Deleting the database loses nothing but rebuild time.
 
 ```
 repo/
-  miku/             # content root (source of truth)
+  miku_docs/             # content root (source of truth)
     *.md            # pages
     assets/         # images (roadmap: drag/drop upload)
   src/              # Rust server
@@ -24,9 +24,9 @@ repo/
 
 - **HTTP layer (axum):** page render/edit/save routes, search, tags, backlinks,
   static asset serving. **Read-only** against Postgres.
-- **Store:** filesystem read/write of `miku/*.md`. Atomic save = write temp +
+- **Store:** filesystem read/write of `miku_docs/*.md`. Atomic save = write temp +
   `fsync` + `rename`.
-- **Background indexer:** `notify` watcher on `miku/`; parses changed pages off
+- **Background indexer:** `notify` watcher on `miku_docs/`; parses changed pages off
   the request path into Postgres. The **sole writer**.
 - **Postgres index:** `pages`, `links`, `tags`, and a `tsvector` FTS column.
 
@@ -35,7 +35,7 @@ repo/
 This is the key design decision that removes save↔index races:
 
 1. `POST /save` writes to a temp file → `fsync` → atomic `rename` into
-   `miku/<path>.md`. The handler returns immediately and **does not touch the
+   `miku_docs/<path>.md`. The handler returns immediately and **does not touch the
    index**.
 2. The `rename` fires a `notify` event → debounced (~200ms) → the indexer
    reindexes just that page.
@@ -58,7 +58,7 @@ Tables are prefixed `tb_`. The authoritative DDL is
 ```sql
 CREATE TABLE tb_pages (
   id          BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-  path        TEXT NOT NULL UNIQUE,           -- relative to miku/, e.g. 'sub/Bar.md'
+  path        TEXT NOT NULL UNIQUE,           -- relative to miku_docs/, e.g. 'sub/Bar.md'
   slug        TEXT NOT NULL,                  -- normalized basename for [[ ]] resolution
   title       TEXT NOT NULL,                  -- frontmatter title, else first H1, else filename
   frontmatter JSONB NOT NULL DEFAULT '{}',    -- opaque user properties
@@ -138,7 +138,7 @@ See `docs/dataflow.md` for the full set of workflow / dataflow Mermaid diagrams.
 
 ## Link resolution
 
-`[[Name]]` resolves by unique basename across `miku/`; if multiple match, pick
+`[[Name]]` resolves by unique basename across `miku_docs/`; if multiple match, pick
 deterministically (shortest path). `[[sub/Bar]]` matches an exact relative
 path. Obsidian `[[ ]]` compatible — this replaces a separate importer.
 
@@ -149,7 +149,7 @@ Unicode **NFC + case-insensitive** matching, so `ミク`, `Foo Bar.md`, and
 ## Vault layout & scale
 
 Organization comes from **links + tags + frontmatter, not a deep directory
-tree**. `miku/` is the content root; `miku/assets/` holds binaries; shallow
+tree**. `miku_docs/` is the content root; `miku_docs/assets/` holds binaries; shallow
 topic folders (`people/`, `projects/`) are allowed as a loose filing cabinet but
 never the primary structure — the graph carries the meaning.
 

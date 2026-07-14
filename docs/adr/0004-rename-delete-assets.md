@@ -28,13 +28,13 @@ operation that writes many files — best-effort at FS level; partial failures
 self-heal via startup reconcile. UX: "this will update N backlinks" confirm.
 
 **Delete = soft-delete with 7-day archive.** The file is **moved to
-`miku/.trash/<original-path>@<deleted-at>.md`**; `.trash/` is excluded from the
+`miku_docs/.trash/<original-path>@<deleted-at>.md`**; `.trash/` is excluded from the
 watcher and index, so the page vanishes from search/backlinks at once (row
 removed, inbound links go dangling via `ON DELETE SET NULL`) while the bytes
 survive. GC purges trash older than **`MIKU_TRASH_TTL` (default 7 days)**.
 Restore = move the file back → reindex.
 
-**Assets.** Live in `miku/assets/`; upload writes atomically, deduped by content
+**Assets.** Live in `miku_docs/assets/`; upload writes atomically, deduped by content
 hash (`name-<short-hash>.ext`). `![[image.png]]` resolves by basename. Orphans
 are **reported, never auto-deleted** (auto-GC of user files violates
 files-are-truth) — `tb_links(kind='asset' AND is_embed)` minus disk.

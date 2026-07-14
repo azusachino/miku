@@ -17,7 +17,7 @@ make dev          # start the DB if needed, then run the server (foreground)
 make dev-tmux     # same, in a tmux session (pane 0: server, pane 1: pg log)
 make db-psql      # open psql against the local cluster
 make db-down      # stop Postgres
-make db-reset     # stop + delete .pgdata (index is rebuilt from miku/**/*.md)
+make db-reset     # stop + delete .pgdata (index is rebuilt from miku_docs/**/*.md)
 ```
 
 `make dev` sets `DATABASE_URL=postgres://miku@localhost:55432/miku` (trust auth,
@@ -66,5 +66,5 @@ above is preferred for local development.
 ## Database
 
 The Postgres index is a disposable cache. Migrations live under `migrations/`
-and are applied via sqlx. The index is fully rebuildable from `miku/**/*.md` —
+and are applied via sqlx. The index is fully rebuildable from `miku_docs/**/*.md` —
 dropping and re-migrating the database loses no user data.

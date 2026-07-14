@@ -41,7 +41,7 @@ flowchart TD
         Reconciler["Startup Reconciler (mtime check)"]
     end
 
-    FS[("miku/ Markdown Directory\n(Source of Truth)")]
+    FS[("miku_docs/ Markdown Directory\n(Source of Truth)")]
     PG[("Postgres DB\n(Disposable Cache)")]
 
     UI -->|"GET /page/Foo"| Router
@@ -95,7 +95,7 @@ Handling up to 100,000 files in a personal wiki introduces constraints across th
 ## 4. User Story & Conflict Simulations
 
 ### Story A: Tanaka-san Imports 50,000 Municipal Records
-- **Action:** Tanaka-san drops 50,000 markdown files into the `miku/` folder via a script.
+- **Action:** Tanaka-san drops 50,000 markdown files into the `miku_docs/` folder via a script.
 - **Workflow Simulation:**
   1. The server is restarted. The `Startup Reconciler` detects 50,000 new files.
   2. Rather than individual `notify` events triggering 50,000 single transactions, the reconciler triggers a `Bulk Import` sequence.

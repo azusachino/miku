@@ -57,7 +57,7 @@ db-up: db-init
 db-down:
 	@$(NIX_RUN)pg_ctl -D $(PGDATA) -m fast stop || true
 
-# The index is disposable — nuke the cluster and rebuild from miku/**/*.md.
+# The index is disposable — nuke the cluster and rebuild from miku_docs/**/*.md.
 db-reset: db-down
 	rm -rf $(PGDATA)
 

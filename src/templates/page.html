@@ -99,7 +99,7 @@ Miku - {{ path }}
             <textarea class="hidden" name="body" data-inline-body>{{ body }}</textarea>
             <div class="mk-inline-editor-bar">
                 <span class="mk-editing"><i></i> Live editing</span>
-                <span class="mk-pathchip">miku/{{ path }}.md</span>
+                <span class="mk-pathchip">miku_docs/{{ path }}.md</span>
                 <div class="mk-inline-editor-actions">
                     <button type="button" class="mk-btn mk-btn-ghost" @click="editing = false">Reading</button>
                     <button type="submit" class="mk-btn mk-btn-primary">Save</button>
@@ -160,7 +160,7 @@ Miku - {{ path }}
             </div>
             <div x-show="!collapsed" x-transition>
                 <div class="mk-kv"><span class="k">Format</span><span class="v">Markdown</span></div>
-                <div class="mk-kv"><span class="k">Path</span><span class="v path" title="miku/{{ path }}.md">{{ path }}</span></div>
+                <div class="mk-kv"><span class="k">Path</span><span class="v path" title="miku_docs/{{ path }}.md">{{ path }}</span></div>
                 <div class="mk-kv"><span class="k">Words</span><span class="v">{{ word_count }}</span></div>
                 <div class="mk-kv"><span class="k">Backlinks</span><span class="v teal">{{ backlink_count }}</span></div>
                 <div class="mk-kv"><span class="k">Updated</span><span class="v">{{ updated }}</span></div>
