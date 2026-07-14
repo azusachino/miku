@@ -56,6 +56,7 @@ def check_editor(page: Page) -> None:
     page.wait_for_url("**/p/Index/edit")
     assert_visible(page, "[data-editor]", "full editor")
     assert_visible(page, "[data-save-status]", "editor save status")
+    page.locator("#editor-container .cm-editor").wait_for(state="attached", timeout=10_000)
     page.locator("#edit-title-input").fill("Index UX acceptance")
     if page.locator("[data-save-status]").inner_text() != "Unsaved changes":
         raise AssertionError("editor did not expose unsaved state")
