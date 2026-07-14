@@ -15,7 +15,6 @@ categories = ["text-processing", "web-programming"]
 include = [
   "src/**/*",
   "static/**/*",
-  "migrations/**/*",
   "/Cargo.toml",
   "/README.md",
   "/LICENSE",
@@ -41,25 +40,31 @@ repository = "https://github.com/azusachino/miku"
 
 [workspace.dependencies]
 async-trait = "0.1"
-comrak = "0.52"
+comrak = { version = "0.52", default-features = false }
 lazy_static = "1"
 regex = "1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 serde_yaml = "0.9"
-tokio = { version = "1", features = ["macros", "rt", "sync"] }
+tokio = { version = "1", default-features = false, features = ["macros", "rt", "sync"] }
 thiserror = "2"
 
 [dependencies]
 anyhow = "1"
 miku-domain = { path = "crates/miku-domain" }
-miku-app = { path = "crates/miku-app", features = ["postgres"] }
+miku-app = { path = "crates/miku-app", default-features = false }
 miku-markdown = { path = "crates/miku-markdown" }
 miku-indexer = { path = "crates/miku-indexer" }
 thiserror = "2"
 
 # async runtime
-tokio = { version = "1", features = ["full"] }
+tokio = { version = "1", default-features = false, features = [
+  "macros",
+  "rt-multi-thread",
+  "sync",
+  "time",
+  "net",
+] }
 tokio-stream = { version = "0.1", features = ["sync"] }
 
 # web
@@ -68,37 +73,31 @@ tower = "0.5"
 tower-http = { version = "0.6", features = ["fs", "trace"] }
 minijinja = { version = "2", features = ["loader"] }
 
-# postgres index cache (disposable; source of truth is miku_docs/**/*.md)
-sqlx = { version = "0.8.6", features = [
-  "postgres",
-  "runtime-tokio-rustls",
-  "chrono",
-  "macros",
-  "migrate",
-] }
-
-# markdown rendering (comrak: native wikilinks + GitHub alerts + GFM)
-comrak = "0.52"
-
 # filesystem watcher (background indexer)
 notify = "7"
-
-# regex + lazy_static
-regex = "1"
-lazy_static = "1"
 
 # serialization + time
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-serde_yaml = "0.9"
-chrono = { version = "0.4", features = ["serde"] }
+chrono = { version = "0.4", default-features = false, features = ["serde", "clock"] }
 
 # hashing
 sha2 = "0.10"
 
 # logging
 tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing-subscriber = { version = "0.3", default-features = false, features = [
+  "env-filter",
+  "fmt",
+] }
+
+[features]
+default = ["memory", "turso"]
+memory = ["miku-app/memory"]
+turso = ["miku-app/turso"]
+postgres = ["miku-app/postgres"]
+valkey = ["miku-app/valkey"]
+postgres-valkey = ["postgres", "valkey"]
 
 [lints.clippy]
 pedantic = { level = "warn", priority = -1 }

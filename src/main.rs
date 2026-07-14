@@ -11,11 +11,10 @@ use axum::{
 };
 use chrono::{DateTime, Local};
 use miku::markdown::{extract_title, parse_frontmatter, render_html_with_toc, Heading};
-use miku_app::{compose_index, IndexApi, IndexConfig};
+use miku_app::{compose_index, resolve_runtime, IndexApi};
 use miku_domain::IndexCapabilities;
 use minijinja::{context, Environment};
 use sha2::{Digest, Sha256};
-use sqlx::postgres::PgPoolOptions;
 use std::env;
 use std::fs;
 use std::io::Write;
@@ -214,40 +213,15 @@ async fn main() -> Result<()> {
 
     info!("Starting Miku Server...");
 
-    // 2. Select the durable index. Local Turso is the default; the
-    // Postgres tier is explicit for the native and Compose deployment profiles.
-    let backend = env::var("MIKU_INDEX_BACKEND").unwrap_or_else(|_| "turso".to_string());
-    let index = match backend.as_str() {
-        "turso" => {
-            let path = env::var("MIKU_INDEX_PATH")
-                .unwrap_or_else(|_| "miku_docs/.miku-index.turso".to_string());
-            compose_index(IndexConfig::Turso { path })
-                .await
-                .map_err(|error| anyhow::anyhow!(error))
-                .context("Failed to compose local Turso index API")?
-        }
-        "postgres" => {
-            let database_url =
-                env::var("DATABASE_URL").context("DATABASE_URL is required for Postgres")?;
-            info!("Connecting to database...");
-            let pool = PgPoolOptions::new()
-                .max_connections(5)
-                .connect(&database_url)
-                .await
-                .context("Failed to connect to database")?;
-            info!("Running database migrations...");
-            sqlx::migrate!("./migrations")
-                .run(&pool)
-                .await
-                .context("Database migrations failed")?;
-            info!("Migrations complete.");
-            compose_index(IndexConfig::Postgres { database_url })
-                .await
-                .map_err(|error| anyhow::anyhow!(error))
-                .context("Failed to compose Postgres index API")?
-        }
-        other => anyhow::bail!("MIKU_INDEX_BACKEND must be `turso` or `postgres`; got {other}"),
-    };
+    // 2. Resolve and compose the selected runtime. Backend drivers stay below
+    // miku-app; this binary only owns process startup and HTTP concerns.
+    let runtime = resolve_runtime()
+        .map_err(|error| anyhow::anyhow!(error))
+        .context("Failed to resolve the selected Miku runtime")?;
+    let index = compose_index(runtime)
+        .await
+        .map_err(|error| anyhow::anyhow!(error))
+        .context("Failed to compose the selected Miku runtime")?;
 
     // 5. Initialize Minijinja template environment
     let mut templates_env = Environment::new();
@@ -1618,6 +1592,7 @@ async fn tag_filter(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use miku_app::RuntimeConfig;
 
     fn test_breadcrumbs() -> Vec<BreadcrumbItem> {
         breadcrumb_items("Notes/Daily", "Daily")
@@ -2160,7 +2135,7 @@ mod tests {
         let mut templates_env = Environment::new();
         templates_env.set_loader(minijinja::path_loader("src/templates"));
         let state = AppState {
-            index: compose_index(IndexConfig::Memory)
+            index: compose_index(RuntimeConfig::Memory)
                 .await
                 .expect("memory index API"),
             templates: Arc::new(templates_env),

@@ -12,7 +12,7 @@ async-trait.workspace = true
 miku-domain = { path = "../miku-domain" }
 miku-index-memory = { path = "../miku-index-memory" }
 serde_json.workspace = true
-turso = "0.7.0"
+turso = { version = "0.7.0", default-features = false, features = ["fts"] }
 
 [dev-dependencies]
 tokio.workspace = true

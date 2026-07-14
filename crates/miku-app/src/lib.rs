@@ -15,7 +15,7 @@ use tokio::sync::Mutex;
 
 /// Explicitly selected deployment tier and primary index.
 #[derive(Debug, Clone)]
-pub enum IndexConfig {
+pub enum RuntimeConfig {
     /// Disposable in-process backend for tests and temporary runs.
     Memory,
     /// Durable local Turso backend.
@@ -29,6 +29,86 @@ pub enum IndexConfig {
         valkey_url: String,
         namespace: String,
     },
+}
+
+/// Resolve the runtime selected by the process environment.
+pub fn resolve_runtime() -> StoreResult<RuntimeConfig> {
+    let backend = std::env::var("MIKU_INDEX_BACKEND").unwrap_or_else(|_| "turso".to_string());
+    let runtime = match backend.as_str() {
+        "memory" => RuntimeConfig::Memory,
+        "turso" => RuntimeConfig::Turso {
+            path: std::env::var("MIKU_INDEX_PATH")
+                .unwrap_or_else(|_| "miku_docs/.miku-index.turso".to_string()),
+        },
+        "postgres" => RuntimeConfig::Postgres {
+            database_url: required_env("DATABASE_URL")?,
+        },
+        "postgres-valkey" => {
+            #[cfg(all(feature = "postgres", feature = "valkey"))]
+            {
+                RuntimeConfig::PostgresValkey {
+                    database_url: required_env("DATABASE_URL")?,
+                    valkey_url: required_env("VALKEY_URL")?,
+                    namespace: std::env::var("MIKU_VALKEY_NAMESPACE")
+                        .unwrap_or_else(|_| "miku".to_string()),
+                }
+            }
+            #[cfg(not(all(feature = "postgres", feature = "valkey")))]
+            {
+                return Err(missing_feature("Postgres + Valkey", "postgres,valkey"));
+            }
+        },
+        other => {
+            return Err(miku_domain::StoreError::Unsupported(format!(
+                "MIKU_INDEX_BACKEND must be `memory`, `turso`, `postgres`, or `postgres-valkey`; got {other}"
+            )))
+        }
+    };
+
+    if runtime_enabled(&runtime) {
+        Ok(runtime)
+    } else {
+        Err(missing_feature(
+            runtime_name(&runtime),
+            runtime_feature(&runtime),
+        ))
+    }
+}
+
+fn required_env(name: &str) -> StoreResult<String> {
+    std::env::var(name).map_err(|_| {
+        miku_domain::StoreError::Unavailable(format!("{name} is required for the selected runtime"))
+    })
+}
+
+const fn runtime_name(runtime: &RuntimeConfig) -> &'static str {
+    match runtime {
+        RuntimeConfig::Memory => "memory",
+        RuntimeConfig::Turso { .. } => "Turso",
+        RuntimeConfig::Postgres { .. } => "Postgres",
+        #[cfg(feature = "valkey")]
+        RuntimeConfig::PostgresValkey { .. } => "Postgres + Valkey",
+    }
+}
+
+const fn runtime_feature(runtime: &RuntimeConfig) -> &'static str {
+    match runtime {
+        RuntimeConfig::Memory => "memory",
+        RuntimeConfig::Turso { .. } => "turso",
+        RuntimeConfig::Postgres { .. } => "postgres",
+        #[cfg(feature = "valkey")]
+        RuntimeConfig::PostgresValkey { .. } => "postgres,valkey",
+    }
+}
+
+const fn runtime_enabled(runtime: &RuntimeConfig) -> bool {
+    match runtime {
+        RuntimeConfig::Memory => cfg!(feature = "memory"),
+        RuntimeConfig::Turso { .. } => cfg!(feature = "turso"),
+        RuntimeConfig::Postgres { .. } => cfg!(feature = "postgres"),
+        #[cfg(feature = "valkey")]
+        RuntimeConfig::PostgresValkey { .. } => cfg!(all(feature = "postgres", feature = "valkey")),
+    }
 }
 
 /// Backend-neutral operations consumed by Miku's HTTP and indexing layers.
@@ -119,9 +199,9 @@ impl IndexApi {
 }
 
 /// Compose one backend without exposing driver types to routes.
-pub async fn compose_index(config: IndexConfig) -> StoreResult<IndexApi> {
+pub async fn compose_index(config: RuntimeConfig) -> StoreResult<IndexApi> {
     match config {
-        IndexConfig::Memory => {
+        RuntimeConfig::Memory => {
             #[cfg(feature = "memory")]
             {
                 Ok(IndexApi::from_store(Arc::new(
@@ -133,7 +213,7 @@ pub async fn compose_index(config: IndexConfig) -> StoreResult<IndexApi> {
                 Err(missing_feature("memory", "memory"))
             }
         }
-        IndexConfig::Turso { path } => {
+        RuntimeConfig::Turso { path } => {
             #[cfg(feature = "turso")]
             {
                 let store = miku_index_turso::TursoIndex::open(&path).await?;
@@ -145,12 +225,10 @@ pub async fn compose_index(config: IndexConfig) -> StoreResult<IndexApi> {
                 Err(missing_feature("Turso", "turso"))
             }
         }
-        IndexConfig::Postgres { database_url } => {
+        RuntimeConfig::Postgres { database_url } => {
             #[cfg(feature = "postgres")]
             {
-                let pool = sqlx::PgPool::connect(&database_url)
-                    .await
-                    .map_err(|error| miku_domain::StoreError::Unavailable(error.to_string()))?;
+                let pool = connect_postgres(&database_url).await?;
                 Ok(IndexApi::from_store(Arc::new(
                     miku_index_postgres::PostgresIndex::new(pool),
                 )))
@@ -162,16 +240,14 @@ pub async fn compose_index(config: IndexConfig) -> StoreResult<IndexApi> {
             }
         }
         #[cfg(feature = "valkey")]
-        IndexConfig::PostgresValkey {
+        RuntimeConfig::PostgresValkey {
             database_url,
             valkey_url,
             namespace,
         } => {
             #[cfg(feature = "postgres")]
             {
-                let pool = sqlx::PgPool::connect(&database_url)
-                    .await
-                    .map_err(|error| miku_domain::StoreError::Unavailable(error.to_string()))?;
+                let pool = connect_postgres(&database_url).await?;
                 let primary: Arc<dyn IndexStore> =
                     Arc::new(miku_index_postgres::PostgresIndex::new(pool));
                 let cache = miku_cache_valkey::ValkeyCache::connect(&valkey_url, namespace)
@@ -193,6 +269,18 @@ pub async fn compose_index(config: IndexConfig) -> StoreResult<IndexApi> {
             }
         }
     }
+}
+
+#[cfg(feature = "postgres")]
+async fn connect_postgres(database_url: &str) -> StoreResult<sqlx::PgPool> {
+    let pool = sqlx::PgPool::connect(database_url)
+        .await
+        .map_err(|error| miku_domain::StoreError::Unavailable(error.to_string()))?;
+    sqlx::migrate!("../miku-index-postgres/migrations")
+        .run(&pool)
+        .await
+        .map_err(|error| miku_domain::StoreError::Unavailable(error.to_string()))?;
+    Ok(pool)
 }
 
 #[cfg(feature = "valkey")]
@@ -288,11 +376,6 @@ impl IndexWriter for CachedIndexWriter {
     }
 }
 
-#[cfg(any(
-    not(feature = "memory"),
-    not(feature = "turso"),
-    not(feature = "postgres")
-))]
 fn missing_feature(backend: &str, feature: &str) -> miku_domain::StoreError {
     miku_domain::StoreError::Unsupported(format!(
         "{backend} backend requires the `{feature}` Cargo feature"
