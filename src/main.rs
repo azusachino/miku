@@ -9,8 +9,7 @@ use axum::{
         sse::{self, KeepAlive, Sse},
         Html, IntoResponse, Redirect, Response,
     },
-    routing::{get, post},
-    Form, Json, Router,
+    Form, Json,
 };
 use chrono::{DateTime, Local};
 use miku::markdown::{extract_title, parse_frontmatter, render_html_with_toc, Heading};
@@ -30,8 +29,9 @@ use std::sync::{
 };
 use std::time::{Duration, Instant};
 use tokio_stream::{wrappers::BroadcastStream, Stream, StreamExt};
-use tower_http::{services::ServeDir, trace::TraceLayer};
 use tracing::{info, warn};
+
+mod http;
 
 const SERVER_TIMING: HeaderName = HeaderName::from_static("server-timing");
 
@@ -317,7 +317,7 @@ async fn main() -> Result<()> {
     };
 
     // 7. Build Router & Configure axum routes
-    let app = app(state);
+    let app = http::router(state);
 
     // 8. Bind and run the listener. Defaults to 0.0.0.0:3000 so the server is
     //    reachable from other hosts on the LAN / Tailscale tailnet (visit
@@ -333,32 +333,6 @@ async fn main() -> Result<()> {
     indexer.shutdown().await;
 
     Ok(())
-}
-
-fn app(state: AppState) -> Router {
-    Router::new()
-        .route("/", get(redirect_to_index))
-        .route("/search", get(search))
-        .route("/tags", get(tags_index))
-        .route("/tags/{tag}", get(tag_filter))
-        .route("/folders/{*path}", get(folder_view))
-        .route("/preview", post(preview))
-        .route("/p/{*path}", get(page_handler).post(page_save))
-        .route("/events", get(events))
-        .route("/healthz", get(healthz))
-        .route("/readyz", get(readyz))
-        .route("/metrics", get(metrics))
-        .route("/api/v1/move", post(page_move))
-        .route("/api/v1/trash", post(page_trash).get(trash_list))
-        .route("/api/v1/trash/restore", post(trash_restore))
-        .route("/api/v1/trash/purge", post(trash_purge))
-        .route("/api/v1/promote-mention", post(promote_mention))
-        .route("/api/v1/nav/children", get(nav_children_handler))
-        .route("/api/v1/quickswitch", get(quickswitch))
-        .nest_service("/static", ServeDir::new("static"))
-        .nest_service("/assets", ServeDir::new("miku_docs/assets"))
-        .layer(TraceLayer::new_for_http().on_response(observe_http_response))
-        .with_state(state)
 }
 
 #[derive(serde::Serialize)]
@@ -2280,7 +2254,7 @@ mod tests {
             events,
         };
         // If `/events` (or any route) were malformed, `app` would panic here.
-        let _router = app(state);
+        let _router = http::router(state);
     }
 
     #[test]
