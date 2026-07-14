@@ -25,6 +25,7 @@ __MACOSX
 
 # Agent session logs (ephemeral)
 .agents/sessions/
+.artifacts/
 
 # Runtime soft-delete trash in the content vault
 miku_docs/.trash/
