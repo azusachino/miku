@@ -53,6 +53,8 @@ def check_persistence(page: Page) -> None:
         raise AssertionError(f"legacy UI state keys remain: {legacy}")
     page.reload(wait_until="domcontentloaded")
     page.wait_for_function("document.documentElement.dataset.theme === 'dark'")
+    assert_visible(page, ".mk-article", "article after direct refresh")
+    assert_visible(page, ".mk-h1", "page title after direct refresh")
 
 
 def check_palette(page: Page) -> None:
