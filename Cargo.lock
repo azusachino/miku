@@ -1221,6 +1221,8 @@ dependencies = [
  "chrono",
  "comrak",
  "lazy_static",
+ "miku-domain",
+ "miku-markdown",
  "minijinja",
  "notify",
  "regex",
@@ -1246,6 +1248,40 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror 2.0.18",
+]
+
+[[package]]
+name = "miku-index-memory"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "miku-domain",
+ "miku-indexer",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
+name = "miku-indexer"
+version = "0.1.0"
+dependencies = [
+ "miku-domain",
+ "miku-markdown",
+ "regex",
+ "serde_json",
+ "thiserror 2.0.18",
+]
+
+[[package]]
+name = "miku-markdown"
+version = "0.1.0"
+dependencies = [
+ "comrak",
+ "lazy_static",
+ "regex",
+ "serde",
+ "serde_json",
+ "serde_yaml",
 ]
 
 [[package]]

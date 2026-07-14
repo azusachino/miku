@@ -22,7 +22,12 @@ include = [
 ]
 
 [workspace]
-members = ["crates/miku-domain"]
+members = [
+  "crates/miku-domain",
+  "crates/miku-markdown",
+  "crates/miku-indexer",
+  "crates/miku-index-memory",
+]
 resolver = "2"
 
 [workspace.package]
@@ -32,12 +37,19 @@ repository = "https://github.com/azusachino/miku"
 
 [workspace.dependencies]
 async-trait = "0.1"
+comrak = "0.52"
+lazy_static = "1"
+regex = "1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+serde_yaml = "0.9"
+tokio = { version = "1", features = ["macros", "rt", "sync"] }
 thiserror = "2"
 
 [dependencies]
 anyhow = "1"
+miku-domain = { path = "crates/miku-domain" }
+miku-markdown = { path = "crates/miku-markdown" }
 thiserror = "2"
 
 # async runtime
