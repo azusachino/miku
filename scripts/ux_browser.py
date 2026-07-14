@@ -20,6 +20,7 @@ def assert_visible(page: Page, selector: str, label: str) -> None:
 
 def check_shell(page: Page) -> None:
     page.goto(f"{BASE_URL}{PAGE_PATH}", wait_until="domcontentloaded", timeout=10_000)
+    page.wait_for_function("window.Alpine && document.body._x_dataStack", timeout=10_000)
     page.locator("link[rel='icon']").wait_for(state="attached")
     assert_visible(page, ".mk-topbar", "shell topbar")
     assert_visible(page, ".mk-sidebar", "shell sidebar")
@@ -49,6 +50,19 @@ def check_navigation(page: Page) -> None:
     page.wait_for_url(f"**{PAGE_PATH}")
 
 
+def check_editor(page: Page) -> None:
+    page.goto(f"{BASE_URL}{PAGE_PATH}", wait_until="domcontentloaded")
+    page.goto(f"{BASE_URL}/p/Index/edit", wait_until="domcontentloaded")
+    page.wait_for_url("**/p/Index/edit")
+    assert_visible(page, "[data-editor]", "full editor")
+    assert_visible(page, "[data-save-status]", "editor save status")
+    page.locator("#edit-title-input").fill("Index")
+    if page.locator("[data-save-status]").inner_text() != "Unsaved changes":
+        raise AssertionError("editor did not expose unsaved state")
+    page.locator("a.mk-btn-ghost").first.click()
+    page.wait_for_url("**/p/Index")
+
+
 def main() -> int:
     ARTIFACT_DIR.mkdir(parents=True, exist_ok=True)
     with sync_playwright() as playwright:
@@ -60,6 +74,7 @@ def main() -> int:
             check_shell(page)
             check_palette(page)
             check_navigation(page)
+            check_editor(page)
             page.set_viewport_size({"width": 390, "height": 844})
             page.reload(wait_until="domcontentloaded")
             page.screenshot(path=str(ARTIFACT_DIR / "narrow.png"), full_page=True)

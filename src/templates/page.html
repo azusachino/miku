@@ -99,6 +99,7 @@ Miku - {{ path }}
             <textarea class="hidden" name="body" data-inline-body>{{ body }}</textarea>
             <div class="mk-inline-editor-bar">
                 <span class="mk-editing"><i></i> Live editing</span>
+                <span class="mk-save-status" data-inline-save-status role="status" aria-live="polite">Saved</span>
                 <span class="mk-pathchip">miku_docs/{{ path }}.md</span>
                 <div class="mk-inline-editor-actions">
                     <button type="button" class="mk-btn mk-btn-ghost" @click="editing = false">Reading</button>
@@ -202,6 +203,19 @@ Miku - {{ path }}
             const livePreview = document.querySelector('[data-live-preview]');
             let timer = null;
             let requestId = 0;
+            let dirty = false;
+            const status = editor.querySelector('[data-inline-save-status]');
+            const setStatus = (label, state) => {
+                if (!status) return;
+                status.textContent = label;
+                status.dataset.state = state;
+            };
+            editor.addEventListener('submit', () => { dirty = false; setStatus('Saving…', 'saving'); });
+            window.addEventListener('beforeunload', event => {
+                if (!dirty) return;
+                event.preventDefault();
+                event.returnValue = '';
+            });
 
             const inlineTheme = EditorView.theme({
                 "&": {
@@ -288,6 +302,8 @@ Miku - {{ path }}
                         EditorView.updateListener.of((update) => {
                             if (!update.docChanged) return;
                             textarea.value = update.state.doc.toString();
+                            dirty = true;
+                            setStatus('Unsaved changes', 'dirty');
                             queuePreview(220);
                         })
                     ]
