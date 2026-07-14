@@ -210,6 +210,14 @@ impl IndexWriter for MemoryIndex {
         Ok(())
     }
 
+    async fn delete_mentions_for_target(&self, target_path: &str) -> StoreResult<()> {
+        self.mentions
+            .write()
+            .map_err(|_| StoreError::Operation("memory mention lock poisoned".to_string()))?
+            .retain(|(target, _, _), _| target != target_path);
+        Ok(())
+    }
+
     async fn delete_page(&self, path: &str) -> StoreResult<IndexEvent> {
         self.write_pages()?.remove(path);
         Ok(IndexEvent::PageDeleted {

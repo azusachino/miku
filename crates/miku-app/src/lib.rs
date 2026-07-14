@@ -374,6 +374,31 @@ impl IndexWriter for CachedIndexWriter {
         let _ = self.cache.lock().await.clear().await;
         Ok(result)
     }
+
+    async fn replace_mentions_for_source(
+        &self,
+        source_path: &str,
+        mentions: Vec<MentionRecord>,
+    ) -> StoreResult<()> {
+        let result = self
+            .primary
+            .replace_mentions_for_source(source_path, mentions)
+            .await;
+        let _ = self.cache.lock().await.clear().await;
+        result
+    }
+
+    async fn delete_mentions_for_source(&self, source_path: &str) -> StoreResult<()> {
+        let result = self.primary.delete_mentions_for_source(source_path).await;
+        let _ = self.cache.lock().await.clear().await;
+        result
+    }
+
+    async fn delete_mentions_for_target(&self, target_path: &str) -> StoreResult<()> {
+        let result = self.primary.delete_mentions_for_target(target_path).await;
+        let _ = self.cache.lock().await.clear().await;
+        result
+    }
 }
 
 fn missing_feature(backend: &str, feature: &str) -> miku_domain::StoreError {

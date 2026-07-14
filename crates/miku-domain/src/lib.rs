@@ -278,6 +278,13 @@ pub trait IndexWriter: Send + Sync {
         ))
     }
 
+    /// Remove every derived mention targeting one page.
+    async fn delete_mentions_for_target(&self, _target_path: &str) -> StoreResult<()> {
+        Err(StoreError::Unsupported(
+            "derived unlinked mentions".to_string(),
+        ))
+    }
+
     /// Delete one page projection and return the resulting event.
     async fn delete_page(&self, path: &str) -> StoreResult<IndexEvent>;
 }

@@ -24,6 +24,16 @@ const CREATE_META: &str = "CREATE TABLE IF NOT EXISTS miku_index_meta (
     key TEXT PRIMARY KEY NOT NULL,
     value TEXT NOT NULL
 )";
+const CREATE_MENTIONS: &str = "CREATE TABLE IF NOT EXISTS miku_mention_index (
+    target_path TEXT NOT NULL,
+    source_path TEXT NOT NULL,
+    source_title TEXT NOT NULL,
+    matched_text TEXT NOT NULL,
+    snippet TEXT NOT NULL,
+    PRIMARY KEY (target_path, source_path, matched_text)
+)";
+const CREATE_MENTIONS_TARGET: &str =
+    "CREATE INDEX IF NOT EXISTS miku_mention_target ON miku_mention_index (target_path)";
 const SEARCH_READY_KEY: &str = "fts_ready";
 
 /// A local durable index using the Rust-built Turso engine.
@@ -50,6 +60,14 @@ impl TursoIndex {
             .map_err(driver_error)?;
         connection
             .execute(CREATE_META, ())
+            .await
+            .map_err(driver_error)?;
+        connection
+            .execute(CREATE_MENTIONS, ())
+            .await
+            .map_err(driver_error)?;
+        connection
+            .execute(CREATE_MENTIONS_TARGET, ())
             .await
             .map_err(driver_error)?;
         let mut search_rows = connection
@@ -97,6 +115,31 @@ impl TursoIndex {
                     pages.push(page);
                 }
                 memory.replace_pages(pages).await?;
+                let mut rows = connection
+                    .query(
+                        "SELECT target_path, source_path, source_title, matched_text, snippet
+                         FROM miku_mention_index ORDER BY target_path, source_path, matched_text",
+                        (),
+                    )
+                    .await
+                    .map_err(driver_error)?;
+                let mut grouped = std::collections::BTreeMap::<String, Vec<MentionRecord>>::new();
+                while let Some(row) = rows.next().await.map_err(driver_error)? {
+                    let mention = MentionRecord {
+                        target_path: text_value(&row.get_value(0).map_err(driver_error)?)?,
+                        source_path: text_value(&row.get_value(1).map_err(driver_error)?)?,
+                        source_title: text_value(&row.get_value(2).map_err(driver_error)?)?,
+                        matched_text: text_value(&row.get_value(3).map_err(driver_error)?)?,
+                        snippet: text_value(&row.get_value(4).map_err(driver_error)?)?,
+                    };
+                    grouped
+                        .entry(mention.source_path.clone())
+                        .or_default()
+                        .push(mention);
+                }
+                for (source, mentions) in grouped {
+                    memory.replace_mentions_for_source(&source, mentions).await?;
+                }
                 Ok(())
             })
             .await
@@ -225,6 +268,7 @@ impl IndexReader for TursoIndex {
     }
 
     async fn mentions_for_target(&self, path: &str) -> StoreResult<Vec<MentionRecord>> {
+        self.ensure_hydrated().await?;
         self.memory.mentions_for_target(path).await
     }
 
@@ -310,13 +354,68 @@ impl IndexWriter for TursoIndex {
         source_path: &str,
         mentions: Vec<MentionRecord>,
     ) -> StoreResult<()> {
+        let connection = self.connection.lock().await;
+        let transaction = connection
+            .unchecked_transaction()
+            .await
+            .map_err(driver_error)?;
+        transaction
+            .execute(
+                "DELETE FROM miku_mention_index WHERE source_path = ?1",
+                [source_path.to_string()],
+            )
+            .await
+            .map_err(driver_error)?;
+        for mention in &mentions {
+            transaction
+                .execute(
+                    "INSERT INTO miku_mention_index
+                     (target_path, source_path, source_title, matched_text, snippet)
+                     VALUES (?1, ?2, ?3, ?4, ?5)
+                     ON CONFLICT(target_path, source_path, matched_text) DO UPDATE SET
+                       source_title = excluded.source_title, snippet = excluded.snippet",
+                    turso::params![
+                        mention.target_path.clone(),
+                        mention.source_path.clone(),
+                        mention.source_title.clone(),
+                        mention.matched_text.clone(),
+                        mention.snippet.clone(),
+                    ],
+                )
+                .await
+                .map_err(driver_error)?;
+        }
+        transaction.commit().await.map_err(driver_error)?;
+        drop(connection);
         self.memory
             .replace_mentions_for_source(source_path, mentions)
             .await
     }
 
     async fn delete_mentions_for_source(&self, source_path: &str) -> StoreResult<()> {
+        let connection = self.connection.lock().await;
+        connection
+            .execute(
+                "DELETE FROM miku_mention_index WHERE source_path = ?1",
+                [source_path.to_string()],
+            )
+            .await
+            .map_err(driver_error)?;
+        drop(connection);
         self.memory.delete_mentions_for_source(source_path).await
+    }
+
+    async fn delete_mentions_for_target(&self, target_path: &str) -> StoreResult<()> {
+        let connection = self.connection.lock().await;
+        connection
+            .execute(
+                "DELETE FROM miku_mention_index WHERE target_path = ?1",
+                [target_path.to_string()],
+            )
+            .await
+            .map_err(driver_error)?;
+        drop(connection);
+        self.memory.delete_mentions_for_target(target_path).await
     }
 
     async fn delete_page(&self, path: &str) -> StoreResult<IndexEvent> {
@@ -333,6 +432,9 @@ impl IndexWriter for TursoIndex {
             .await
             .map_err(driver_error)?;
         transaction.commit().await.map_err(driver_error)?;
+        drop(connection);
+        self.delete_mentions_for_source(path).await?;
+        self.delete_mentions_for_target(path).await?;
         self.memory.delete_page(path).await
     }
 }
@@ -500,6 +602,62 @@ mod tests {
             .await
             .expect("search reopened index");
         assert_eq!(hits.len(), 1);
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[tokio::test]
+    async fn rehydrates_derived_mentions_after_restart() {
+        let path = std::env::temp_dir().join(format!(
+            "miku-turso-mentions-{}-{}.db",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("system clock")
+                .as_nanos()
+        ));
+        let path_string = path.to_string_lossy().into_owned();
+        {
+            let store = TursoIndex::open(&path_string).await.expect("open disk index");
+            store
+                .replace_page(page("Index.md", "Target"))
+                .await
+                .expect("write target");
+            store
+                .replace_page(page("Source.md", "Index"))
+                .await
+                .expect("write source");
+            store
+                .replace_mentions_for_source(
+                    "Source.md",
+                    vec![MentionRecord {
+                        target_path: "Index.md".to_string(),
+                        source_path: "Source.md".to_string(),
+                        source_title: "Source".to_string(),
+                        matched_text: "Index".to_string(),
+                        snippet: "Index".to_string(),
+                    }],
+                )
+                .await
+                .expect("write mention");
+        }
+        let reopened = TursoIndex::open(&path_string).await.expect("reopen disk index");
+        assert_eq!(
+            reopened
+                .mentions_for_target("Index.md")
+                .await
+                .expect("read mention")
+                .len(),
+            1
+        );
+        reopened
+            .delete_mentions_for_target("Index.md")
+            .await
+            .expect("delete target mentions");
+        assert!(reopened
+            .mentions_for_target("Index.md")
+            .await
+            .expect("read deleted mention")
+            .is_empty());
         let _ = std::fs::remove_file(path);
     }
 }
