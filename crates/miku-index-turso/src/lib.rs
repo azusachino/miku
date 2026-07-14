@@ -20,6 +20,11 @@ const CREATE_PAGES: &str = "CREATE TABLE IF NOT EXISTS miku_page_index (
 )";
 const CREATE_SEARCH: &str =
     "CREATE INDEX IF NOT EXISTS miku_page_search ON miku_page_index USING fts (title, body)";
+const CREATE_META: &str = "CREATE TABLE IF NOT EXISTS miku_index_meta (
+    key TEXT PRIMARY KEY NOT NULL,
+    value TEXT NOT NULL
+)";
+const SEARCH_READY_KEY: &str = "fts_ready";
 
 /// A local durable index using the Rust-built Turso engine.
 #[derive(Clone)]
@@ -43,9 +48,40 @@ impl TursoIndex {
             .await
             .map_err(driver_error)?;
         connection
-            .execute(CREATE_SEARCH, ())
+            .execute(CREATE_META, ())
             .await
             .map_err(driver_error)?;
+        let mut search_rows = connection
+            .query(
+                "SELECT value FROM miku_index_meta WHERE key = ?1 LIMIT 1",
+                [SEARCH_READY_KEY.to_string()],
+            )
+            .await
+            .map_err(driver_error)?;
+        let search_ready = search_rows
+            .next()
+            .await
+            .map_err(driver_error)?
+            .and_then(|row| {
+                row.get_value(0)
+                    .ok()
+                    .and_then(|value| text_value(&value).ok())
+            })
+            .is_some_and(|value| value == "1");
+        if !search_ready {
+            connection
+                .execute(CREATE_SEARCH, ())
+                .await
+                .map_err(driver_error)?;
+            connection
+                .execute(
+                    "INSERT INTO miku_index_meta (key, value) VALUES (?1, '1')
+                     ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+                    [SEARCH_READY_KEY.to_string()],
+                )
+                .await
+                .map_err(driver_error)?;
+        }
 
         let memory = MemoryIndex::new();
         let mut rows = connection
@@ -208,6 +244,14 @@ impl IndexWriter for TursoIndex {
                 .execute("DROP INDEX IF EXISTS miku_page_search", ())
                 .await
                 .map_err(driver_error)?;
+            connection
+                .execute(
+                    "INSERT INTO miku_index_meta (key, value) VALUES (?1, '0')
+                     ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+                    [SEARCH_READY_KEY.to_string()],
+                )
+                .await
+                .map_err(driver_error)?;
         }
         let connection = self.connection.lock().await;
         let mut transaction = connection
@@ -235,6 +279,14 @@ impl IndexWriter for TursoIndex {
         let connection = self.connection.lock().await;
         connection
             .execute(CREATE_SEARCH, ())
+            .await
+            .map_err(driver_error)?;
+        connection
+            .execute(
+                "INSERT INTO miku_index_meta (key, value) VALUES (?1, '1')
+                 ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+                [SEARCH_READY_KEY.to_string()],
+            )
             .await
             .map_err(driver_error)?;
         self.search_available.store(true, Ordering::Release);

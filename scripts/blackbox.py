@@ -72,6 +72,19 @@ def wait_for_index() -> dict[str, object]:
     )
 
 
+def wait_for_http() -> None:
+    deadline = time.monotonic() + READY_TIMEOUT_SECONDS
+    while time.monotonic() < deadline:
+        try:
+            status, _, _ = get("/api/health")
+            if status in {200, 503}:
+                return
+        except SystemExit:
+            pass
+        time.sleep(1)
+    raise AssertionError(f"HTTP server did not bind within {READY_TIMEOUT_SECONDS:g}s")
+
+
 def validate_page(body: str, page: str) -> None:
     if "Miku" not in body and page not in body:
         raise AssertionError(f"/p/{page}: response does not look like a rendered page")
@@ -133,6 +146,8 @@ def main() -> int:
         f"folder={folder!r} tag={tag!r}"
     )
 
+    wait_for_http()
+
     encoded_page = urllib.parse.quote(app_page, safe="/")
 
     # The page source must remain available before the background indexer is
@@ -146,6 +161,11 @@ def main() -> int:
 
     health = wait_for_index()
     print(f"ok: backend ready capabilities={health.get('capabilities', {})}")
+
+    status, _, body = get("/metrics")
+    expect(status, 200, "/metrics")
+    if "miku_http_requests_total" not in body or "miku_index_ready 1" not in body:
+        raise AssertionError("/metrics: missing request or index readiness metrics")
 
     status, _, _ = get("/")
     expect(status, 200, "/")

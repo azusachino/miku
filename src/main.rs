@@ -1,7 +1,10 @@
 use anyhow::{Context, Result};
 use axum::{
     extract::{Path, Query, State},
-    http::{header::HeaderName, HeaderValue, StatusCode},
+    http::{
+        header::{self, HeaderName},
+        HeaderValue, StatusCode,
+    },
     response::{
         sse::{self, KeepAlive, Sse},
         Html, IntoResponse, Redirect, Response,
@@ -16,17 +19,70 @@ use miku_domain::IndexCapabilities;
 use minijinja::{context, Environment};
 use sha2::{Digest, Sha256};
 use std::env;
+use std::fmt::Write as _;
 use std::fs;
 use std::io::Write;
 use std::net::SocketAddr;
 use std::path::{Path as StdPath, PathBuf};
-use std::sync::{atomic::AtomicBool, Arc};
-use std::time::Instant;
+use std::sync::{
+    atomic::{AtomicBool, AtomicU64, Ordering},
+    Arc, OnceLock,
+};
+use std::time::{Duration, Instant};
 use tokio_stream::{wrappers::BroadcastStream, Stream, StreamExt};
 use tower_http::{services::ServeDir, trace::TraceLayer};
 use tracing::{info, warn};
 
 const SERVER_TIMING: HeaderName = HeaderName::from_static("server-timing");
+
+struct HttpMetrics {
+    started_at: Instant,
+    requests_total: AtomicU64,
+    duration_microseconds_sum: AtomicU64,
+    duration_buckets: [AtomicU64; 7],
+}
+
+impl HttpMetrics {
+    fn new() -> Self {
+        Self {
+            started_at: Instant::now(),
+            requests_total: AtomicU64::new(0),
+            duration_microseconds_sum: AtomicU64::new(0),
+            duration_buckets: std::array::from_fn(|_| AtomicU64::new(0)),
+        }
+    }
+
+    fn observe(&self, duration: Duration) {
+        let microseconds =
+            u64::try_from(duration.as_micros().min(u128::from(u64::MAX))).unwrap_or(u64::MAX);
+        self.requests_total.fetch_add(1, Ordering::Relaxed);
+        self.duration_microseconds_sum
+            .fetch_add(microseconds, Ordering::Relaxed);
+        for (bucket, limit) in self
+            .duration_buckets
+            .iter()
+            .zip([1_000, 5_000, 10_000, 25_000, 50_000, 100_000, 250_000])
+        {
+            if microseconds <= limit {
+                bucket.fetch_add(1, Ordering::Relaxed);
+            }
+        }
+    }
+}
+
+static HTTP_METRICS: OnceLock<HttpMetrics> = OnceLock::new();
+
+fn http_metrics() -> &'static HttpMetrics {
+    HTTP_METRICS.get_or_init(HttpMetrics::new)
+}
+
+fn observe_http_response<B>(
+    _response: &axum::http::Response<B>,
+    latency: Duration,
+    _span: &tracing::Span,
+) {
+    http_metrics().observe(latency);
+}
 
 #[derive(serde::Serialize)]
 struct Backlink {
@@ -278,6 +334,7 @@ fn app(state: AppState) -> Router {
         .route("/p/{*path}", get(page_handler).post(page_save))
         .route("/events", get(events))
         .route("/api/health", get(health))
+        .route("/metrics", get(metrics))
         .route("/api/move", post(page_move))
         .route("/api/trash", post(page_trash).get(trash_list))
         .route("/api/trash/restore", post(trash_restore))
@@ -287,7 +344,7 @@ fn app(state: AppState) -> Router {
         .route("/api/quickswitch", get(quickswitch))
         .nest_service("/static", ServeDir::new("static"))
         .nest_service("/assets", ServeDir::new("miku_docs/assets"))
-        .layer(TraceLayer::new_for_http())
+        .layer(TraceLayer::new_for_http().on_response(observe_http_response))
         .with_state(state)
 }
 
@@ -309,6 +366,50 @@ async fn health(State(state): State<AppState>) -> Result<Json<HealthResponse>, S
         capabilities,
         index_ready: state.index_ready.load(std::sync::atomic::Ordering::Acquire),
     }))
+}
+
+async fn metrics(State(state): State<AppState>) -> impl IntoResponse {
+    let metrics = http_metrics();
+    let bucket_limits = [
+        ("1000", 0),
+        ("5000", 1),
+        ("10000", 2),
+        ("25000", 3),
+        ("50000", 4),
+        ("100000", 5),
+        ("250000", 6),
+    ];
+    let mut body = format!(
+        "# HELP miku_process_uptime_seconds Process uptime.\n# TYPE miku_process_uptime_seconds gauge\nmiku_process_uptime_seconds {}\n# HELP miku_index_ready Whether the initial index reconcile has completed.\n# TYPE miku_index_ready gauge\nmiku_index_ready {}\n# HELP miku_http_requests_total Total HTTP responses.\n# TYPE miku_http_requests_total counter\nmiku_http_requests_total {}\n# HELP miku_http_request_duration_microseconds_sum Sum of HTTP response durations in microseconds.\n# TYPE miku_http_request_duration_microseconds_sum counter\nmiku_http_request_duration_microseconds_sum {}\n# HELP miku_http_request_duration_microseconds HTTP response duration distribution.\n# TYPE miku_http_request_duration_microseconds histogram\n",
+        metrics.started_at.elapsed().as_secs_f64(),
+        u8::from(state.index_ready.load(Ordering::Acquire)),
+        metrics.requests_total.load(Ordering::Relaxed),
+        metrics.duration_microseconds_sum.load(Ordering::Relaxed),
+    );
+    for (limit, index) in bucket_limits {
+        let _ = writeln!(
+            body,
+            "miku_http_request_duration_microseconds_bucket{{le=\"{limit}\"}} {}",
+            metrics.duration_buckets[index].load(Ordering::Relaxed)
+        );
+    }
+    let _ = writeln!(
+        body,
+        "miku_http_request_duration_microseconds_bucket{{le=\"+Inf\"}} {}",
+        metrics.requests_total.load(Ordering::Relaxed),
+    );
+    let _ = writeln!(
+        body,
+        "miku_http_request_duration_microseconds_count {}",
+        metrics.requests_total.load(Ordering::Relaxed),
+    );
+    (
+        [(
+            header::CONTENT_TYPE,
+            HeaderValue::from_static("text/plain; version=0.0.4"),
+        )],
+        body,
+    )
 }
 
 // Redirect root "/" to "/p/Index"

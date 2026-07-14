@@ -73,7 +73,12 @@ repeatable read-path comparisons while the server is running:
 ```bash
 hyperfine --warmup 2 --runs 10 'curl -fsS http://127.0.0.1:3000/p/Index'
 MIKU_BENCH_REQUESTS=1000 MIKU_BENCH_CONCURRENCY=32 make benchmark
+xh get http://127.0.0.1:3000/metrics
 ```
+
+`/metrics` is deliberately implemented in the application using the Prometheus text exposition format, without adding a metrics exporter to the Rust dependency graph. It exposes process uptime, index
+readiness, request count, cumulative response duration, and response-duration buckets in microseconds. Scrape it during a cold rebuild and while running `oha` to separate startup/indexing cost from
+HTTP tail latency.
 
 Record at minimum: time until `index_ready=true`, each reconcile phase, per-batch write p50/p95 if available, effective Tantivy commit frequency, page-request success rate/latency while not ready,
 final index size, and restart convergence time. Do not compare only final database size.
