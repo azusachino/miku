@@ -11,6 +11,7 @@ use axum::{
 };
 use chrono::{DateTime, Local};
 use miku::markdown::{extract_title, parse_frontmatter, render_html_with_toc, Heading};
+use miku_app::{compose_index, IndexApi, IndexConfig};
 use minijinja::{context, Environment};
 use sha2::{Digest, Sha256};
 use sqlx::postgres::PgPoolOptions;
@@ -175,6 +176,7 @@ struct NavNode {
 #[derive(Clone)]
 struct AppState {
     db: sqlx::PgPool,
+    index: IndexApi,
     templates: Arc<Environment<'static>>,
     // Broadcasts the relative path (`.md` stripped) of each page the background
     // indexer just re-indexed, so connected browsers can live-refresh via SSE.
@@ -238,6 +240,13 @@ async fn main() -> Result<()> {
         .context("Database migrations failed")?;
     info!("Migrations complete.");
 
+    let index = compose_index(IndexConfig::Postgres {
+        database_url: database_url.clone(),
+    })
+    .await
+    .map_err(|error| anyhow::anyhow!(error))
+    .context("Failed to compose Postgres index API")?;
+
     // 5. Initialize Minijinja template environment
     let mut templates_env = Environment::new();
     templates_env.set_loader(minijinja::path_loader("src/templates"));
@@ -249,6 +258,7 @@ async fn main() -> Result<()> {
 
     let state = AppState {
         db: pool.clone(),
+        index,
         templates: Arc::new(templates_env),
         events: events_tx.clone(),
     };
@@ -1609,16 +1619,17 @@ async fn tags_index(State(state): State<AppState>) -> Result<impl IntoResponse, 
     info!("Rendering tags index");
     let template = state.templates.get_template("tags.html")?;
 
-    let rows: Vec<(String, i64)> = sqlx::query_as(
-        "SELECT tag, COUNT(*) AS cnt FROM tb_tags GROUP BY tag ORDER BY cnt DESC, tag",
-    )
-    .fetch_all(&state.db)
-    .await
-    .context("Failed to load tags")?;
-
-    let tags: Vec<TagCount> = rows
+    let tags: Vec<TagCount> = state
+        .index
+        .tags()
+        .await
+        .map_err(|error| anyhow::anyhow!(error))
+        .context("Failed to load tags")?
         .into_iter()
-        .map(|(tag, count)| TagCount { tag, count })
+        .map(|tag| TagCount {
+            tag: tag.tag,
+            count: tag.count,
+        })
         .collect();
 
     let nav = nav_pages(&state.db, "").await?;
@@ -2215,6 +2226,9 @@ mod tests {
         let state = AppState {
             db: sqlx::PgPool::connect_lazy("postgres://localhost/miku_test_unused")
                 .expect("lazy pool"),
+            index: compose_index(IndexConfig::Memory)
+                .await
+                .expect("memory index API"),
             templates: Arc::new(templates_env),
             events,
         };

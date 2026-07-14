@@ -1238,6 +1238,7 @@ dependencies = [
  "chrono",
  "comrak",
  "lazy_static",
+ "miku-app",
  "miku-domain",
  "miku-markdown",
  "minijinja",

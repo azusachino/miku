@@ -52,6 +52,7 @@ thiserror = "2"
 [dependencies]
 anyhow = "1"
 miku-domain = { path = "crates/miku-domain" }
+miku-app = { path = "crates/miku-app", features = ["postgres"] }
 miku-markdown = { path = "crates/miku-markdown" }
 thiserror = "2"
 
