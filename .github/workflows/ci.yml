@@ -13,4 +13,4 @@ jobs:
       - uses: actions/checkout@v4
       - uses: cachix/install-nix-action@v25
       - run: make check
-      - run: make featured
+      - run: make all-features

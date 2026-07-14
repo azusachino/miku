@@ -51,7 +51,7 @@ export DATABASE_URL=postgres://localhost/miku
 nix develop       # enter the devShell (provisions all tools)
 make run          # run the server (expects DATABASE_URL already set)
 make check                             # default fmt + lint + tests
-make featured                          # all Cargo features
+make all-features                      # all Cargo features
 make integration                       # optional service-backed probes
 make release                           # crates.io package dry-runs
 make validate                          # check + release build

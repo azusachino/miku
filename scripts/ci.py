@@ -4,7 +4,7 @@
 Run through uv:
 
     uv run python scripts/ci.py check
-    uv run python scripts/ci.py featured
+    uv run python scripts/ci.py all-features
     uv run python scripts/ci.py integration
     uv run python scripts/ci.py release
 
@@ -73,7 +73,7 @@ def validate() -> None:
 
 COMMANDS = {
     "check": check,
-    "featured": featured,
+    "all-features": featured,
     "integration": integration,
     "release": release,
     "scale": scale,
