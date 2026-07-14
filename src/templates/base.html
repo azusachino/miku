@@ -479,11 +479,19 @@
                     @pointerdown="startPaneResize($event, 'sidebar')"
                     aria-label="Resize file panel"></button>
 
-            <main class="mk-main">
+        <main class="mk-main">
                 <div class="mk-view" x-data x-init="if (window.Prism) Prism.highlightAll()">
                     {% block content %}{% endblock %}
                 </div>
             </main>
+        </div>
+
+        <div class="mk-zen-exit" x-show="zenMode" x-transition.opacity x-cloak>
+            <button type="button" class="mk-zen-exit-button" @click="toggleZen()" aria-label="Exit Zen mode">
+                <span aria-hidden="true">↗</span>
+                <span>Exit Zen</span>
+                <kbd>Esc</kbd>
+            </button>
         </div>
 
         <div class="mk-command-overlay" x-show="paletteOpen" x-transition.opacity hx-boost="false"
@@ -730,6 +738,11 @@
                         if (this.paletteOpen) this.queuePaletteRefresh();
                     });
                     window.addEventListener('keydown', event => {
+                        if (event.key === 'Escape' && this.zenMode && !this.paletteOpen && !this.createOpen && !this.settingsOpen) {
+                            event.preventDefault();
+                            this.toggleZen();
+                            return;
+                        }
                         if (!(event.metaKey || event.ctrlKey)) return;
                         const key = event.key.toLowerCase();
                         if (key === 'k') {

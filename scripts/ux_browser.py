@@ -41,6 +41,19 @@ def check_palette(page: Page) -> None:
         raise AssertionError("quick switcher did not close with Escape")
 
 
+def check_zen_mode(page: Page) -> None:
+    page.keyboard.press("Control+Shift+P")
+    page.locator(".mk-command-modal").wait_for(state="visible")
+    page.locator("input[x-ref='paletteInput']").fill("Toggle Zen mode")
+    page.get_by_text("Toggle Zen mode", exact=True).click()
+    page.locator("body.mk-zen").wait_for(state="attached")
+    assert_visible(page, ".mk-zen-exit-button", "Zen mode exit control")
+    page.keyboard.press("Escape")
+    page.wait_for_timeout(200)
+    if page.locator("body.mk-zen").count():
+        raise AssertionError("Zen mode did not close with Escape")
+
+
 def check_navigation(page: Page) -> None:
     page.locator("a[href='/p/Features']").first.click()
     page.wait_for_url("**/p/Features")
@@ -74,6 +87,7 @@ def main() -> int:
         try:
             check_shell(page)
             check_palette(page)
+            check_zen_mode(page)
             check_navigation(page)
             check_editor(page)
             page.set_viewport_size({"width": 390, "height": 844})

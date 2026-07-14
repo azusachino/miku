@@ -257,6 +257,46 @@ a { color: var(--teal); }
   margin: 0 auto;
 }
 
+.mk-zen-exit {
+  position: fixed;
+  top: 18px;
+  right: 22px;
+  z-index: 40;
+}
+.mk-zen-exit-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 7px 11px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--panel) 92%, transparent);
+  color: var(--muted);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .12);
+  font: 700 12px/1 var(--font-body);
+  cursor: pointer;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  transition: color .16s ease, border-color .16s ease, transform .16s ease;
+}
+.mk-zen-exit-button:hover {
+  color: var(--text);
+  border-color: var(--teal);
+  transform: translateY(-1px);
+}
+.mk-zen-exit-button span:first-child {
+  color: var(--teal);
+  font-size: 15px;
+}
+.mk-zen-exit-button kbd {
+  padding: 3px 5px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--muted);
+  font: 700 10px/1 var(--font-mono);
+}
+
 /* ---- New page button ---- */
 .mk-newpage {
   display: flex; align-items: center; gap: 10px; width: 100%; padding: 11px 14px; margin: 2px 0 14px;
