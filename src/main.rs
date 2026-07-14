@@ -264,7 +264,7 @@ async fn main() -> Result<()> {
     };
 
     // 6. Initialize background indexer
-    let _indexer =
+    let indexer =
         miku::indexer::IndexerQueue::new(pool, std::path::PathBuf::from("miku"), events_tx)
             .context("Failed to initialize background indexer")?;
 
@@ -282,6 +282,7 @@ async fn main() -> Result<()> {
     info!("Listening on {}", addr);
     let listener = tokio::net::TcpListener::bind(&addr).await?;
     axum::serve(listener, app).await?;
+    indexer.shutdown().await;
 
     Ok(())
 }

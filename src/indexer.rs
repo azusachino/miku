@@ -17,6 +17,7 @@ use std::sync::{
 };
 use std::time::Duration;
 use tokio::sync::{broadcast, mpsc};
+use tokio::task::JoinHandle;
 use tokio::time::sleep;
 use tracing::{error, info, warn};
 
@@ -290,6 +291,7 @@ pub struct IndexerQueue {
     sender: mpsc::Sender<WatcherEvent>,
     reconcile_queued: Arc<AtomicBool>,
     _watcher: notify::RecommendedWatcher,
+    tasks: Vec<JoinHandle<()>>,
 }
 
 impl IndexerQueue {
@@ -306,7 +308,7 @@ impl IndexerQueue {
         let content_root_clone = content_root.clone();
         let events_clone = events.clone();
         let reconcile_queued_for_consumer = Arc::clone(&reconcile_queued);
-        tokio::spawn(async move {
+        let consumer_task = tokio::spawn(async move {
             let mut index_failures = HashMap::new();
             info!("Starting startup reconcile sweep...");
             if let Err(e) = Self::reconcile_all(
@@ -394,7 +396,7 @@ impl IndexerQueue {
         let reconcile_sender = sender.clone();
         let reconcile_queued_for_ticker = Arc::clone(&reconcile_queued);
         let reconcile_interval = Self::reconcile_interval();
-        tokio::spawn(async move {
+        let ticker_task = tokio::spawn(async move {
             let mut ticker = tokio::time::interval(reconcile_interval);
             ticker.tick().await; // consume the immediate first tick (startup sweep covers it)
             loop {
@@ -407,7 +409,19 @@ impl IndexerQueue {
             sender,
             reconcile_queued,
             _watcher: watcher,
+            tasks: vec![consumer_task, ticker_task],
         })
+    }
+
+    /// Stop background indexing and await task termination.
+    pub async fn shutdown(self) {
+        let IndexerQueue { tasks, .. } = self;
+        for task in &tasks {
+            task.abort();
+        }
+        for task in tasks {
+            let _ = task.await;
+        }
     }
 
     pub fn trigger_reconcile(&self) {
