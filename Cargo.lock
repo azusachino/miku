@@ -1264,7 +1264,10 @@ dependencies = [
  "async-trait",
  "miku-domain",
  "miku-index-memory",
+ "miku-index-postgres",
+ "miku-index-turso",
  "serde_json",
+ "sqlx",
  "tokio",
 ]
 
