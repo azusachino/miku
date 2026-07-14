@@ -318,7 +318,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn commits_batches_and_reopens_a_disk_database() {
+    async fn reopens_and_resumes_a_partial_disk_projection() {
         let path = std::env::temp_dir().join(format!(
             "miku-turso-{}-{}.db",
             std::process::id(),
@@ -333,18 +333,25 @@ mod tests {
                 .await
                 .expect("open disk index");
             store
-                .replace_pages(vec![
-                    page("Today.md", "A durable note"),
-                    page("Next.md", "Another note"),
-                ])
+                .replace_page(page("Today.md", "A durable note"))
                 .await
-                .expect("write batch");
+                .expect("write first projection");
         }
-        let reopened = TursoIndex::open(&path_string)
+        {
+            let reopened = TursoIndex::open(&path_string)
+                .await
+                .expect("reopen disk index");
+            assert_eq!(reopened.list_pages().await.expect("list pages").len(), 1);
+            reopened
+                .replace_page(page("Next.md", "Another note"))
+                .await
+                .expect("resume with second projection");
+        }
+        let resumed = TursoIndex::open(&path_string)
             .await
-            .expect("reopen disk index");
-        assert_eq!(reopened.list_pages().await.expect("list pages").len(), 2);
-        let hits = reopened
+            .expect("reopen resumed index");
+        assert_eq!(resumed.list_pages().await.expect("list pages").len(), 2);
+        let hits = resumed
             .search(SearchRequest {
                 query: "durable".to_string(),
                 scope: miku_domain::SearchScope::Body,
