@@ -65,13 +65,30 @@ def p95(values: list[float]) -> float:
 
 
 def main() -> int:
+    health_status, _ = get("/healthz")
+    if health_status != 200:
+        raise SystemExit(
+            f"UX soak target is unavailable at {BASE_URL}/healthz (status={health_status}); "
+            "start Miku first"
+        )
+
     started = time.monotonic()
     samples: list[tuple[int, float]] = []
     rounds = 0
+    next_report = started + 10
     with ThreadPoolExecutor(max_workers=5) as pool:
         while time.monotonic() - started < DURATION:
             samples.extend(pool.map(get, action_paths(rounds)))
             rounds += 1
+            now = time.monotonic()
+            if now >= next_report:
+                failures = sum(status < 200 or status >= 400 for status, _ in samples)
+                print(
+                    f"progress elapsed={now - started:.0f}s rounds={rounds} "
+                    f"requests={len(samples)} failures={failures}",
+                    flush=True,
+                )
+                next_report = now + 10
 
     latencies = [elapsed for status, elapsed in samples]
     failures = [(status, elapsed) for status, elapsed in samples if status < 200 or status >= 400]
