@@ -58,7 +58,7 @@ Miku - Edit {{ path }}
             <!-- Hidden textarea for form submit -->
             <textarea
                 id="body-textarea"
-                class="hidden"
+                class="mk-editor-fallback"
                 name="body"
             >{{ body }}</textarea>
         </section>
@@ -199,6 +199,7 @@ Miku - Edit {{ path }}
                 state,
                 parent: editor.querySelector('#editor-container')
             });
+            textarea.classList.add('is-hidden');
 
             function syncTitleFromEditor(val) {
                 const fmInfo = getTitleAndBody(val);

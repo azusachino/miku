@@ -550,6 +550,8 @@ a { color: var(--teal); }
   background: var(--code); color: var(--code-text); font-family: var(--font-mono); font-size: 13.5px; line-height: 1.75;
 }
 .mk-preview { flex: 1; overflow-y: auto; padding: 28px 32px; }
+.mk-editor-fallback { display: block; flex: 1; width: 100%; min-height: 320px; resize: none; border: 0; outline: 0; padding: 24px 26px; background: var(--code); color: var(--code-text); font-family: var(--font-mono); font-size: 13.5px; line-height: 1.75; }
+.mk-editor-fallback.is-hidden { display: none; }
 
 .mk-js-fallback {
   display: none;
