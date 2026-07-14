@@ -51,6 +51,7 @@ make check-integration                 # optional service-backed probes
 make release                           # crates.io package dry-runs
 make validate                          # check + release build
 make check-blackbox                    # live HTTP checks against a running app
+make check-ux-browser                 # Playwright browser acceptance (install Chromium once)
 MIKU_BENCH_BACKEND=turso make benchmark # benchmark a running local Turso app
 ```
 
@@ -61,6 +62,9 @@ The `scripts/` suite is a first-class non-Rust test surface: `pytest` covers bla
 and is invoked with `make check-blackbox`.
 
 Project automation/scripts are Python run via `uv run python scripts/<x>.py` (root `pyproject.toml`), not bash.
+
+The browser acceptance harness uses Playwright against a real local process. Install its browser once with `uv run playwright install chromium`, then run `make check-ux-browser`. Screenshots are
+written to `.artifacts/ux/` (ignored).
 
 ## Containers (optional, Linux)
 

@@ -882,3 +882,86 @@ pre.mermaid svg {
   }
   .mk-view, .mk-edit, .mk-page, .mk-overlay { animation: none !important; }
 }
+
+/* ===========================================================================
+   UX 2.0 visual contract — calm document-first defaults
+   =========================================================================== */
+:root {
+  --font-display: ui-rounded, "SF Pro Rounded", "Avenir Next", system-ui, sans-serif;
+  --font-body: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans CJK JP", "Noto Sans CJK SC", system-ui, sans-serif;
+  --font-mono: ui-monospace, "SFMono-Regular", "Cascadia Code", "Noto Sans Mono CJK SC", monospace;
+  --read-w: 72ch;
+  --space-page: clamp(20px, 4vw, 56px);
+  --space-block: 1.1rem;
+  --control-h: 40px;
+  --focus-ring: 0 0 0 3px var(--tealsoft);
+}
+
+:where(button, a, input, textarea, select, [tabindex]):focus-visible {
+  outline: 2px solid var(--teal);
+  outline-offset: 2px;
+  box-shadow: var(--focus-ring);
+}
+
+.mk-topbar {
+  min-height: 64px;
+  padding-inline: var(--space-page);
+  background: color-mix(in srgb, var(--topbar) 92%, var(--bg));
+  backdrop-filter: blur(14px);
+}
+
+.mk-brand { width: 220px; }
+.mk-sidebar { background: color-mix(in srgb, var(--sidebar) 92%, var(--bg)); }
+.mk-main { background: var(--bg2); }
+
+.mk-read {
+  grid-template-columns: minmax(0, var(--read-w)) 8px var(--rail-w);
+  justify-content: center;
+  gap: clamp(18px, 3vw, 34px);
+  padding: 34px var(--space-page) 100px;
+}
+.mk-article { width: 100%; max-width: var(--read-w); }
+.mk-prose { font-size: 16px; line-height: 1.72; }
+.mk-prose p { margin: 0 0 var(--space-block); }
+.mk-prose h2 { margin-top: 2.4em; margin-bottom: .65em; line-height: 1.25; }
+.mk-prose h3 { margin-top: 1.8em; margin-bottom: .55em; line-height: 1.3; }
+.mk-prose ul, .mk-prose ol { margin-block: 0 var(--space-block); }
+.mk-prose table { width: 100%; display: block; overflow-x: auto; border-spacing: 0; }
+.mk-prose th, .mk-prose td { min-width: 8rem; padding: .65rem .8rem; text-align: left; vertical-align: top; }
+.mk-prose blockquote { margin: 1.4rem 0; padding: .2rem 1rem; border-left: 3px solid var(--teal); color: var(--muted); }
+.mk-prose pre { margin-block: 1.4rem 1.8rem; max-width: 100%; }
+
+.mk-h1 { line-height: 1.18; text-wrap: balance; }
+.mk-lede { max-width: var(--read-w); line-height: 1.6; }
+.mk-meta { line-height: 1.4; }
+.mk-title-actions .mk-btn, .mk-btn { min-height: var(--control-h); }
+
+.mk-sidebar-scroll { scrollbar-gutter: stable; }
+.mk-tree-item, .mk-tab, .mk-sidebar-actions button { min-height: var(--control-h); }
+.mk-tree-item.is-active { background: var(--tealsoft); box-shadow: inset 3px 0 0 var(--teal); }
+.mk-card { box-shadow: 0 8px 24px color-mix(in srgb, var(--bg) 70%, transparent); }
+
+@media (max-width: 1100px) {
+  .mk-read { grid-template-columns: minmax(0, var(--read-w)); }
+  .mk-rail, .mk-rail-resizer { display: none; }
+}
+
+@media (max-width: 760px) {
+  .mk-topbar { gap: 10px; padding: 10px 14px; }
+  .mk-brand { width: auto; }
+  .mk-wordmark small, .mk-search-trigger span:not(.mk-kbd) { display: none; }
+  .mk-search-trigger { max-width: none; padding: 9px 11px; }
+  .mk-sidebar { position: absolute; inset: 0 auto 0 0; z-index: 20; width: min(86vw, 320px); transform: translateX(-102%); transition: transform 180ms ease; }
+  .mk-sidebar.is-open { transform: translateX(0); }
+  .mk-read { padding: 24px 18px 72px; }
+  .mk-title-row { display: block; }
+  .mk-title-actions { margin-top: 14px; }
+  .mk-title-actions .mk-btn { width: 100%; justify-content: center; }
+  .mk-prose { font-size: 15.5px; }
+  .mk-edit-toolbar { flex-wrap: wrap; gap: 8px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; transition-duration: 0.001ms !important; }
+  .mk-sidebar { transition: none; }
+}

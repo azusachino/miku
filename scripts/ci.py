@@ -94,6 +94,10 @@ def ux_soak() -> None:
     run_ux_script("scripts/ux_soak.py")
 
 
+def ux_browser() -> None:
+    run_ux_script("scripts/ux_browser.py")
+
+
 def run_ux_script(script: str) -> None:
     environment = os.environ.copy()
     base_url = environment.get("MIKU_BLACKBOX_URL", "http://127.0.0.1:3000").rstrip("/")
@@ -143,6 +147,7 @@ COMMANDS = {
     "check-blackbox": blackbox,
     "check-ux-smoke": ux_smoke,
     "check-ux-soak": ux_soak,
+    "check-ux-browser": ux_browser,
     "validate": validate,
 }
 
