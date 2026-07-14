@@ -58,3 +58,16 @@ CREATE TABLE tb_page_aliases (
   PRIMARY KEY (page_id, alias)
 );
 CREATE INDEX idx_page_aliases_alias ON tb_page_aliases(alias);
+
+-- Derived plain-text title/alias mentions. Markdown remains the source of
+-- truth; this relation is disposable and rebuilt by the background indexer.
+CREATE TABLE tb_unlinked_mentions (
+  target_path  TEXT NOT NULL,
+  source_path  TEXT NOT NULL,
+  source_title TEXT NOT NULL,
+  matched_text TEXT NOT NULL,
+  snippet      TEXT NOT NULL,
+  PRIMARY KEY (target_path, source_path, matched_text)
+);
+CREATE INDEX idx_unlinked_mentions_target ON tb_unlinked_mentions(target_path);
+CREATE INDEX idx_unlinked_mentions_source ON tb_unlinked_mentions(source_path);

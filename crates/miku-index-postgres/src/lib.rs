@@ -166,9 +166,30 @@ impl IndexReader for PostgresIndex {
     }
 
     async fn mentions_for_target(&self, _path: &str) -> StoreResult<Vec<MentionRecord>> {
-        // The raw Markdown body belongs to the filesystem source of truth and
-        // is intentionally not duplicated in the Postgres projection.
-        Ok(Vec::new())
+        sqlx::query_as::<_, (String, String, String, String, String)>(
+            "SELECT target_path, source_path, source_title, matched_text, snippet
+             FROM tb_unlinked_mentions
+             WHERE target_path = $1
+             ORDER BY source_title, source_path, matched_text
+             LIMIT 20",
+        )
+        .bind(page_path(_path))
+        .fetch_all(self.pool())
+        .await
+        .map(|rows| {
+            rows.into_iter()
+                .map(|(target_path, source_path, source_title, matched_text, snippet)| {
+                    MentionRecord {
+                        target_path,
+                        source_path,
+                        source_title,
+                        matched_text,
+                        snippet,
+                    }
+                })
+                .collect()
+        })
+        .map_err(database_error)
     }
 
     async fn tags(&self) -> StoreResult<Vec<TagCount>> {
@@ -310,7 +331,58 @@ impl IndexWriter for PostgresIndex {
         Ok(IndexEvent::PageIndexed { path })
     }
 
+    async fn replace_mentions_for_source(
+        &self,
+        source_path: &str,
+        mentions: Vec<MentionRecord>,
+    ) -> StoreResult<()> {
+        let mut tx = self.pool.begin().await.map_err(database_error)?;
+        sqlx::query("DELETE FROM tb_unlinked_mentions WHERE source_path = $1")
+            .bind(page_path(source_path))
+            .execute(&mut *tx)
+            .await
+            .map_err(database_error)?;
+        for mention in mentions {
+            sqlx::query(
+                "INSERT INTO tb_unlinked_mentions
+                 (target_path, source_path, source_title, matched_text, snippet)
+                 VALUES ($1, $2, $3, $4, $5)
+                 ON CONFLICT (target_path, source_path, matched_text) DO UPDATE SET
+                   source_title = EXCLUDED.source_title, snippet = EXCLUDED.snippet",
+            )
+            .bind(page_path(&mention.target_path))
+            .bind(page_path(&mention.source_path))
+            .bind(mention.source_title)
+            .bind(mention.matched_text)
+            .bind(mention.snippet)
+            .execute(&mut *tx)
+            .await
+            .map_err(database_error)?;
+        }
+        tx.commit().await.map_err(database_error)
+    }
+
+    async fn delete_mentions_for_source(&self, source_path: &str) -> StoreResult<()> {
+        sqlx::query("DELETE FROM tb_unlinked_mentions WHERE source_path = $1")
+            .bind(page_path(source_path))
+            .execute(self.pool())
+            .await
+            .map_err(database_error)
+            .map(|_| ())
+    }
+
+    async fn delete_mentions_for_target(&self, target_path: &str) -> StoreResult<()> {
+        sqlx::query("DELETE FROM tb_unlinked_mentions WHERE target_path = $1")
+            .bind(page_path(target_path))
+            .execute(self.pool())
+            .await
+            .map_err(database_error)
+            .map(|_| ())
+    }
+
     async fn delete_page(&self, path: &str) -> StoreResult<IndexEvent> {
+        self.delete_mentions_for_source(path).await?;
+        self.delete_mentions_for_target(path).await?;
         sqlx::query("DELETE FROM tb_pages WHERE path = $1")
             .bind(page_path(path))
             .execute(self.pool())
