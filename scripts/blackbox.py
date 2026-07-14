@@ -11,6 +11,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 BASE_URL = os.environ.get("MIKU_BLACKBOX_URL", "http://127.0.0.1:3000").rstrip("/")
@@ -125,6 +126,29 @@ def app_page_path(page: str) -> str:
     return f"{prefix}/{page}" if prefix else page
 
 
+def stress_navigation() -> None:
+    pages = [
+        path.relative_to(CONTENT_ROOT).with_suffix("").as_posix()
+        for path in sorted(CONTENT_ROOT.rglob("*.md"))
+        if not any(part.startswith(".") for part in path.relative_to(CONTENT_ROOT).parts)
+    ][:12]
+    if not pages:
+        raise AssertionError(f"no Markdown navigation pages found under {CONTENT_ROOT}")
+
+    started = time.monotonic()
+    with ThreadPoolExecutor(max_workers=min(8, len(pages))) as pool:
+        results = list(
+            pool.map(
+                lambda page: get(f"/p/{urllib.parse.quote(page, safe='/')}"),
+                pages,
+            )
+        )
+    elapsed = time.monotonic() - started
+    for page, (status, _, _) in zip(pages, results, strict=True):
+        expect(status, 200, f"/p/{page} navigation stress")
+    print(f"ok: concurrent navigation pages={len(pages)} elapsed={elapsed:.3f}s")
+
+
 def discover_tag() -> str | None:
     pattern = re.compile(r"(?<!\w)#([\w\u0080-\uffff][\w\u0080-\uffff_/-]*)")
     for path in CONTENT_ROOT.rglob("*.md"):
@@ -161,6 +185,7 @@ def main() -> int:
 
     health = wait_for_index()
     print(f"ok: backend ready capabilities={health.get('capabilities', {})}")
+    stress_navigation()
 
     status, _, body = get("/metrics")
     expect(status, 200, "/metrics")

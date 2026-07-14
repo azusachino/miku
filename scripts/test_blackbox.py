@@ -1,4 +1,12 @@
+from pathlib import Path
+
 from blackbox import validate_page, validate_ready
+
+
+def test_navigation_does_not_prefetch_full_pages_on_hover() -> None:
+    source = Path("src/templates/base.html").read_text(encoding="utf-8")
+    assert "prefetchPageLink" not in source
+    assert "X-Miku-Prefetch" not in source
 
 
 def test_validate_ready_accepts_capabilities_payload() -> None:

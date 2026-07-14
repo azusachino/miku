@@ -971,24 +971,6 @@
                 document.documentElement.removeAttribute('data-nav-loading');
             });
 
-            const prefetched = new Set();
-            function prefetchPageLink(link) {
-                if (!link || !link.href || prefetched.has(link.href)) return;
-                const url = new URL(link.href, window.location.href);
-                if (url.origin !== window.location.origin || !url.pathname.startsWith('/p/')) return;
-                prefetched.add(link.href);
-                fetch(url.pathname + url.search, {
-                    headers: { 'X-Miku-Prefetch': '1' },
-                    priority: 'low'
-                }).catch(function() {});
-            }
-            document.addEventListener('pointerover', function(event) {
-                prefetchPageLink(event.target.closest && event.target.closest('a[href^="/p/"]'));
-            });
-            document.addEventListener('focusin', function(event) {
-                prefetchPageLink(event.target.closest && event.target.closest('a[href^="/p/"]'));
-            });
-
             function syncIndicatorStatus() {
                 const indicator = document.querySelector("[data-sync-indicator]");
                 if (indicator) {
