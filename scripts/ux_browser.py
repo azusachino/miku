@@ -25,6 +25,17 @@ def check_shell(page: Page) -> None:
     assert_visible(page, ".mk-topbar", "shell topbar")
     assert_visible(page, ".mk-sidebar", "shell sidebar")
     assert_visible(page, ".mk-article", "reading article")
+    assert_visible(page, ".mk-topbar-action:first-of-type", "topbar actions")
+    if page.locator(".mk-history-controls").count():
+        raise AssertionError("browser history arrows should not be duplicated in the app chrome")
+    if page.locator(".mk-topbar use[href^='/static/lucide.svg#']").count() < 3:
+        raise AssertionError("topbar controls are missing the shared OSS icon sprite")
+    page.locator("[data-set-theme='light']").first.click()
+    page.wait_for_function("document.documentElement.dataset.theme === 'light'")
+    if not page.locator("[data-set-theme='light'].is-active").count():
+        raise AssertionError("light theme control did not become selected")
+    page.locator("[data-set-theme='dark']").first.click()
+    page.wait_for_function("document.documentElement.dataset.theme === 'dark'")
     page.screenshot(path=str(ARTIFACT_DIR / "reading.png"), full_page=True)
 
 
@@ -88,6 +99,9 @@ def check_editor(page: Page) -> None:
     page.wait_for_url("**/p/Index/edit")
     assert_visible(page, "[data-editor]", "full editor")
     assert_visible(page, "[data-save-status]", "editor save status")
+    form = page.locator("form[data-editor]")
+    if form.get_attribute("hx-boost") != "false" or form.get_attribute("hx-history") != "false":
+        raise AssertionError("editor save must use a normal POST redirect, not boosted history")
     page.locator("#editor-container .cm-editor").wait_for(state="attached", timeout=10_000)
     page.locator("#edit-title-input").fill("Index UX acceptance")
     if page.locator("[data-save-status]").inner_text() != "Unsaved changes":
@@ -103,6 +117,12 @@ def main() -> int:
         page = browser.new_page(reduced_motion="reduce", viewport={"width": 1280, "height": 900})
         page.set_default_timeout(5_000)
         page.set_default_navigation_timeout(10_000)
+        console_errors: list[str] = []
+        def record_console(message) -> None:
+            if message.type == "error":
+                console_errors.append(message.text)
+
+        page.on("console", record_console)
         try:
             check_shell(page)
             check_palette(page)
@@ -115,6 +135,9 @@ def main() -> int:
             page.screenshot(path=str(ARTIFACT_DIR / "narrow.png"), full_page=True)
             if page.locator("body").evaluate("el => el.scrollWidth > el.clientWidth"):
                 raise AssertionError("narrow viewport has horizontal overflow")
+            history_errors = [error for error in console_errors if "historyCacheError" in error]
+            if history_errors:
+                raise AssertionError(f"HTMX history cache errors observed: {history_errors}")
         finally:
             browser.close()
     print(f"UX browser acceptance passed; artifacts={ARTIFACT_DIR}")

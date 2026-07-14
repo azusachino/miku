@@ -51,7 +51,7 @@ Miku - {{ path }}
                 {% if frontmatter.tags is string %}
                     <li>
                         Tags: 
-                        <a href="/tags/{{ frontmatter.tags }}" class="bg-tealsoft hover:bg-tealsoft/80 text-teal px-1.5 py-0.5 rounded font-bold text-[10px] uppercase tracking-wider border border-teal/20 transition-all">
+                        <a href="/tags/{{ frontmatter.tags }}" class="mk-inline-tag">
                             #{{ frontmatter.tags }}
                         </a>
                     </li>
@@ -60,7 +60,7 @@ Miku - {{ path }}
                         Tags: 
                         <span class="flex flex-wrap gap-1.5 inline-flex ml-1">
                             {% for tag in frontmatter.tags %}
-                                <a href="/tags/{{ tag }}" class="bg-tealsoft hover:bg-tealsoft/80 text-teal px-1.5 py-0.5 rounded font-bold text-[10px] uppercase tracking-wider border border-teal/20 transition-all">
+                                <a href="/tags/{{ tag }}" class="mk-inline-tag">
                                     #{{ tag }}
                                 </a>
                             {% endfor %}
@@ -94,7 +94,7 @@ Miku - {{ path }}
             </div>
         </section>
 
-        <form action="/p/{{ path }}" method="POST" class="mk-inline-editor" data-inline-editor x-show="editing" x-transition.opacity>
+        <form action="/p/{{ path }}" method="POST" class="mk-inline-editor" data-inline-editor hx-boost="false" hx-history="false" x-show="editing" x-transition.opacity>
             <input type="hidden" name="loaded_hash" value="{{ loaded_hash }}">
             <textarea class="hidden" name="body" data-inline-body>{{ body }}</textarea>
             <div class="mk-inline-editor-bar">

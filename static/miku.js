@@ -92,6 +92,12 @@
     var a = e.target.closest('[data-set-accent]');
     if (a) { setAccent(a.getAttribute('data-set-accent')); return; }
   });
+  syncActive();
+
+  if (window.htmx) {
+    window.htmx.config.historyCacheSize = 0;
+    window.htmx.config.refreshOnHistoryMiss = true;
+  }
 
   /* ---- Keyboard: Cmd/Ctrl-N → new page --------------------------------
      Cmd/Ctrl-K (palette), Cmd-/ and Cmd-E are owned by the Alpine shell in

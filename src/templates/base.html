@@ -267,9 +267,9 @@
     </style>
 
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" id="prism-theme">
+    <script src="/static/vendor/htmx.min.js" defer></script>
     <script defer src="/static/miku.js"></script>
     <script defer src="/static/vendor/alpine.min.js"></script>
-    <script src="/static/vendor/htmx.min.js" defer></script>
 
     {% if has_mermaid %}
     <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
@@ -285,11 +285,11 @@
 
     {% block head %}{% endblock %}
 </head>
-<body x-data="mikuShell()" x-init="init()" :class="{ 'mk-zen': zenMode }" class="bg-bg-base text-text-base font-body antialiased selection:bg-teal/32 overflow-hidden h-full">
+<body x-data="mikuShell()" x-init="init()" @miku-close-sidebar.window="sidebarOpen = false" :class="{ 'mk-zen': zenMode }" class="bg-bg-base text-text-base font-body antialiased selection:bg-teal/32 overflow-hidden h-full">
     <div class="mk-app relative flex flex-col h-screen overflow-hidden" hx-boost="true">
         <header class="mk-topbar relative z-10 flex items-center gap-5 px-5.5 py-3.25 border-b border-border bg-topbar backdrop-blur-[22px] flex-shrink-0">
-            <button type="button" class="mk-mobile-menu mk-icon-btn" @click="sidebarOpen = !sidebarOpen" :aria-expanded="sidebarOpen" aria-label="Toggle navigation">
-                <svg class="mk-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"></path></svg>
+            <button type="button" class="mk-mobile-files" @click="sidebarOpen = !sidebarOpen" :aria-expanded="sidebarOpen" aria-label="Open files">
+                <svg class="mk-icon" aria-hidden="true"><use href="/static/lucide.svg#folder"></use></svg><span>Files</span>
             </button>
             <a class="mk-brand flex items-center gap-3 w-66 flex-shrink-0 no-underline" href="/p/Index" aria-label="Miku home">
                 <span class="mk-logo relative w-10.5 h-10.5 rounded-[14px] bg-grad flex items-center justify-center shadow-[0_8px_22px_var(--tealglow)]" aria-hidden="true">
@@ -304,27 +304,20 @@
             </button>
 
             <div class="mk-topbar-right flex items-center gap-2.5 ml-auto">
-                <div class="mk-history-controls" aria-label="Page history">
-                    <button type="button" class="mk-icon-btn" @click="window.history.back()" aria-label="Go back" title="Back">
-                        <svg class="mk-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"></path></svg>
-                    </button>
-                    <button type="button" class="mk-icon-btn" @click="window.history.forward()" aria-label="Go forward" title="Forward">
-                        <svg class="mk-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
-                    </button>
-                </div>
                 <div class="mk-seg flex p-[3px] rounded-xl bg-panel border border-border" aria-label="Theme">
                     <button type="button" data-set-theme="light" aria-label="Use light theme">
-                        <svg class="mk-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2.5M12 19.5V22M4.93 4.93 6.7 6.7M17.3 17.3l1.77 1.77M2 12h2.5M19.5 12H22M4.93 19.07 6.7 17.3M17.3 6.7l1.77-1.77"></path></svg>
+                        <svg class="mk-icon" aria-hidden="true"><use href="/static/lucide.svg#sun"></use></svg>
                     </button>
                     <button type="button" data-set-theme="dark" aria-label="Use dark theme">
-                        <svg class="mk-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 14.5A8.5 8.5 0 0 1 9.5 3.5 7.5 7.5 0 1 0 20.5 14.5Z"></path></svg>
+                        <svg class="mk-icon" aria-hidden="true"><use href="/static/lucide.svg#moon"></use></svg>
                     </button>
                 </div>
                 <button type="button" class="mk-topbar-action" @click="openPalette('commands')" aria-label="Open command palette">
-                    <svg class="mk-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m4 17 6-10"></path><path d="m14 7 6 10"></path><path d="M7 13h10"></path></svg>
+                    <svg class="mk-icon" aria-hidden="true"><use href="/static/lucide.svg#command"></use></svg>
                     <span>Commands</span>
                 </button>
                 <button type="button" class="mk-topbar-action" @click="settingsOpen = true" aria-label="Open settings">
+                    <svg class="mk-icon mk-oss-settings" aria-hidden="true"><use href="/static/lucide.svg#settings"></use></svg>
                     <svg class="mk-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6 1.7 1.7 0 0 0-.4 1.1V21a2 2 0 0 1-4 0v-.09A1.7 1.7 0 0 0 8.6 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-.6-1 1.7 1.7 0 0 0-1.1-.4H3a2 2 0 0 1 0-4h.09A1.7 1.7 0 0 0 4.6 8.6a1.7 1.7 0 0 0-.34-1.88l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-.6 1.7 1.7 0 0 0 .4-1.1V3a2 2 0 0 1 4 0v.09A1.7 1.7 0 0 0 15.4 4.6a1.7 1.7 0 0 0 1.88-.34l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.4 9c.22.35.6.6 1 .6h.6a2 2 0 0 1 0 4h-.09a1.7 1.7 0 0 0-1.51 1.4Z"></path></svg>
                     <span>Settings</span>
                 </button>
@@ -423,7 +416,6 @@
                           <div class="mk-shortcut-list">
                             {% for t in tags %}
                               <a class="mk-tagrow" href="/tags/{{ t.tag }}">
-                                <span class="swatch" style="background: var(--teal);" aria-hidden="true"></span>
                                 <span class="name">#{{ t.tag }}</span>
                                 <span class="count">{{ t.count }}</span>
                               </a>
@@ -465,19 +457,11 @@
 
                 <div class="mk-appearance">
                     <div class="mk-footer-row">
-                      <div>
-                        <div class="mk-section-label">Accent</div>
-                        <div class="mk-swatches" aria-label="Accent color">
-                        <button type="button" class="mk-swatch miku" data-set-accent="miku" aria-label="Miku accent"></button>
-                        <button type="button" class="mk-swatch ocean" data-set-accent="ocean" aria-label="Ocean accent"></button>
-                        <button type="button" class="mk-swatch sakura" data-set-accent="sakura" aria-label="Sakura accent"></button>
-                        <button type="button" class="mk-swatch mono" data-set-accent="mono" aria-label="Mono accent"></button>
-                        </div>
-                      </div>
-                      <div class="mk-synced"><i></i><span>Miku Wiki v0.1.0</span></div>
+                      <div class="mk-synced"><i></i><span>Miku Wiki v0.0.2</span></div>
                     </div>
                 </div>
             </aside>
+            <button type="button" class="mk-sidebar-backdrop" @click="sidebarOpen = false" aria-label="Close files panel"></button>
             <button type="button" class="mk-pane-resizer mk-sidebar-resizer"
                     @pointerdown="startPaneResize($event, 'sidebar')"
                     aria-label="Resize file panel"></button>
@@ -619,16 +603,6 @@
                         <div class="mk-modecards">
                             <button type="button" class="mk-modecard" data-set-theme="light">Light</button>
                             <button type="button" class="mk-modecard" data-set-theme="dark">Dark</button>
-                        </div>
-                    </div>
-
-                    <div class="mk-card">
-                        <div class="mk-card-label">Accent</div>
-                        <div class="mk-swatches">
-                            <button type="button" class="mk-swatch miku" data-set-accent="miku" aria-label="Miku accent"></button>
-                            <button type="button" class="mk-swatch ocean" data-set-accent="ocean" aria-label="Ocean accent"></button>
-                            <button type="button" class="mk-swatch sakura" data-set-accent="sakura" aria-label="Sakura accent"></button>
-                            <button type="button" class="mk-swatch mono" data-set-accent="mono" aria-label="Mono accent"></button>
                         </div>
                     </div>
 
@@ -1003,6 +977,7 @@
                 const elt = evt.detail && evt.detail.elt;
                 const nav = elt && elt.closest && elt.closest('a[href^="/p/"], form[action="/search"]');
                 if (nav) {
+                    window.dispatchEvent(new CustomEvent('miku-close-sidebar'));
                     document.documentElement.setAttribute('data-nav-loading', 'true');
                     const main = document.querySelector('.mk-main');
                     if (main) {

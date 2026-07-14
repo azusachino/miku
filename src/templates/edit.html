@@ -5,7 +5,7 @@ Miku - Edit {{ path }}
 {% endblock %}
 
 {% block content %}
-<form action="/p/{{ path }}" method="POST" class="mk-edit flex flex-col h-full overflow-hidden" data-editor
+<form action="/p/{{ path }}" method="POST" class="mk-edit flex flex-col h-full overflow-hidden" data-editor hx-boost="false" hx-history="false"
       x-data="{ 
           viewMode: 'split',
           wrapSelection(marker, fallback) { window.editorWrapSelection(marker, fallback) },
