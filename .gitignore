@@ -27,10 +27,10 @@ __MACOSX
 .agents/sessions/
 
 # Runtime soft-delete trash in the content vault
-miku/.trash/
+miku_docs/.trash/
 
 # Local scale-test corpus (cloned, not source)
-miku/geektime-docs/
+miku_docs/geektime-docs/
 
 # Native dev Postgres cluster (disposable; `make db-up`)
 .pgdata/

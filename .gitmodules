@@ -1,0 +1,6 @@
+[submodule "miku_docs/dedao-docs"]
+	path = miku_docs/dedao-docs
+	url = https://github.com/uaxe/dedao-docs.git
+[submodule "miku_docs/geektime-docs"]
+	path = miku_docs/geektime-docs
+	url = https://github.com/uaxe/geektime-docs.git
