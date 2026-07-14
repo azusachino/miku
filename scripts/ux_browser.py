@@ -35,6 +35,7 @@ def check_palette(page: Page) -> None:
     page.locator(".mk-command-item").first.wait_for()
     page.keyboard.press("ArrowDown")
     page.keyboard.press("Escape")
+    page.wait_for_timeout(300)
     if page.locator(".mk-command-modal").is_visible():
         raise AssertionError("quick switcher did not close with Escape")
 
@@ -42,7 +43,7 @@ def check_palette(page: Page) -> None:
 def check_navigation(page: Page) -> None:
     page.locator("a[href='/p/Features']").first.click()
     page.wait_for_url("**/p/Features")
-    if "Features" not in page.locator("h1").inner_text():
+    if "Features" not in page.locator(".mk-h1").inner_text():
         raise AssertionError("page navigation did not render Features")
     page.go_back(wait_until="domcontentloaded")
     page.wait_for_url(f"**{PAGE_PATH}")

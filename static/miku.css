@@ -124,6 +124,13 @@ a { color: var(--teal); }
   padding: 13px 22px; border-bottom: 1px solid var(--border);
   background: var(--topbar); backdrop-filter: blur(22px); -webkit-backdrop-filter: blur(22px);
 }
+.mk-history-controls { display: flex; gap: 4px; }
+.mk-history-controls .mk-icon-btn { width: 34px; height: 34px; border-radius: 9px; }
+.mk-mobile-menu { display: none; }
+.mk-save-status { color: var(--muted); font-size: 12px; font-weight: 700; white-space: nowrap; }
+.mk-save-status[data-state='dirty'] { color: var(--pink); }
+.mk-save-status[data-state='saving'] { color: var(--teal); }
+.mk-preview-retry { border: 1px solid var(--border); border-radius: var(--radius-ctl); background: var(--panel); color: var(--teal); padding: 4px 8px; cursor: pointer; font: inherit; font-size: 12px; }
 .mk-brand { display: flex; align-items: center; gap: 13px; width: 266px; flex-shrink: 0; }
 .mk-logo {
   position: relative; width: 36px; height: 36px; border-radius: 8px; background: var(--panel2);
@@ -949,6 +956,8 @@ pre.mermaid svg {
 @media (max-width: 760px) {
   .mk-topbar { gap: 10px; padding: 10px 14px; }
   .mk-brand { width: auto; }
+  .mk-mobile-menu { display: inline-flex; position: absolute; top: 74px; left: 12px; z-index: 25; }
+  .mk-history-controls { display: none; }
   .mk-wordmark small, .mk-search-trigger span:not(.mk-kbd) { display: none; }
   .mk-search-trigger { max-width: none; padding: 9px 11px; }
   .mk-sidebar { position: absolute; inset: 0 auto 0 0; z-index: 20; width: min(86vw, 320px); transform: translateX(-102%); transition: transform 180ms ease; }

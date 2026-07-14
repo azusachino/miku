@@ -268,8 +268,8 @@
 
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" id="prism-theme">
     <script defer src="/static/miku.js"></script>
-    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
-    <script src="https://unpkg.com/htmx.org@1.9.10" defer></script>
+    <script defer src="/static/vendor/alpine.min.js"></script>
+    <script src="/static/vendor/htmx.min.js" defer></script>
 
     {% if has_mermaid %}
     <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
@@ -301,6 +301,14 @@
             </button>
 
             <div class="mk-topbar-right flex items-center gap-2.5 ml-auto">
+                <div class="mk-history-controls" aria-label="Page history">
+                    <button type="button" class="mk-icon-btn" @click="window.history.back()" aria-label="Go back" title="Back">
+                        <svg class="mk-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"></path></svg>
+                    </button>
+                    <button type="button" class="mk-icon-btn" @click="window.history.forward()" aria-label="Go forward" title="Forward">
+                        <svg class="mk-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
+                    </button>
+                </div>
                 <div class="mk-seg flex p-[3px] rounded-xl bg-panel border border-border" aria-label="Theme">
                     <button type="button" data-set-theme="light" aria-label="Use light theme">
                         <svg class="mk-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2.5M12 19.5V22M4.93 4.93 6.7 6.7M17.3 17.3l1.77 1.77M2 12h2.5M19.5 12H22M4.93 19.07 6.7 17.3M17.3 6.7l1.77-1.77"></path></svg>
@@ -319,7 +327,10 @@
         </header>
 
         <div class="mk-body relative z-0 flex flex-1 min-h-0">
-            <aside class="mk-sidebar flex-shrink-0 flex flex-col border-r border-border bg-sidebar backdrop-blur-[18px]">
+            <button type="button" class="mk-mobile-menu mk-icon-btn" @click="sidebarOpen = !sidebarOpen" :aria-expanded="sidebarOpen" aria-label="Toggle navigation">
+                <svg class="mk-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"></path></svg>
+            </button>
+            <aside class="mk-sidebar flex-shrink-0 flex flex-col border-r border-border bg-sidebar backdrop-blur-[18px]" :class="{ 'is-open': sidebarOpen }">
                 {% set sec = section | default('files') %}
                 <div class="flex flex-col flex-1 min-h-0" x-data="{ sidebarTab: '{{ sec }}' }">
                     <nav class="mk-tabs" aria-label="Sections" role="tablist">
@@ -492,7 +503,10 @@
                 <label class="mk-command-input">
                     <span aria-hidden="true">⌕</span>
                     <input x-ref="paletteInput" type="search" x-model="paletteQuery"
-                           placeholder="Type to filter..." autocomplete="off">
+                           placeholder="Type to filter..." autocomplete="off"
+                           @keydown.home.prevent="paletteIndex = 0"
+                           @keydown.end.prevent="paletteIndex = Math.max(0, paletteItems.length - 1)"
+                           :aria-activedescendant="paletteItems[paletteIndex] ? 'palette-item-' + paletteItems[paletteIndex].id : null">
                 </label>
                 <div class="mk-command-list" role="listbox">
                     <template x-if="paletteLoading">
@@ -504,8 +518,10 @@
                     <template x-if="!paletteLoading && !paletteError && paletteItems.length === 0">
                         <div class="mk-command-empty">No matches.</div>
                     </template>
-                    <template x-for="(item, idx) in paletteItems" :key="item.kind + ':' + item.id">
-                        <button type="button" role="option" class="mk-command-item"
+                        <template x-for="(item, idx) in paletteItems" :key="item.kind + ':' + item.id">
+                            <button type="button" role="option" class="mk-command-item"
+                                    :id="'palette-item-' + item.id"
+                                    :aria-selected="idx === paletteIndex"
                                 :class="{ 'is-active': idx === paletteIndex }"
                                 @mouseenter="paletteIndex = idx"
                                 @click="choosePalette(idx)">
@@ -677,6 +693,7 @@
                     sidebar: 288,
                     rail: 260
                 },
+                sidebarOpen: false,
                 commandItems: [
                     { kind: 'command', id: 'new', mark: '+', title: 'New page', subtitle: 'Create a note', shortcut: 'Cmd N', run: shell => shell.openCreate() },
                     { kind: 'command', id: 'edit', mark: 'E', title: 'Toggle edit / read', subtitle: 'Open editor or return to page', shortcut: 'Cmd E', run: shell => shell.toggleEdit() },
@@ -966,8 +983,23 @@
             document.addEventListener('htmx:beforeRequest', function(evt) {
                 const elt = evt.detail && evt.detail.elt;
                 const nav = elt && elt.closest && elt.closest('a[href^="/p/"], form[action="/search"]');
-                if (nav) document.documentElement.setAttribute('data-nav-loading', 'true');
+                if (nav) {
+                    document.documentElement.setAttribute('data-nav-loading', 'true');
+                    const main = document.querySelector('.mk-main');
+                    if (main) {
+                        try { sessionStorage.setItem('miku:scroll:' + window.location.href, String(main.scrollTop)); } catch (e) {}
+                    }
+                }
             });
+            function restoreRouteScroll() {
+                const main = document.querySelector('.mk-main');
+                if (!main) return;
+                let position = 0;
+                try { position = Number(sessionStorage.getItem('miku:scroll:' + window.location.href) || 0); } catch (e) {}
+                window.requestAnimationFrame(() => { main.scrollTop = Number.isFinite(position) ? position : 0; });
+            }
+            document.addEventListener('htmx:historyRestore', restoreRouteScroll);
+            window.addEventListener('popstate', () => window.setTimeout(restoreRouteScroll, 0));
             document.addEventListener('htmx:responseError', function() {
                 document.documentElement.removeAttribute('data-nav-loading');
             });

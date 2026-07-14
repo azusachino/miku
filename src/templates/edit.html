@@ -34,6 +34,7 @@ Miku - Edit {{ path }}
         </div>
 
         <div class="mk-edit-actions flex items-center gap-2.5">
+            <span class="mk-save-status" data-save-status role="status" aria-live="polite">Saved</span>
             <a href="/p/{{ path }}" class="mk-btn mk-btn-ghost">Cancel</a>
             <button type="submit" class="mk-btn mk-btn-primary">Save</button>
         </div>
@@ -86,6 +87,29 @@ Miku - Edit {{ path }}
             const titleInput = editor.querySelector('#edit-title-input');
             let timer = null;
             let requestId = 0;
+            let dirty = false;
+
+            function setSaveStatus(label, state) {
+                const status = editor.querySelector('[data-save-status]');
+                if (!status) return;
+                status.textContent = label;
+                status.dataset.state = state;
+            }
+
+            function markDirty() {
+                dirty = true;
+                setSaveStatus('Unsaved changes', 'dirty');
+            }
+
+            editor.addEventListener('submit', function() {
+                dirty = false;
+                setSaveStatus('Saving…', 'saving');
+            });
+            window.addEventListener('beforeunload', function(event) {
+                if (!dirty) return;
+                event.preventDefault();
+                event.returnValue = '';
+            });
 
             const frontmatterRegex = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/;
 
@@ -165,6 +189,7 @@ Miku - Edit {{ path }}
                             textarea.value = newDoc;
                             syncTitleFromEditor(newDoc);
                             queuePreview(250);
+                            markDirty();
                         }
                     })
                 ]
@@ -254,8 +279,10 @@ Miku - Edit {{ path }}
                     })
                     .catch(function() {
                         if (current !== requestId) return;
-                        preview.innerHTML = '<p><em>Preview unavailable.</em></p>';
+                        preview.innerHTML = '<p><em>Preview unavailable.</em> <button type="button" class="mk-preview-retry">Retry</button></p>';
                         preview.dataset.state = 'error';
+                        const retry = preview.querySelector('.mk-preview-retry');
+                        if (retry) retry.addEventListener('click', function() { renderPreview(); });
                     });
             }
 
