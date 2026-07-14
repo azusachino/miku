@@ -14,6 +14,11 @@ const SCHEMA: &str = "CREATE TABLE IF NOT EXISTS miku_page_index (
     path TEXT PRIMARY KEY NOT NULL,
     payload TEXT NOT NULL,
     mtime INTEGER NOT NULL
+);
+CREATE VIRTUAL TABLE IF NOT EXISTS miku_page_fts USING fts5(
+    path UNINDEXED,
+    title,
+    body
 );";
 
 /// A local durable index using a SQLite-compatible driver.
@@ -66,6 +71,7 @@ impl TursoIndex {
         let payload = serde_json::to_string(page).map_err(|error| {
             StoreError::Operation(format!("encode local page projection: {error}"))
         })?;
+        let mut transaction = self.connection.begin().await.map_err(driver_error)?;
         sqlx::query(
             "INSERT INTO miku_page_index (path, payload, mtime) VALUES (?1, ?2, ?3)
              ON CONFLICT(path) DO UPDATE SET payload = excluded.payload, mtime = excluded.mtime",
@@ -73,9 +79,22 @@ impl TursoIndex {
         .bind(&page.summary.path)
         .bind(payload)
         .bind(page.summary.mtime)
-        .execute(&self.connection)
+        .execute(&mut *transaction)
         .await
         .map_err(driver_error)?;
+        sqlx::query("DELETE FROM miku_page_fts WHERE path = ?1")
+            .bind(&page.summary.path)
+            .execute(&mut *transaction)
+            .await
+            .map_err(driver_error)?;
+        sqlx::query("INSERT INTO miku_page_fts (path, title, body) VALUES (?1, ?2, ?3)")
+            .bind(&page.summary.path)
+            .bind(&page.summary.title)
+            .bind(&page.body)
+            .execute(&mut *transaction)
+            .await
+            .map_err(driver_error)?;
+        transaction.commit().await.map_err(driver_error)?;
         Ok(())
     }
 }
@@ -89,7 +108,7 @@ impl IndexReader for TursoIndex {
     async fn capabilities(&self) -> StoreResult<IndexCapabilities> {
         Ok(IndexCapabilities {
             durable: true,
-            full_text_search: false,
+            full_text_search: true,
             fuzzy_page_search: false,
             transactions: true,
             remote_sync: false,
@@ -105,7 +124,29 @@ impl IndexReader for TursoIndex {
     }
 
     async fn search(&self, request: SearchRequest) -> StoreResult<Vec<SearchHit>> {
-        self.memory.search(request).await
+        if request.query.trim().is_empty() || request.limit == 0 {
+            return Ok(Vec::new());
+        }
+        if request.scope == miku_domain::SearchScope::Title {
+            return self.memory.search(request).await;
+        }
+
+        let rows = sqlx::query_as::<_, (String, String)>(
+            "SELECT path, title FROM miku_page_fts WHERE miku_page_fts MATCH ?1 LIMIT ?2",
+        )
+        .bind(request.query.trim())
+        .bind(request.limit as i64)
+        .fetch_all(&self.connection)
+        .await
+        .map_err(driver_error)?;
+        Ok(rows
+            .into_iter()
+            .map(|(path, title)| SearchHit {
+                path,
+                title,
+                snippet: String::new(),
+            })
+            .collect())
     }
 
     async fn backlinks(&self, path: &str) -> StoreResult<Vec<Backlink>> {
@@ -135,11 +176,18 @@ impl IndexWriter for TursoIndex {
     }
 
     async fn delete_page(&self, path: &str) -> StoreResult<IndexEvent> {
+        let mut transaction = self.connection.begin().await.map_err(driver_error)?;
         sqlx::query("DELETE FROM miku_page_index WHERE path = ?1")
             .bind(path)
-            .execute(&self.connection)
+            .execute(&mut *transaction)
             .await
             .map_err(driver_error)?;
+        sqlx::query("DELETE FROM miku_page_fts WHERE path = ?1")
+            .bind(path)
+            .execute(&mut *transaction)
+            .await
+            .map_err(driver_error)?;
+        transaction.commit().await.map_err(driver_error)?;
         self.memory.delete_page(path).await
     }
 }
@@ -171,5 +219,61 @@ mod tests {
             .await
             .expect("write projection");
         assert_eq!(store.list_pages().await.expect("list pages").len(), 1);
+        let hits = store
+            .search(SearchRequest {
+                query: "note".to_string(),
+                scope: miku_domain::SearchScope::Body,
+                limit: 10,
+            })
+            .await
+            .expect("search local index");
+        assert_eq!(hits.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn reopens_a_disk_database_with_searchable_projections() {
+        let path = std::env::temp_dir().join(format!(
+            "miku-index-{}-{}.db",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("system clock")
+                .as_nanos()
+        ));
+        let path_string = path.to_string_lossy().into_owned();
+        {
+            let store = TursoIndex::open(&path_string)
+                .await
+                .expect("open disk index");
+            store
+                .replace_page(PageIndex {
+                    summary: PageSummary {
+                        path: "Today.md".to_string(),
+                        title: "Today".to_string(),
+                        frontmatter: serde_json::json!({}),
+                        mtime: 1,
+                    },
+                    body: "A durable note".to_string(),
+                    links: Vec::new(),
+                    tags: Vec::new(),
+                    aliases: Vec::new(),
+                    has_mermaid: false,
+                })
+                .await
+                .expect("write disk projection");
+        }
+        let reopened = TursoIndex::open(&path_string)
+            .await
+            .expect("reopen disk index");
+        let hits = reopened
+            .search(SearchRequest {
+                query: "durable".to_string(),
+                scope: miku_domain::SearchScope::Body,
+                limit: 10,
+            })
+            .await
+            .expect("search reopened index");
+        assert_eq!(hits.len(), 1);
+        let _ = std::fs::remove_file(path);
     }
 }
