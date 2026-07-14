@@ -9,7 +9,7 @@ PRETTIER_FILES := "**/*.{md,json,yaml,yml}"
 # On macOS with podman, start the VM first: `podman machine init && podman machine start`.
 COMPOSE ?= podman compose
 
-.PHONY: fmt fmt-check lint test check check-all-features check-integration check-blackbox release validate benchmark run clean daily stack-up stack-down stack-build stack-logs db-init db-up db-down db-reset db-psql dev dev-tmux
+.PHONY: fmt fmt-check lint test check check-all-features check-integration check-blackbox release validate benchmark inspect-index run clean daily stack-up stack-down stack-build stack-logs db-init db-up db-down db-reset db-psql dev dev-tmux
 
 fmt:
 	$(NIX_RUN)cargo fmt --all
@@ -45,6 +45,9 @@ validate:
 
 benchmark:
 	$(NIX_RUN)uv run python scripts/ci.py benchmark
+
+inspect-index:
+	$(NIX_RUN)cargo run -p miku-index-turso --example inspect -- "$(MIKU_INDEX_PATH)"
 
 # --- Native (no-container) local dev stack ---------------------------------
 # Runs Postgres directly from the nix devShell against a project-local cluster
