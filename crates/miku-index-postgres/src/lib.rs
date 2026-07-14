@@ -9,6 +9,8 @@ use miku_domain::{
 use miku_indexer::page_slug;
 use sqlx::PgPool;
 
+const MENTIONS_READY_VERSION: &str = "2";
+
 /// Postgres-backed index projection using the repository's existing schema.
 #[derive(Clone)]
 pub struct PostgresIndex {
@@ -201,7 +203,7 @@ impl IndexReader for PostgresIndex {
         .fetch_one(self.pool())
         .await
         .map_err(database_error)?;
-        Ok(value.as_deref() == Some("1"))
+        Ok(value.as_deref() == Some(MENTIONS_READY_VERSION))
     }
 
     async fn tags(&self) -> StoreResult<Vec<TagCount>> {
@@ -374,6 +376,38 @@ impl IndexWriter for PostgresIndex {
         tx.commit().await.map_err(database_error)
     }
 
+    async fn replace_mentions_for_sources(
+        &self,
+        entries: Vec<(String, Vec<MentionRecord>)>,
+    ) -> StoreResult<()> {
+        let mut tx = self.pool.begin().await.map_err(database_error)?;
+        for (source_path, mentions) in entries {
+            sqlx::query("DELETE FROM tb_unlinked_mentions WHERE source_path = $1")
+                .bind(page_path(&source_path))
+                .execute(&mut *tx)
+                .await
+                .map_err(database_error)?;
+            for mention in mentions {
+                sqlx::query(
+                    "INSERT INTO tb_unlinked_mentions
+                     (target_path, source_path, source_title, matched_text, snippet)
+                     VALUES ($1, $2, $3, $4, $5)
+                     ON CONFLICT (target_path, source_path, matched_text) DO UPDATE SET
+                       source_title = EXCLUDED.source_title, snippet = EXCLUDED.snippet",
+                )
+                .bind(page_path(&mention.target_path))
+                .bind(page_path(&mention.source_path))
+                .bind(mention.source_title)
+                .bind(mention.matched_text)
+                .bind(mention.snippet)
+                .execute(&mut *tx)
+                .await
+                .map_err(database_error)?;
+            }
+        }
+        tx.commit().await.map_err(database_error)
+    }
+
     async fn delete_mentions_for_source(&self, source_path: &str) -> StoreResult<()> {
         sqlx::query("DELETE FROM tb_unlinked_mentions WHERE source_path = $1")
             .bind(page_path(source_path))
@@ -392,11 +426,29 @@ impl IndexWriter for PostgresIndex {
             .map(|_| ())
     }
 
+    async fn delete_mentions_for_targets(&self, target_paths: Vec<String>) -> StoreResult<()> {
+        if target_paths.is_empty() {
+            return Ok(());
+        }
+        sqlx::query("DELETE FROM tb_unlinked_mentions WHERE target_path = ANY($1)")
+            .bind(
+                target_paths
+                    .iter()
+                    .map(|path| page_path(path))
+                    .collect::<Vec<_>>(),
+            )
+            .execute(self.pool())
+            .await
+            .map_err(database_error)
+            .map(|_| ())
+    }
+
     async fn mark_mentions_ready(&self) -> StoreResult<()> {
         sqlx::query(
-            "INSERT INTO tb_index_meta (key, value) VALUES ('mentions_ready', '1')
+            "INSERT INTO tb_index_meta (key, value) VALUES ('mentions_ready', $1)
              ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value",
         )
+        .bind(MENTIONS_READY_VERSION)
         .execute(self.pool())
         .await
         .map_err(database_error)

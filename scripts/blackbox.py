@@ -227,12 +227,18 @@ def main() -> int:
     mention_case = discover_unlinked_case()
     if mention_case:
         target_path, source_path, target_title, source_title = mention_case
-        status, _, body = get(f"/p/{urllib.parse.quote(target_path, safe='/')}")
-        expect(status, 200, f"/p/{target_path} derived mentions")
-        if "UNLINKED MENTIONS" not in body or source_title not in body:
-            raise AssertionError(
-                f"/p/{target_path}: missing derived mention from {source_path} ({target_title!r})"
-            )
+        deadline = time.monotonic() + READY_TIMEOUT_SECONDS
+        while True:
+            status, _, body = get(f"/p/{urllib.parse.quote(target_path, safe='/')}")
+            expect(status, 200, f"/p/{target_path} derived mentions")
+            if "UNLINKED MENTIONS" in body and source_title in body:
+                break
+            if time.monotonic() >= deadline:
+                raise AssertionError(
+                    f"/p/{target_path}: missing derived mention from {source_path} "
+                    f"({target_title!r})"
+                )
+            time.sleep(1)
         print(f"ok: derived mention target={target_path} source={source_path}")
     else:
         print("skip: no unique plain-text mention found in corpus")

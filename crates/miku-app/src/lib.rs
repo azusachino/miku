@@ -396,6 +396,15 @@ impl IndexWriter for CachedIndexWriter {
         result
     }
 
+    async fn replace_mentions_for_sources(
+        &self,
+        entries: Vec<(String, Vec<MentionRecord>)>,
+    ) -> StoreResult<()> {
+        let result = self.primary.replace_mentions_for_sources(entries).await;
+        let _ = self.cache.lock().await.clear().await;
+        result
+    }
+
     async fn delete_mentions_for_source(&self, source_path: &str) -> StoreResult<()> {
         let result = self.primary.delete_mentions_for_source(source_path).await;
         let _ = self.cache.lock().await.clear().await;
@@ -404,6 +413,12 @@ impl IndexWriter for CachedIndexWriter {
 
     async fn delete_mentions_for_target(&self, target_path: &str) -> StoreResult<()> {
         let result = self.primary.delete_mentions_for_target(target_path).await;
+        let _ = self.cache.lock().await.clear().await;
+        result
+    }
+
+    async fn delete_mentions_for_targets(&self, target_paths: Vec<String>) -> StoreResult<()> {
+        let result = self.primary.delete_mentions_for_targets(target_paths).await;
         let _ = self.cache.lock().await.clear().await;
         result
     }

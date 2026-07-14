@@ -206,6 +206,30 @@ impl IndexWriter for MemoryIndex {
         Ok(())
     }
 
+    async fn replace_mentions_for_sources(
+        &self,
+        entries: Vec<(String, Vec<MentionRecord>)>,
+    ) -> StoreResult<()> {
+        let mut indexed = self
+            .mentions
+            .write()
+            .map_err(|_| StoreError::Operation("memory mention lock poisoned".to_string()))?;
+        for (source_path, mentions) in entries {
+            indexed.retain(|(_, source, _), _| source != &source_path);
+            for mention in mentions {
+                indexed.insert(
+                    (
+                        mention.target_path.clone(),
+                        mention.source_path.clone(),
+                        mention.matched_text.to_lowercase(),
+                    ),
+                    mention,
+                );
+            }
+        }
+        Ok(())
+    }
+
     async fn delete_mentions_for_source(&self, source_path: &str) -> StoreResult<()> {
         self.mentions
             .write()
@@ -219,6 +243,14 @@ impl IndexWriter for MemoryIndex {
             .write()
             .map_err(|_| StoreError::Operation("memory mention lock poisoned".to_string()))?
             .retain(|(target, _, _), _| target != target_path);
+        Ok(())
+    }
+
+    async fn delete_mentions_for_targets(&self, target_paths: Vec<String>) -> StoreResult<()> {
+        self.mentions
+            .write()
+            .map_err(|_| StoreError::Operation("memory mention lock poisoned".to_string()))?
+            .retain(|(target, _, _), _| !target_paths.iter().any(|path| path == target));
         Ok(())
     }
 

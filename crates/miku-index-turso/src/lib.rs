@@ -36,6 +36,7 @@ const CREATE_MENTIONS_TARGET: &str =
     "CREATE INDEX IF NOT EXISTS miku_mention_target ON miku_mention_index (target_path)";
 const SEARCH_READY_KEY: &str = "fts_ready";
 const MENTIONS_READY_KEY: &str = "mentions_ready";
+const MENTIONS_READY_VERSION: &str = "2";
 
 /// A local durable index using the Rust-built Turso engine.
 #[derive(Clone)]
@@ -88,7 +89,7 @@ impl TursoIndex {
                     .ok()
                     .and_then(|value| text_value(&value).ok())
             })
-            .is_some_and(|value| value == "1");
+            .is_some_and(|value| value == MENTIONS_READY_VERSION);
         let mut mention_rows = connection
             .query(
                 "SELECT value FROM miku_index_meta WHERE key = ?1 LIMIT 1",
@@ -418,6 +419,52 @@ impl IndexWriter for TursoIndex {
             .await
     }
 
+    async fn replace_mentions_for_sources(
+        &self,
+        entries: Vec<(String, Vec<MentionRecord>)>,
+    ) -> StoreResult<()> {
+        let connection = self.connection.lock().await;
+        let transaction = connection
+            .unchecked_transaction()
+            .await
+            .map_err(driver_error)?;
+        let mut delete_source = transaction
+            .prepare("DELETE FROM miku_mention_index WHERE source_path = ?1")
+            .await
+            .map_err(driver_error)?;
+        let mut insert_mention = transaction
+            .prepare(
+                "INSERT INTO miku_mention_index
+                 (target_path, source_path, source_title, matched_text, snippet)
+                 VALUES (?1, ?2, ?3, ?4, ?5)
+                 ON CONFLICT(target_path, source_path, matched_text) DO UPDATE SET
+                   source_title = excluded.source_title, snippet = excluded.snippet",
+            )
+            .await
+            .map_err(driver_error)?;
+        for (source_path, mentions) in &entries {
+            delete_source
+                .execute([source_path.clone()])
+                .await
+                .map_err(driver_error)?;
+            for mention in mentions {
+                insert_mention
+                    .execute(turso::params![
+                        mention.target_path.clone(),
+                        mention.source_path.clone(),
+                        mention.source_title.clone(),
+                        mention.matched_text.clone(),
+                        mention.snippet.clone(),
+                    ])
+                    .await
+                    .map_err(driver_error)?;
+            }
+        }
+        transaction.commit().await.map_err(driver_error)?;
+        drop(connection);
+        self.memory.replace_mentions_for_sources(entries).await
+    }
+
     async fn delete_mentions_for_source(&self, source_path: &str) -> StoreResult<()> {
         let connection = self.connection.lock().await;
         connection
@@ -444,13 +491,39 @@ impl IndexWriter for TursoIndex {
         self.memory.delete_mentions_for_target(target_path).await
     }
 
+    async fn delete_mentions_for_targets(&self, target_paths: Vec<String>) -> StoreResult<()> {
+        if target_paths.is_empty() {
+            return Ok(());
+        }
+        let connection = self.connection.lock().await;
+        let transaction = connection
+            .unchecked_transaction()
+            .await
+            .map_err(driver_error)?;
+        for target_path in &target_paths {
+            transaction
+                .execute(
+                    "DELETE FROM miku_mention_index WHERE target_path = ?1",
+                    [target_path.clone()],
+                )
+                .await
+                .map_err(driver_error)?;
+        }
+        transaction.commit().await.map_err(driver_error)?;
+        drop(connection);
+        self.memory.delete_mentions_for_targets(target_paths).await
+    }
+
     async fn mark_mentions_ready(&self) -> StoreResult<()> {
         let connection = self.connection.lock().await;
         connection
             .execute(
-                "INSERT INTO miku_index_meta (key, value) VALUES (?1, '1')
+                "INSERT INTO miku_index_meta (key, value) VALUES (?1, ?2)
                  ON CONFLICT(key) DO UPDATE SET value = excluded.value",
-                [MENTIONS_READY_KEY.to_string()],
+                [
+                    MENTIONS_READY_KEY.to_string(),
+                    MENTIONS_READY_VERSION.to_string(),
+                ],
             )
             .await
             .map_err(driver_error)?;

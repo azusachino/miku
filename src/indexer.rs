@@ -75,6 +75,7 @@ async fn reconcile_store(
     writer: &Arc<dyn IndexWriter>,
     content_root: &Path,
     events: &broadcast::Sender<String>,
+    ready: &AtomicBool,
 ) -> miku_domain::StoreResult<()> {
     let reconcile_started = Instant::now();
     let walk_started = Instant::now();
@@ -163,6 +164,9 @@ async fn reconcile_store(
     if search_rebuilt {
         writer.rebuild_search_index().await?;
     }
+    // Page projections and full-text search are the serving contract. Derived
+    // mentions may continue in the background and must not block page traffic.
+    ready.store(true, Ordering::Release);
     info!(
         scanned_files,
         indexed_pages,
@@ -203,11 +207,27 @@ async fn refresh_mentions_for_sources(
         candidates.push(page.clone());
     }
     let matcher = MentionMatcher::new(&candidates);
-    let mut updated = 0;
-    for page in changed_pages {
-        refresh_mentions_for_source_with_matcher(writer, &matcher, page).await?;
-        updated += 1;
-    }
+    let target_paths = changed_pages
+        .iter()
+        .map(|page| page.summary.path.clone())
+        .collect::<Vec<_>>();
+    writer
+        .delete_mentions_for_targets(target_paths)
+        .await
+        .or_else(ignore_unsupported)?;
+    let entries = changed_pages
+        .into_iter()
+        .map(|page| {
+            let source_path = page.summary.path.clone();
+            let mentions = matcher.extract(&page);
+            (source_path, mentions)
+        })
+        .collect::<Vec<_>>();
+    let updated = entries.len();
+    writer
+        .replace_mentions_for_sources(entries)
+        .await
+        .or_else(ignore_unsupported)?;
     let _ = reader;
     Ok(updated)
 }
@@ -380,8 +400,14 @@ impl IndexerQueue {
         let ready_flag = Arc::clone(&ready);
         let consumer_task = tokio::spawn(async move {
             let startup_started = Instant::now();
-            let startup_result =
-                reconcile_store(&reader_task, &writer_task, &root_task, &events_task).await;
+            let startup_result = reconcile_store(
+                &reader_task,
+                &writer_task,
+                &root_task,
+                &events_task,
+                &ready_flag,
+            )
+            .await;
             if let Err(error) = startup_result {
                 error!(
                     ?error,
@@ -397,8 +423,14 @@ impl IndexerQueue {
             }
             while let Some(event) = receiver.recv().await {
                 if event == WatcherEvent::Modified(PathBuf::from(RECONCILE_SENTINEL)) {
-                    if let Err(error) =
-                        reconcile_store(&reader_task, &writer_task, &root_task, &events_task).await
+                    if let Err(error) = reconcile_store(
+                        &reader_task,
+                        &writer_task,
+                        &root_task,
+                        &events_task,
+                        &ready_flag,
+                    )
+                    .await
                     {
                         error!(?error, "periodic index reconcile failed");
                     }

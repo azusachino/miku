@@ -276,6 +276,18 @@ pub trait IndexWriter: Send + Sync {
         ))
     }
 
+    /// Replace derived mentions for several source pages in one backend operation.
+    async fn replace_mentions_for_sources(
+        &self,
+        entries: Vec<(String, Vec<MentionRecord>)>,
+    ) -> StoreResult<()> {
+        for (source_path, mentions) in entries {
+            self.replace_mentions_for_source(&source_path, mentions)
+                .await?;
+        }
+        Ok(())
+    }
+
     /// Remove every derived mention emitted by one source page.
     async fn delete_mentions_for_source(&self, _source_path: &str) -> StoreResult<()> {
         Err(StoreError::Unsupported(
@@ -288,6 +300,14 @@ pub trait IndexWriter: Send + Sync {
         Err(StoreError::Unsupported(
             "derived unlinked mentions".to_string(),
         ))
+    }
+
+    /// Remove derived mentions targeting several pages in one backend operation.
+    async fn delete_mentions_for_targets(&self, target_paths: Vec<String>) -> StoreResult<()> {
+        for target_path in target_paths {
+            self.delete_mentions_for_target(&target_path).await?;
+        }
+        Ok(())
     }
 
     /// Mark the derived mention projection complete for the current page set.
