@@ -35,3 +35,9 @@ miku/geektime-docs/
 # Native dev Postgres cluster (disposable; `make db-up`)
 .pgdata/
 
+# Python automation caches
+__pycache__/
+*.py[cod]
+
+# Local SQLite/Turso-compatible index projection
+miku_docs/.miku-index.sqlite*

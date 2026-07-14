@@ -213,32 +213,42 @@ async fn main() -> Result<()> {
 
     info!("Starting Miku Server...");
 
-    // 2. Load DATABASE_URL from environment variable
-    let database_url =
-        env::var("DATABASE_URL").context("DATABASE_URL environment variable must be set")?;
-
-    // 3. Connect to PostgreSQL database using sqlx PgPool
-    info!("Connecting to database...");
-    let pool = PgPoolOptions::new()
-        .max_connections(5)
-        .connect(&database_url)
-        .await
-        .context("Failed to connect to database")?;
-
-    // 4. Run migrations on startup
-    info!("Running database migrations...");
-    sqlx::migrate!("./migrations")
-        .run(&pool)
-        .await
-        .context("Database migrations failed")?;
-    info!("Migrations complete.");
-
-    let index = compose_index(IndexConfig::Postgres {
-        database_url: database_url.clone(),
-    })
-    .await
-    .map_err(|error| anyhow::anyhow!(error))
-    .context("Failed to compose Postgres index API")?;
+    // 2. Select the durable index. Local SQLite/Turso is the default; the
+    // Postgres tier is explicit for the native and Compose deployment profiles.
+    let backend = env::var("MIKU_INDEX_BACKEND").unwrap_or_else(|_| "sqlite".to_string());
+    let index = match backend.as_str() {
+        "sqlite" | "turso" => {
+            let path = env::var("MIKU_INDEX_PATH")
+                .unwrap_or_else(|_| "miku_docs/.miku-index.sqlite".to_string());
+            compose_index(IndexConfig::LocalSqlite { path })
+                .await
+                .map_err(|error| anyhow::anyhow!(error))
+                .context("Failed to compose local SQLite/Turso index API")?
+        }
+        "postgres" => {
+            let database_url =
+                env::var("DATABASE_URL").context("DATABASE_URL is required for Postgres")?;
+            info!("Connecting to database...");
+            let pool = PgPoolOptions::new()
+                .max_connections(5)
+                .connect(&database_url)
+                .await
+                .context("Failed to connect to database")?;
+            info!("Running database migrations...");
+            sqlx::migrate!("./migrations")
+                .run(&pool)
+                .await
+                .context("Database migrations failed")?;
+            info!("Migrations complete.");
+            compose_index(IndexConfig::Postgres { database_url })
+                .await
+                .map_err(|error| anyhow::anyhow!(error))
+                .context("Failed to compose Postgres index API")?
+        }
+        other => anyhow::bail!(
+            "MIKU_INDEX_BACKEND must be `sqlite`, `turso`, or `postgres`; got {other}"
+        ),
+    };
 
     // 5. Initialize Minijinja template environment
     let mut templates_env = Environment::new();

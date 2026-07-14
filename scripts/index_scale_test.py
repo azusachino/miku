@@ -11,6 +11,7 @@ Optional environment:
 - MIKU_BENCH_URL: URL to probe with oha, default http://127.0.0.1:3000/p/Index.
 - MIKU_BENCH_REQUESTS / MIKU_BENCH_CONCURRENCY: oha load shape.
 - MIKU_SKIP_HTTP_BENCH=1: skip the oha probe.
+- MIKU_BENCH_BACKEND: label printed with the benchmark result, default unknown.
 """
 
 from __future__ import annotations
@@ -102,6 +103,7 @@ def check_http_probe() -> bool:
         print(result.stderr.strip())
         return False
     print(result.stdout)
+    print(f"benchmark_backend={os.environ.get('MIKU_BENCH_BACKEND', 'unknown')}")
     match = re.search(r"Success rate:\s+([0-9.]+)%", result.stdout)
     if match and float(match.group(1)) <= 0.0:
         return False

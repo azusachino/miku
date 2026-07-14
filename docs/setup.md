@@ -3,7 +3,7 @@
 ## Prerequisites
 
 - Nix (with flakes) — the devShell provides rust, prettier, uv, and postgresql
-- Postgres — provided by the native dev stack below, or reachable via `DATABASE_URL`
+- Postgres — optional, for the explicit native/scale profile
 
 ## Native dev stack (no containers — Linux & macOS)
 
@@ -20,9 +20,11 @@ make db-down      # stop Postgres
 make db-reset     # stop + delete .pgdata (index is rebuilt from miku_docs/**/*.md)
 ```
 
-`make dev` sets `DATABASE_URL=postgres://miku@localhost:55432/miku` (trust auth,
-no password) and the app runs its embedded sqlx migrations on startup — no
-separate migrate step. Override with `PGPORT=…` / `PGDATA=…` / `DATABASE_URL=…`.
+The app defaults to the local SQLite/Turso-compatible index at
+`miku_docs/.miku-index.sqlite`. `make dev` selects the explicit Postgres profile
+and sets `DATABASE_URL=postgres://miku@localhost:55432/miku` (trust auth, no
+password); migrations run on startup. Override with `MIKU_INDEX_BACKEND=…`,
+`MIKU_INDEX_PATH=…`, `PGPORT=…`, `PGDATA=…`, or `DATABASE_URL=…`.
 
 ## Remote access (LAN / Tailscale)
 
@@ -43,18 +45,22 @@ If you already run Postgres elsewhere, just point the app at it (kept out of git
 
 ```bash
 export DATABASE_URL=postgres://localhost/miku
+export MIKU_INDEX_BACKEND=postgres
 ```
 
 ## Build, run, test
 
 ```bash
 nix develop       # enter the devShell (provisions all tools)
-make run          # run the server (expects DATABASE_URL already set)
+make run          # run the server with the default local SQLite/Turso index
 make check                             # default fmt + lint + tests
 make all-features                      # all Cargo features
 make integration                       # optional service-backed probes
 make release                           # crates.io package dry-runs
 make validate                          # check + release build
+make blackbox                          # live HTTP checks against a running app
+MIKU_BENCH_BACKEND=sqlite make bench   # benchmark a running local Turso app
+```
 
 All quality targets are thin Make wrappers around `uv run python scripts/ci.py`,
 so local and GitHub CI use the same implementation. The Python commands can also
@@ -63,7 +69,6 @@ be invoked directly when debugging a single matrix slice.
 The `scripts/` suite is a first-class non-Rust test surface: `pytest` covers
 black-box validation helpers, and `ruff` checks/lints the automation code. The
 HTTP black-box probe requires a running app and is invoked with `make blackbox`.
-```
 
 Project automation/scripts are Python run via `uv run python scripts/<x>.py`
 (root `pyproject.toml`), not bash.

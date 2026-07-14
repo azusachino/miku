@@ -131,10 +131,16 @@ impl IndexReader for TursoIndex {
             return self.memory.search(request).await;
         }
 
+        let fts_query = request
+            .query
+            .split_whitespace()
+            .map(|term| format!("\"{}\"", term.replace('"', "\"\"")))
+            .collect::<Vec<_>>()
+            .join(" AND ");
         let rows = sqlx::query_as::<_, (String, String)>(
             "SELECT path, title FROM miku_page_fts WHERE miku_page_fts MATCH ?1 LIMIT ?2",
         )
-        .bind(request.query.trim())
+        .bind(fts_query)
         .bind(request.limit as i64)
         .fetch_all(&self.connection)
         .await
@@ -210,7 +216,7 @@ mod tests {
                     frontmatter: serde_json::json!({}),
                     mtime: 1,
                 },
-                body: "A note".to_string(),
+                body: "Miku note".to_string(),
                 links: Vec::new(),
                 tags: Vec::new(),
                 aliases: Vec::new(),
@@ -228,6 +234,15 @@ mod tests {
             .await
             .expect("search local index");
         assert_eq!(hits.len(), 1);
+        let title_like_hits = store
+            .search(SearchRequest {
+                query: "Miku".to_string(),
+                scope: miku_domain::SearchScope::Body,
+                limit: 10,
+            })
+            .await
+            .expect("search a title-like term in the local index");
+        assert_eq!(title_like_hits.len(), 1);
     }
 
     #[tokio::test]

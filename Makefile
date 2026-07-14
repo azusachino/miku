@@ -79,12 +79,12 @@ db-psql:
 
 # Start the DB (if needed) and run the server in the foreground.
 dev: db-up
-	DATABASE_URL="$(DATABASE_URL)" $(NIX_RUN)cargo run
+	MIKU_INDEX_BACKEND=postgres DATABASE_URL="$(DATABASE_URL)" $(NIX_RUN)cargo run
 
 # Same, but in a tmux session: pane 0 = server, pane 1 = Postgres log tail.
 dev-tmux: db-up
 	tmux new-session -d -s miku -n miku \
-		'DATABASE_URL="$(DATABASE_URL)" nix develop --command cargo run'
+		'MIKU_INDEX_BACKEND=postgres DATABASE_URL="$(DATABASE_URL)" nix develop --command cargo run'
 	tmux split-window -t miku:miku -v 'tail -f $(PGDATA)/server.log'
 	tmux select-pane -t miku:miku.0
 	tmux attach -t miku
