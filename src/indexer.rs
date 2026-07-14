@@ -1,6 +1,6 @@
 use anyhow::Result;
 use miku_domain::{IndexReader, IndexWriter, PageIndex, PageSummary};
-use miku_indexer::build_page_index;
+use miku_indexer::{build_page_index, extract_mentions};
 use notify::Watcher;
 use std::collections::{HashMap, HashSet};
 use std::env;
@@ -40,6 +40,7 @@ pub struct IndexerQueue {
 }
 
 async fn index_store_file(
+    reader: &Arc<dyn IndexReader>,
     writer: &Arc<dyn IndexWriter>,
     content_root: &Path,
     events: &broadcast::Sender<String>,
@@ -49,6 +50,8 @@ async fn index_store_file(
     let file = content_root.join(relative);
     if !file.exists() {
         writer.delete_page(&path).await?;
+        let _ = writer.delete_mentions_for_source(&path).await;
+        let _ = writer.delete_mentions_for_target(&path).await;
         let _ = events.send(path.strip_suffix(".md").unwrap_or(&path).to_string());
         return Ok(());
     }
@@ -60,9 +63,9 @@ async fn index_store_file(
         .and_then(|metadata| metadata.modified().ok())
         .and_then(|time| time.duration_since(std::time::UNIX_EPOCH).ok())
         .map_or(0, |duration| duration.as_secs() as i64);
-    writer
-        .replace_page(build_page_index(&path, &bytes, mtime))
-        .await?;
+    let page = build_page_index(&path, &bytes, mtime);
+    writer.replace_page(page.clone()).await?;
+    refresh_mentions_for_source(reader, writer, page).await?;
     let _ = events.send(path.strip_suffix(".md").unwrap_or(&path).to_string());
     Ok(())
 }
@@ -98,6 +101,7 @@ async fn reconcile_store(
     let mut parse_duration = Duration::ZERO;
     let mut write_duration = Duration::ZERO;
     let mut metadata_duration = Duration::ZERO;
+    let mut changed_pages = Vec::new();
     for file in files {
         let relative = file
             .strip_prefix(content_root)
@@ -130,6 +134,7 @@ async fn reconcile_store(
         let pages = build_page_batch(content_root, source_batch, parse_concurrency).await?;
         parse_duration += parse_started.elapsed();
         indexed_pages += pages.len();
+        changed_pages.extend(pages.iter().cloned());
         batches += 1;
         write_duration += flush_reconcile_batch(writer, events, pages, batches).await?;
     }
@@ -137,9 +142,14 @@ async fn reconcile_store(
     let mut deleted_pages = 0usize;
     for path in existing.keys().filter(|path| !seen.contains(*path)) {
         writer.delete_page(path).await?;
+        let _ = writer.delete_mentions_for_source(path).await;
+        let _ = writer.delete_mentions_for_target(path).await;
         deleted = true;
         deleted_pages += 1;
     }
+    let mention_started = Instant::now();
+    let mentions_updated = refresh_mentions_for_sources(reader, writer, &existing, changed_pages).await?;
+    let mention_ms = mention_started.elapsed().as_secs_f64() * 1000.0;
     if deleted {
         let _ = events.send(BULK_INDEX_REFRESH.to_string());
     }
@@ -160,10 +170,100 @@ async fn reconcile_store(
         metadata_ms = metadata_duration.as_secs_f64() * 1000.0,
         parse_ms = parse_duration.as_secs_f64() * 1000.0,
         write_ms = write_duration.as_secs_f64() * 1000.0,
+        mentions_updated,
+        mention_ms,
         total_ms = reconcile_started.elapsed().as_secs_f64() * 1000.0,
         "index reconcile finished"
     );
     Ok(())
+}
+
+async fn refresh_mentions_for_sources(
+    reader: &Arc<dyn IndexReader>,
+    writer: &Arc<dyn IndexWriter>,
+    existing: &HashMap<String, PageSummary>,
+    changed_pages: Vec<PageIndex>,
+) -> miku_domain::StoreResult<usize> {
+    if changed_pages.is_empty() {
+        return Ok(0);
+    }
+    let mut candidates = existing
+        .values()
+        .cloned()
+        .map(summary_projection)
+        .collect::<Vec<_>>();
+    for page in &changed_pages {
+        candidates.retain(|candidate| candidate.summary.path != page.summary.path);
+        candidates.push(page.clone());
+    }
+    let mut updated = 0;
+    for page in changed_pages {
+        refresh_mentions_for_source_with_candidates(writer, &candidates, page).await?;
+        updated += 1;
+    }
+    let _ = reader;
+    Ok(updated)
+}
+
+async fn refresh_mentions_for_source(
+    reader: &Arc<dyn IndexReader>,
+    writer: &Arc<dyn IndexWriter>,
+    page: PageIndex,
+) -> miku_domain::StoreResult<()> {
+    let candidates = reader
+        .list_pages()
+        .await?
+        .into_iter()
+        .map(summary_projection)
+        .chain(std::iter::once(page.clone()))
+        .collect::<Vec<_>>();
+    refresh_mentions_for_source_with_candidates(writer, &candidates, page).await
+}
+
+async fn refresh_mentions_for_source_with_candidates(
+    writer: &Arc<dyn IndexWriter>,
+    candidates: &[PageIndex],
+    page: PageIndex,
+) -> miku_domain::StoreResult<()> {
+    writer
+        .delete_mentions_for_target(&page.summary.path)
+        .await
+        .or_else(ignore_unsupported)?;
+    writer
+        .replace_mentions_for_source(&page.summary.path, extract_mentions(&page, candidates))
+        .await
+        .or_else(ignore_unsupported)
+}
+
+fn ignore_unsupported(error: miku_domain::StoreError) -> miku_domain::StoreResult<()> {
+    match error {
+        miku_domain::StoreError::Unsupported(_) => Ok(()),
+        other => Err(other),
+    }
+}
+
+fn summary_projection(summary: PageSummary) -> PageIndex {
+    let aliases = summary
+        .frontmatter
+        .get("aliases")
+        .map(|value| match value {
+            serde_json::Value::String(alias) => vec![alias.clone()],
+            serde_json::Value::Array(aliases) => aliases
+                .iter()
+                .filter_map(|alias| alias.as_str().map(str::to_string))
+                .collect(),
+            _ => Vec::new(),
+        })
+        .unwrap_or_default();
+    PageIndex {
+        summary,
+        body: String::new(),
+        links: Vec::new(),
+        tags: Vec::new(),
+        aliases,
+        has_mermaid: false,
+        signals: Default::default(),
+    }
 }
 
 async fn build_page_batch(
@@ -300,7 +400,14 @@ impl IndexerQueue {
 
                 let result = match event {
                     WatcherEvent::Modified(path) | WatcherEvent::Deleted(path) => {
-                        index_store_file(&writer_task, &root_task, &events_task, &path).await
+                        index_store_file(
+                            &reader_task,
+                            &writer_task,
+                            &root_task,
+                            &events_task,
+                            &path,
+                        )
+                        .await
                     }
                 };
                 if let Err(error) = result {
