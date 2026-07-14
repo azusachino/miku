@@ -7,6 +7,8 @@ Optional environment:
 - DATABASE_URL: enables a tb_pages convergence query.
 - MIKU_EXPECTED_PAGES: expected minimum indexed page count.
 - MIKU_INDEX_LOG: log file to scan for repeated "parsing/saving" operations.
+- MIKU_INDEX_LOG also reports reconcile scan/parse/write/total timings emitted by
+  the Rust indexer.
 - MIKU_MAX_INDEX_OP_MULTIPLIER: max log operations / unique pages, default 1.5.
 - MIKU_BENCH_URL: URL to probe with oha, default http://127.0.0.1:3000/p/Index.
 - MIKU_BENCH_REQUESTS / MIKU_BENCH_CONCURRENCY: oha load shape.
@@ -83,6 +85,48 @@ def check_index_log() -> bool:
     return operations <= limit
 
 
+def check_reconcile_metrics() -> bool:
+    log_path = os.environ.get("MIKU_INDEX_LOG")
+    if not log_path:
+        return True
+
+    summary_re = re.compile(
+        r"index reconcile finished.*?scanned_files=(\d+).*?indexed_pages=(\d+)"
+        r".*?deleted_pages=(\d+).*?batches=(\d+)"
+        r".*?parse_ms=([\d.]+).*?write_ms=([\d.]+).*?total_ms=([\d.]+)"
+    )
+    batch_re = re.compile(
+        r"index reconcile batch committed.*?batch_number=(\d+)"
+        r".*?page_count=(\d+).*?write_ms=([\d.]+)"
+    )
+    summaries: list[tuple[str, ...]] = []
+    batches: list[tuple[str, ...]] = []
+    with open(log_path, encoding="utf-8", errors="replace") as log_file:
+        for line in log_file:
+            if match := summary_re.search(line):
+                summaries.append(match.groups())
+            if match := batch_re.search(line):
+                batches.append(match.groups())
+
+    if not summaries:
+        print("skip: no reconcile timing metrics found in MIKU_INDEX_LOG")
+        return True
+
+    scanned, indexed, deleted, batch_count, parse_ms, write_ms, total_ms = summaries[-1]
+    print(
+        "reconcile_metrics="
+        f"scanned:{scanned},indexed:{indexed},deleted:{deleted},batches:{batch_count},"
+        f"parse_ms:{parse_ms},write_ms:{write_ms},total_ms:{total_ms}"
+    )
+    if batches:
+        writes = [float(batch[2]) for batch in batches]
+        print(
+            f"reconcile_batch_write_ms=min:{min(writes):.2f},"
+            f"median:{sorted(writes)[len(writes) // 2]:.2f},max:{max(writes):.2f}"
+        )
+    return True
+
+
 def check_http_probe() -> bool:
     if os.environ.get("MIKU_SKIP_HTTP_BENCH") == "1":
         print("skip: MIKU_SKIP_HTTP_BENCH=1")
@@ -111,7 +155,7 @@ def check_http_probe() -> bool:
 
 
 def main() -> int:
-    checks = [check_db_count(), check_index_log(), check_http_probe()]
+    checks = [check_db_count(), check_index_log(), check_reconcile_metrics(), check_http_probe()]
     return 0 if all(checks) else 1
 
 

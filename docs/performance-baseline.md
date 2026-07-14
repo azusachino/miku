@@ -42,8 +42,28 @@ In a second shell, probe page availability during rebuild:
 MIKU_BENCH_REQUESTS=200 MIKU_BENCH_CONCURRENCY=20 make benchmark
 ```
 
-Record at minimum: time until `index_ready=true`, effective Tantivy commit frequency, page-request success rate/latency while not ready, final index size, and restart convergence time. Do not compare
-only final database size.
+With the server log redirected, `scripts/index_scale_test.py` now extracts the reconcile timing fields and per-batch write distribution:
+
+```bash
+# shell 1
+RUST_LOG=info make run 2>&1 | tee /tmp/miku-index.log
+
+# shell 2, after the server is responding
+MIKU_INDEX_LOG=/tmp/miku-index.log \
+  MIKU_BENCH_BACKEND=turso make benchmark
+```
+
+The Rust indexer emits `startup index reconcile ready elapsed_ms=...`, one `index reconcile batch committed ... write_ms=...` event per batch, and an
+`index reconcile finished ... parse_ms=... write_ms=... total_ms=...` summary. Use `oha` for the HTTP latency distribution and `hyperfine` for repeatable read-path comparisons while the server is
+running:
+
+```bash
+hyperfine --warmup 2 --runs 10 'curl -fsS http://127.0.0.1:3000/p/Index'
+MIKU_BENCH_REQUESTS=1000 MIKU_BENCH_CONCURRENCY=32 make benchmark
+```
+
+Record at minimum: time until `index_ready=true`, reconcile parse/write/total time, per-batch write p50/p95 if available, effective Tantivy commit frequency, page-request success rate/latency while
+not ready, final index size, and restart convergence time. Do not compare only final database size.
 
 ## Implemented batching change
 

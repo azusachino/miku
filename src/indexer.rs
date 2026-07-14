@@ -10,10 +10,10 @@ use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc,
 };
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tokio::sync::{broadcast, mpsc};
 use tokio::task::JoinHandle;
-use tracing::error;
+use tracing::{error, info};
 
 const RECONCILE_SENTINEL: &str = "__reconcile__";
 const BULK_INDEX_REFRESH: &str = "__miku_bulk_index_refresh__";
@@ -67,6 +67,7 @@ async fn reconcile_store(
     content_root: &Path,
     events: &broadcast::Sender<String>,
 ) -> miku_domain::StoreResult<()> {
+    let reconcile_started = Instant::now();
     let mut files = Vec::new();
     walk_store_tree(content_root, &mut files)
         .map_err(|error| miku_domain::StoreError::Operation(error.to_string()))?;
@@ -76,10 +77,16 @@ async fn reconcile_store(
         .into_iter()
         .map(|page| (page.path.clone(), page))
         .collect::<HashMap<String, PageSummary>>();
+    let scanned_files = files.len();
     let mut seen = HashSet::with_capacity(files.len());
     let batch_size = IndexerQueue::reconcile_batch_size();
     let mut pages = Vec::with_capacity(batch_size);
+    let mut indexed_pages = 0usize;
+    let mut batches = 0usize;
+    let mut parse_duration = Duration::ZERO;
+    let mut write_duration = Duration::ZERO;
     for file in files {
+        let parse_started = Instant::now();
         let relative = file
             .strip_prefix(content_root)
             .map_err(|error| miku_domain::StoreError::Operation(error.to_string()))?;
@@ -99,21 +106,39 @@ async fn reconcile_store(
             continue;
         }
         pages.push(build_page_index(&relative.to_string_lossy(), &bytes, mtime));
+        parse_duration += parse_started.elapsed();
         if pages.len() == batch_size {
-            flush_reconcile_batch(writer, events, std::mem::take(&mut pages)).await?;
+            let batch = std::mem::take(&mut pages);
+            indexed_pages += batch.len();
+            batches += 1;
+            write_duration += flush_reconcile_batch(writer, events, batch, batches).await?;
         }
     }
     if !pages.is_empty() {
-        flush_reconcile_batch(writer, events, pages).await?;
+        indexed_pages += pages.len();
+        batches += 1;
+        write_duration += flush_reconcile_batch(writer, events, pages, batches).await?;
     }
     let mut deleted = false;
+    let mut deleted_pages = 0usize;
     for path in existing.keys().filter(|path| !seen.contains(*path)) {
         writer.delete_page(path).await?;
         deleted = true;
+        deleted_pages += 1;
     }
     if deleted {
         let _ = events.send(BULK_INDEX_REFRESH.to_string());
     }
+    info!(
+        scanned_files,
+        indexed_pages,
+        deleted_pages,
+        batches,
+        parse_ms = parse_duration.as_secs_f64() * 1000.0,
+        write_ms = write_duration.as_secs_f64() * 1000.0,
+        total_ms = reconcile_started.elapsed().as_secs_f64() * 1000.0,
+        "index reconcile finished"
+    );
     Ok(())
 }
 
@@ -121,10 +146,20 @@ async fn flush_reconcile_batch(
     writer: &Arc<dyn IndexWriter>,
     events: &broadcast::Sender<String>,
     pages: Vec<PageIndex>,
-) -> miku_domain::StoreResult<()> {
+    batch_number: usize,
+) -> miku_domain::StoreResult<Duration> {
+    let page_count = pages.len();
+    let started = Instant::now();
     writer.replace_pages(pages).await?;
     let _ = events.send(BULK_INDEX_REFRESH.to_string());
-    Ok(())
+    let elapsed = started.elapsed();
+    info!(
+        batch_number,
+        page_count,
+        write_ms = elapsed.as_secs_f64() * 1000.0,
+        "index reconcile batch committed"
+    );
+    Ok(elapsed)
 }
 
 fn walk_store_tree(root: &Path, files: &mut Vec<PathBuf>) -> std::io::Result<()> {
@@ -168,12 +203,21 @@ impl IndexerQueue {
         let reconcile_flag = Arc::clone(&reconcile_queued);
         let ready_flag = Arc::clone(&ready);
         let consumer_task = tokio::spawn(async move {
+            let startup_started = Instant::now();
             let startup_result =
                 reconcile_store(&reader_task, &writer_task, &root_task, &events_task).await;
             if let Err(error) = startup_result {
-                error!(?error, "startup index reconcile failed");
+                error!(
+                    ?error,
+                    elapsed_ms = startup_started.elapsed().as_secs_f64() * 1000.0,
+                    "startup index reconcile failed"
+                );
             } else {
                 ready_flag.store(true, Ordering::Release);
+                info!(
+                    elapsed_ms = startup_started.elapsed().as_secs_f64() * 1000.0,
+                    "startup index reconcile ready"
+                );
             }
             while let Some(event) = receiver.recv().await {
                 if event == WatcherEvent::Modified(PathBuf::from(RECONCILE_SENTINEL)) {

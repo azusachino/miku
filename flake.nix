@@ -23,6 +23,8 @@
             uv
             # HTTP smoke/load probe used by make bench when a server is running
             oha
+            # Repeatable command and request timing comparisons.
+            hyperfine
             # formatting
             prettier
             # local Postgres for the native (no-container) dev stack — see

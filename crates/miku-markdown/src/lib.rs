@@ -253,7 +253,7 @@ fn render_admonition(
     resolved: &dyn Fn(&str) -> Option<String>,
 ) -> String {
     let ad_type = info.strip_prefix("ad-").unwrap_or(info);
-    let mut title = format!("{}{}", &ad_type[..1].to_uppercase(), &ad_type[1..]);
+    let mut title = format!("{}{}", ad_type[..1].to_uppercase(), &ad_type[1..]);
     let mut actual_content = String::new();
     let mut lines = literal.lines();
 
