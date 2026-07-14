@@ -191,6 +191,9 @@ pub trait IndexReader: Send + Sync {
 
     /// Return all tags and their page counts.
     async fn tags(&self) -> StoreResult<Vec<TagCount>>;
+
+    /// List pages carrying one exact normalized tag.
+    async fn pages_with_tag(&self, tag: &str) -> StoreResult<Vec<PageSummary>>;
 }
 
 /// Mutation operations shared by durable and in-memory index stores.

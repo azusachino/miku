@@ -81,6 +81,11 @@ impl IndexApi {
         self.reader.tags().await
     }
 
+    /// List pages carrying one exact normalized tag.
+    pub async fn pages_with_tag(&self, tag: &str) -> StoreResult<Vec<PageSummary>> {
+        self.reader.pages_with_tag(tag).await
+    }
+
     /// Atomically replace one indexed page projection.
     pub async fn replace_page(&self, page: PageIndex) -> StoreResult<IndexEvent> {
         self.writer.replace_page(page).await

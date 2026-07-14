@@ -596,15 +596,23 @@ fn nav_folder_children(nodes: Vec<NavNode>, dir: &str) -> Vec<NavNode> {
 // Sidebar nav: every page in the index, title-sorted, for the explorer list
 // rendered by base.html. The index is the disposable read model; a freshly
 // saved page appears once the background indexer catches up.
-async fn nav_pages(db: &sqlx::PgPool, active: &str) -> Result<Vec<NavNode>, AppError> {
-    let rows: Vec<(String, String)> =
-        sqlx::query_as("SELECT path, title FROM tb_pages ORDER BY title")
-            .fetch_all(db)
-            .await
-            .context("Failed to load nav pages")?;
+async fn nav_pages(index: &IndexApi, active: &str) -> Result<Vec<NavNode>, AppError> {
+    let rows = index
+        .list_pages()
+        .await
+        .map_err(|error| anyhow::anyhow!(error))
+        .context("Failed to load nav pages")?;
     let stripped_rows: Vec<(String, String)> = rows
         .into_iter()
-        .map(|(path, title)| (path.strip_suffix(".md").unwrap_or(&path).to_string(), title))
+        .map(|page| {
+            (
+                page.path
+                    .strip_suffix(".md")
+                    .unwrap_or(&page.path)
+                    .to_string(),
+                page.title,
+            )
+        })
         .collect();
     let mut tree = build_nav_tree(stripped_rows);
     // Render only the root level plus the active page's ancestor folders; all
@@ -729,7 +737,7 @@ async fn folder_view(
     let path = validate_folder_path(&path)?;
     let template = state.templates.get_template("folder.html")?;
     let db_started = Instant::now();
-    let nav = nav_pages(&state.db, &path).await?;
+    let nav = nav_pages(&state.index, &path).await?;
     let (folders, pages) = folder_children(&state.db, &path).await?;
     let db_ms = timing_ms(db_started);
     let folder_count = folders.len();
@@ -838,7 +846,7 @@ async fn page_view(path: String, state: AppState) -> Result<Response, AppError> 
     let file_path = safe_file_path(&path)?;
     let template = state.templates.get_template("page.html")?;
     let nav_started = Instant::now();
-    let nav = nav_pages(&state.db, &path).await?;
+    let nav = nav_pages(&state.index, &path).await?;
     let nav_ms = timing_ms(nav_started);
 
     if !file_path.exists() {
@@ -1040,7 +1048,7 @@ async fn page_edit(
         (seed.to_string(), String::new())
     };
 
-    let nav = nav_pages(&state.db, &path).await?;
+    let nav = nav_pages(&state.index, &path).await?;
     let rendered = template.render(context! {
         path => path,
         body => body,
@@ -1093,7 +1101,7 @@ async fn page_save(
         if disk_hash != form.loaded_hash {
             warn!("Conflict detected on page save: path={}", path);
             let template = state.templates.get_template("conflict.html")?;
-            let nav = nav_pages(&state.db, &path).await?;
+            let nav = nav_pages(&state.index, &path).await?;
             let rendered = template.render(context! {
                 path => path,
                 current_content => disk_content,
@@ -1598,7 +1606,7 @@ async fn search(
         results
     };
 
-    let nav = nav_pages(&state.db, "").await?;
+    let nav = nav_pages(&state.index, "").await?;
     let rendered = template.render(context! {
         query => query_str,
         scope => scope.as_str(),
@@ -1632,7 +1640,7 @@ async fn tags_index(State(state): State<AppState>) -> Result<impl IntoResponse, 
         })
         .collect();
 
-    let nav = nav_pages(&state.db, "").await?;
+    let nav = nav_pages(&state.index, "").await?;
     let rendered = template.render(context! {
         tags => tags,
         nav_pages => nav,
@@ -1650,25 +1658,24 @@ async fn tag_filter(
     info!("Rendering tag filter for tag: {}", tag);
     let template = state.templates.get_template("tag.html")?;
 
-    let rows: Vec<(String, String)> = sqlx::query_as(
-        "SELECT p.path, p.title
-         FROM tb_tags t JOIN tb_pages p ON p.id = t.page_id
-         WHERE t.tag = $1 ORDER BY p.title",
-    )
-    .bind(&tag)
-    .fetch_all(&state.db)
-    .await
-    .context("Failed to load pages for tag")?;
-
-    let pages: Vec<PageRef> = rows
+    let pages: Vec<PageRef> = state
+        .index
+        .pages_with_tag(&tag)
+        .await
+        .map_err(|error| anyhow::anyhow!(error))
+        .context("Failed to load pages for tag")?
         .into_iter()
-        .map(|(path, title)| PageRef {
-            path: path.strip_suffix(".md").unwrap_or(&path).to_string(),
-            title,
+        .map(|page| PageRef {
+            path: page
+                .path
+                .strip_suffix(".md")
+                .unwrap_or(&page.path)
+                .to_string(),
+            title: page.title,
         })
         .collect();
 
-    let nav = nav_pages(&state.db, "").await?;
+    let nav = nav_pages(&state.index, "").await?;
     let rendered = template.render(context! {
         tag => tag,
         pages => pages,

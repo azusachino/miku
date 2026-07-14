@@ -119,6 +119,10 @@ impl IndexReader for TursoIndex {
     async fn tags(&self) -> StoreResult<Vec<TagCount>> {
         self.memory.tags().await
     }
+
+    async fn pages_with_tag(&self, tag: &str) -> StoreResult<Vec<PageSummary>> {
+        self.memory.pages_with_tag(tag).await
+    }
 }
 
 #[async_trait]

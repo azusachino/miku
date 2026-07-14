@@ -152,6 +152,15 @@ impl IndexReader for MemoryIndex {
             .map(|(tag, count)| TagCount { tag, count })
             .collect())
     }
+
+    async fn pages_with_tag(&self, tag: &str) -> StoreResult<Vec<PageSummary>> {
+        Ok(self
+            .read_pages()?
+            .values()
+            .filter(|page| page.tags.iter().any(|candidate| candidate == tag))
+            .map(|page| page.summary.clone())
+            .collect())
+    }
 }
 
 #[async_trait]

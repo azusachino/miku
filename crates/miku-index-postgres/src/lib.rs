@@ -184,6 +184,28 @@ impl IndexReader for PostgresIndex {
         })
         .map_err(database_error)
     }
+
+    async fn pages_with_tag(&self, tag: &str) -> StoreResult<Vec<PageSummary>> {
+        sqlx::query_as::<_, (String, String, serde_json::Value, i64)>(
+            "SELECT p.path, p.title, p.frontmatter, p.mtime
+             FROM tb_tags t JOIN tb_pages p ON p.id = t.page_id
+             WHERE t.tag = $1 ORDER BY p.title, p.path",
+        )
+        .bind(tag)
+        .fetch_all(self.pool())
+        .await
+        .map(|rows| {
+            rows.into_iter()
+                .map(|(path, title, frontmatter, mtime)| PageSummary {
+                    path,
+                    title,
+                    frontmatter,
+                    mtime,
+                })
+                .collect()
+        })
+        .map_err(database_error)
+    }
 }
 
 #[async_trait]
