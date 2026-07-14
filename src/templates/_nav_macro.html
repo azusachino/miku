@@ -32,7 +32,7 @@
            loaded: {{ 'true' if node.children else 'false' }},
            init() {
              this.path = this.$el.dataset.folderPath || '';
-             this.open = (localStorage.getItem('folder:' + this.path) === 'true') || this.open;
+             this.open = (window.mikuStorage && window.mikuStorage.get('folders', []).includes(this.path)) || this.open;
              this.loadChildren();
            },
            loadChildren() {
@@ -54,7 +54,7 @@
            @dragover.prevent="$store.tree.dropTarget = path"
            @dragleave="if ($store.tree.dropTarget === path) $store.tree.dropTarget = null"
            @drop.prevent.stop="$store.tree.dropInto(path, $event)"
-           @click="open = !open; localStorage.setItem('folder:' + path, open); loadChildren()">
+           @click="open = !open; window.mikuStorage && window.mikuStorage.toggleFolder(path, open); loadChildren()">
         <span class="tree-chevron mr-1 text-[9px] text-muted/70 transition-transform duration-100 inline-block w-2.5" x-text="open ? '▼' : '▶'"></span>
         <span class="tree-folder-name" title="{{ node.name }}">{{ node.name }}</span>
       </div>

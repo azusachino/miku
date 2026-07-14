@@ -1782,8 +1782,8 @@ mod tests {
 
         assert!(base.contains("mk-sidebar-resizer"));
         assert!(page.contains("mk-rail-resizer"));
-        assert!(base.contains("miku:sidebar-width"));
-        assert!(base.contains("miku:rail-width"));
+        assert!(base.contains("miku:ui:v1"));
+        assert!(base.contains("window.mikuStorage"));
         assert!(css.contains("grid-template-columns: minmax(0, 1fr) 8px var(--rail-w)"));
         assert!(!page.contains("mk-page-mark"));
     }

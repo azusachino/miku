@@ -12,12 +12,59 @@
 
     <script>
         (function() {
-            var theme = 'dark';
-            var accent = 'miku';
-            try {
-                theme = localStorage.getItem('miku:theme') || theme;
-                accent = localStorage.getItem('miku:accent') || accent;
-            } catch (e) {}
+            var storageKey = 'miku:ui:v1';
+            var defaults = { version: 1, theme: 'dark', accent: 'miku', animatedAccents: true,
+                showBacklinks: true, compactSpacing: false, zenMode: false,
+                sidebarWidth: 288, railWidth: 260, folders: [] };
+            function validState(value) {
+                if (!value || value.version !== 1) return null;
+                return Object.assign({}, defaults, value, {
+                    folders: Array.isArray(value.folders) ? value.folders.slice(-200) : []
+                });
+            }
+            function readState() {
+                try {
+                    var current = validState(JSON.parse(localStorage.getItem(storageKey) || 'null'));
+                    if (current) return current;
+                    var migrated = Object.assign({}, defaults);
+                    migrated.theme = localStorage.getItem('miku:theme') || migrated.theme;
+                    migrated.accent = localStorage.getItem('miku:accent') || migrated.accent;
+                    migrated.animatedAccents = localStorage.getItem('miku:animated-accents') !== 'false';
+                    migrated.showBacklinks = localStorage.getItem('miku:show-backlinks') !== 'false';
+                    migrated.compactSpacing = localStorage.getItem('miku:compact-spacing') === 'true';
+                    migrated.zenMode = localStorage.getItem('miku:zen-mode') === 'true';
+                    migrated.sidebarWidth = Number(localStorage.getItem('miku:sidebar-width')) || migrated.sidebarWidth;
+                    migrated.railWidth = Number(localStorage.getItem('miku:rail-width')) || migrated.railWidth;
+                    for (var i = 0; i < localStorage.length && migrated.folders.length < 200; i++) {
+                        var key = localStorage.key(i);
+                        if (key && key.indexOf('folder:') === 0 && localStorage.getItem(key) === 'true') migrated.folders.push(key.slice(7));
+                    }
+                    migrated = validState(migrated);
+                    localStorage.setItem(storageKey, JSON.stringify(migrated));
+                    for (var j = localStorage.length - 1; j >= 0; j--) {
+                        var oldKey = localStorage.key(j);
+                        if (oldKey && (oldKey.indexOf('miku:') === 0 || oldKey.indexOf('folder:') === 0) && oldKey !== storageKey) localStorage.removeItem(oldKey);
+                    }
+                    return migrated;
+                } catch (e) { return Object.assign({}, defaults); }
+            }
+            var state = readState();
+            window.mikuStorage = {
+                get: function(key, fallback) { return state[key] === undefined ? fallback : state[key]; },
+                set: function(key, value) {
+                    state[key] = value;
+                    if (key === 'folders') state.folders = Array.from(new Set(state.folders || [])).slice(-200);
+                    try { localStorage.setItem(storageKey, JSON.stringify(state)); } catch (e) {}
+                },
+                toggleFolder: function(path, open) {
+                    var folders = (state.folders || []).filter(function(item) { return item !== path; });
+                    if (open) folders.push(path);
+                    this.set('folders', folders);
+                },
+                reset: function() { try { localStorage.removeItem(storageKey); } catch (e) {} window.location.reload(); }
+            };
+            var theme = window.mikuStorage.get('theme', 'dark');
+            var accent = window.mikuStorage.get('accent', 'miku');
             document.documentElement.setAttribute('data-theme', theme === 'light' ? 'light' : 'dark');
             document.documentElement.setAttribute('data-accent', ['miku', 'ocean', 'sakura', 'mono'].indexOf(accent) === -1 ? 'miku' : accent);
         })();
@@ -685,18 +732,18 @@
                     return this.createFolder + this.createSlug;
                 },
                 init() {
-                    this.animatedAccents = this.readBool('miku:animated-accents', true);
-                    this.showBacklinks = this.readBool('miku:show-backlinks', true);
-                    this.compactSpacing = this.readBool('miku:compact-spacing', false);
-                    this.zenMode = this.readBool('miku:zen-mode', false);
-                    this.paneWidths.sidebar = this.readNumber('miku:sidebar-width', 288, 220, 520);
-                    this.paneWidths.rail = this.readNumber('miku:rail-width', 260, 220, 440);
+                    this.animatedAccents = this.readBool('animatedAccents', true);
+                    this.showBacklinks = this.readBool('showBacklinks', true);
+                    this.compactSpacing = this.readBool('compactSpacing', false);
+                    this.zenMode = this.readBool('zenMode', false);
+                    this.paneWidths.sidebar = this.readNumber('sidebarWidth', 288, 220, 520);
+                    this.paneWidths.rail = this.readNumber('railWidth', 260, 220, 440);
                     this.applyReadingPrefs();
                     this.applyPaneWidths();
-                    this.$watch('animatedAccents', value => { this.writeBool('miku:animated-accents', value); this.applyReadingPrefs(); });
-                    this.$watch('showBacklinks', value => { this.writeBool('miku:show-backlinks', value); this.applyReadingPrefs(); });
-                    this.$watch('compactSpacing', value => { this.writeBool('miku:compact-spacing', value); this.applyReadingPrefs(); });
-                    this.$watch('zenMode', value => { this.writeBool('miku:zen-mode', value); });
+                    this.$watch('animatedAccents', value => { this.writeBool('animatedAccents', value); this.applyReadingPrefs(); });
+                    this.$watch('showBacklinks', value => { this.writeBool('showBacklinks', value); this.applyReadingPrefs(); });
+                    this.$watch('compactSpacing', value => { this.writeBool('compactSpacing', value); this.applyReadingPrefs(); });
+                    this.$watch('zenMode', value => { this.writeBool('zenMode', value); });
                     this.$watch('paletteQuery', () => {
                         if (this.paletteOpen) this.queuePaletteRefresh();
                     });
@@ -872,8 +919,8 @@
                         ? this.paneWidths.sidebar
                         : this.paneWidths.rail;
                     const limits = pane === 'sidebar'
-                        ? { min: 220, max: 520, key: 'miku:sidebar-width' }
-                        : { min: 220, max: 440, key: 'miku:rail-width' };
+                        ? { min: 220, max: 520, key: 'sidebarWidth' }
+                        : { min: 220, max: 440, key: 'railWidth' };
                     const onMove = moveEvent => {
                         const delta = pane === 'sidebar'
                             ? moveEvent.clientX - startX
@@ -886,31 +933,21 @@
                         window.removeEventListener('pointermove', onMove);
                         window.removeEventListener('pointerup', onUp);
                         document.documentElement.classList.remove('mk-resizing');
-                        try { localStorage.setItem(limits.key, String(this.paneWidths[pane])); } catch (e) {}
+                        if (window.mikuStorage) window.mikuStorage.set(limits.key, this.paneWidths[pane]);
                     };
                     document.documentElement.classList.add('mk-resizing');
                     window.addEventListener('pointermove', onMove);
                     window.addEventListener('pointerup', onUp, { once: true });
                 },
                 readBool(key, fallback) {
-                    try {
-                        const value = localStorage.getItem(key);
-                        return value === null ? fallback : value === 'true';
-                    } catch (e) {
-                        return fallback;
-                    }
+                    return window.mikuStorage ? Boolean(window.mikuStorage.get(key, fallback)) : fallback;
                 },
                 readNumber(key, fallback, min, max) {
-                    try {
-                        const raw = Number(localStorage.getItem(key));
-                        if (!Number.isFinite(raw)) return fallback;
-                        return Math.min(max, Math.max(min, raw));
-                    } catch (e) {
-                        return fallback;
-                    }
+                    const raw = window.mikuStorage ? Number(window.mikuStorage.get(key, fallback)) : fallback;
+                    return Number.isFinite(raw) ? Math.min(max, Math.max(min, raw)) : fallback;
                 },
                 writeBool(key, value) {
-                    try { localStorage.setItem(key, value ? 'true' : 'false'); } catch (e) {}
+                    if (window.mikuStorage) window.mikuStorage.set(key, Boolean(value));
                 },
                 applyPaneWidths() {
                     document.documentElement.style.setProperty('--sidebar-w', this.paneWidths.sidebar + 'px');
@@ -970,6 +1007,53 @@
                         try { sessionStorage.setItem('miku:scroll:' + window.location.href, String(main.scrollTop)); } catch (e) {}
                     }
                 }
+            });
+            var navSequence = 0;
+            function navId() { return 'web-' + Date.now().toString(36) + '-' + (++navSequence); }
+            function navTarget(evt) {
+                return evt.detail && (evt.detail.elt || evt.detail.target);
+            }
+            function navPath(evt) {
+                var xhr = evt.detail && evt.detail.xhr;
+                return (xhr && xhr.responseURL) || (evt.detail && evt.detail.pathInfo && evt.detail.pathInfo.requestPath) || window.location.href;
+            }
+            function showNavigationError(evt, reason) {
+                document.documentElement.removeAttribute('data-nav-loading');
+                var existing = document.querySelector('[data-nav-error]');
+                if (existing) existing.remove();
+                var banner = document.createElement('div');
+                banner.setAttribute('data-nav-error', 'true');
+                banner.className = 'mk-toast mk-nav-error';
+                banner.innerHTML = '<span>Could not open this page. ' + reason + '</span><button type="button" class="mk-chip">Retry</button>';
+                banner.querySelector('button').addEventListener('click', function() {
+                    banner.remove();
+                    var elt = navTarget(evt);
+                    if (elt && window.htmx) htmx.trigger(elt, 'click'); else window.location.reload();
+                });
+                document.body.appendChild(banner);
+            }
+            document.addEventListener('htmx:configRequest', function(evt) {
+                var detail = evt.detail || {};
+                detail.mikuRequestId = detail.mikuRequestId || navId();
+                detail.headers = detail.headers || {};
+                detail.headers['X-Miku-Request-ID'] = detail.mikuRequestId;
+                console.debug('[miku nav] request', detail.mikuRequestId, detail.path);
+            });
+            document.addEventListener('htmx:afterRequest', function(evt) {
+                var detail = evt.detail || {};
+                var xhr = detail.xhr;
+                console.debug('[miku nav] response', detail.mikuRequestId || (xhr && xhr.getResponseHeader('X-Miku-Request-ID')), xhr && xhr.status, navPath(evt));
+            });
+            ['sendError', 'sendAbort', 'timeout', 'swapError', 'targetError', 'onLoadError'].forEach(function(name) {
+                document.addEventListener('htmx:' + name, function(evt) {
+                    console.warn('[miku nav] ' + name, evt.detail && evt.detail.mikuRequestId, navPath(evt));
+                    if (name !== 'sendAbort') showNavigationError(evt, name === 'timeout' ? 'The request timed out.' : 'The server or page response failed.');
+                });
+            });
+            document.addEventListener('htmx:responseError', function(evt) {
+                var xhr = evt.detail && evt.detail.xhr;
+                console.warn('[miku nav] responseError', evt.detail && evt.detail.mikuRequestId, xhr && xhr.status, navPath(evt));
+                showNavigationError(evt, 'HTTP ' + ((xhr && xhr.status) || 'error') + '.');
             });
             function restoreRouteScroll() {
                 const main = document.querySelector('.mk-main');

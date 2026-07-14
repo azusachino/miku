@@ -11,27 +11,25 @@
 (function () {
   'use strict';
   var root = document.documentElement;
-  var LS_THEME = 'miku:theme';
-  var LS_ACCENT = 'miku:accent';
+  var storage = window.mikuStorage;
 
   /* ---- Restore persisted theme + accent (FOUC-safe if you also inline the
      two getItem lines in <head>; see README) ---------------------------- */
   function apply(attr, key, fallback) {
-    var v = null;
-    try { v = localStorage.getItem(key); } catch (e) {}
+    var v = storage ? storage.get(key, null) : null;
     root.setAttribute(attr, v || fallback);
   }
-  apply('data-theme', LS_THEME, 'dark');
-  apply('data-accent', LS_ACCENT, 'miku');
+  apply('data-theme', 'theme', 'dark');
+  apply('data-accent', 'accent', 'miku');
 
   function setTheme(mode) {
     root.setAttribute('data-theme', mode);
-    try { localStorage.setItem(LS_THEME, mode); } catch (e) {}
+    if (storage) storage.set('theme', mode);
     syncActive();
   }
   function setAccent(name) {
     root.setAttribute('data-accent', name);
-    try { localStorage.setItem(LS_ACCENT, name); } catch (e) {}
+    if (storage) storage.set('accent', name);
     syncActive();
   }
 
