@@ -260,6 +260,7 @@ async fn main() -> Result<()> {
 
     // 6. Initialize background indexer
     let indexer = miku::indexer::IndexerQueue::new_with_writer(
+        index.reader(),
         index.writer(),
         std::path::PathBuf::from("miku_docs"),
         events_tx.clone(),

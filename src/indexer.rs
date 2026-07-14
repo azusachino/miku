@@ -1,7 +1,8 @@
 use anyhow::Result;
-use miku_domain::{IndexWriter, PageIndex};
+use miku_domain::{IndexReader, IndexWriter, PageIndex, PageSummary};
 use miku_indexer::build_page_index;
 use notify::Watcher;
+use std::collections::{HashMap, HashSet};
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -60,6 +61,7 @@ async fn index_store_file(
 }
 
 async fn reconcile_store(
+    reader: &Arc<dyn IndexReader>,
     writer: &Arc<dyn IndexWriter>,
     content_root: &Path,
     events: &broadcast::Sender<String>,
@@ -67,6 +69,13 @@ async fn reconcile_store(
     let mut files = Vec::new();
     walk_store_tree(content_root, &mut files)
         .map_err(|error| miku_domain::StoreError::Operation(error.to_string()))?;
+    let existing = reader
+        .list_pages()
+        .await?
+        .into_iter()
+        .map(|page| (page.path.clone(), page))
+        .collect::<HashMap<String, PageSummary>>();
+    let mut seen = HashSet::with_capacity(files.len());
     let mut pages = Vec::with_capacity(RECONCILE_BATCH_SIZE);
     for file in files {
         let relative = file
@@ -79,6 +88,14 @@ async fn reconcile_store(
             .and_then(|metadata| metadata.modified().ok())
             .and_then(|time| time.duration_since(std::time::UNIX_EPOCH).ok())
             .map_or(0, |duration| duration.as_secs() as i64);
+        let path = relative.to_string_lossy().into_owned();
+        seen.insert(path.clone());
+        if existing
+            .get(&path)
+            .is_some_and(|indexed| indexed.mtime == mtime)
+        {
+            continue;
+        }
         pages.push(build_page_index(&relative.to_string_lossy(), &bytes, mtime));
         if pages.len() == RECONCILE_BATCH_SIZE {
             flush_reconcile_batch(writer, events, std::mem::take(&mut pages)).await?;
@@ -86,6 +103,10 @@ async fn reconcile_store(
     }
     if !pages.is_empty() {
         flush_reconcile_batch(writer, events, pages).await?;
+    }
+    for path in existing.keys().filter(|path| !seen.contains(*path)) {
+        writer.delete_page(path).await?;
+        let _ = events.send(path.strip_suffix(".md").unwrap_or(path).to_string());
     }
     Ok(())
 }
@@ -125,6 +146,7 @@ fn walk_store_tree(root: &Path, files: &mut Vec<PathBuf>) -> std::io::Result<()>
 impl IndexerQueue {
     /// Start the backend-neutral filesystem indexer.
     pub fn new_with_writer(
+        reader: Arc<dyn IndexReader>,
         writer: Arc<dyn IndexWriter>,
         content_root: PathBuf,
         events: broadcast::Sender<String>,
@@ -137,12 +159,14 @@ impl IndexerQueue {
         let reconcile_queued = Arc::new(AtomicBool::new(false));
         let ready = Arc::new(AtomicBool::new(false));
         let writer_task = Arc::clone(&writer);
+        let reader_task = Arc::clone(&reader);
         let root_task = content_root.clone();
         let events_task = events.clone();
         let reconcile_flag = Arc::clone(&reconcile_queued);
         let ready_flag = Arc::clone(&ready);
         let consumer_task = tokio::spawn(async move {
-            let startup_result = reconcile_store(&writer_task, &root_task, &events_task).await;
+            let startup_result =
+                reconcile_store(&reader_task, &writer_task, &root_task, &events_task).await;
             if let Err(error) = startup_result {
                 error!(?error, "startup index reconcile failed");
             } else {
@@ -151,7 +175,7 @@ impl IndexerQueue {
             while let Some(event) = receiver.recv().await {
                 if event == WatcherEvent::Modified(PathBuf::from(RECONCILE_SENTINEL)) {
                     if let Err(error) =
-                        reconcile_store(&writer_task, &root_task, &events_task).await
+                        reconcile_store(&reader_task, &writer_task, &root_task, &events_task).await
                     {
                         error!(?error, "periodic index reconcile failed");
                     }

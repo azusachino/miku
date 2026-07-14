@@ -61,6 +61,12 @@ impl IndexApi {
         Arc::clone(&self.writer)
     }
 
+    /// Expose the read half to the filesystem reconciler.
+    #[must_use]
+    pub fn reader(&self) -> Arc<dyn IndexReader> {
+        Arc::clone(&self.reader)
+    }
+
     /// Return backend capabilities for health/configuration reporting.
     pub async fn capabilities(&self) -> StoreResult<IndexCapabilities> {
         self.reader.capabilities().await
