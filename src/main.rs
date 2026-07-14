@@ -330,7 +330,7 @@ fn safe_file_path(path: &str) -> Result<PathBuf, AppError> {
     if path.contains("..") || path.starts_with('/') {
         return Err(anyhow::anyhow!("Invalid path: path traversal detected").into());
     }
-    Ok(StdPath::new("miku").join(format!("{path}.md")))
+    Ok(StdPath::new("miku_docs").join(format!("{path}.md")))
 }
 
 fn validate_folder_path(path: &str) -> Result<String, AppError> {
@@ -1197,7 +1197,7 @@ struct PromoteMentionForm {
 }
 
 fn trash_dir() -> PathBuf {
-    StdPath::new("miku").join(".trash")
+    StdPath::new("miku_docs").join(".trash")
 }
 
 // A trash id is a bare filename stem we join onto `miku_docs/.trash`; reject anything

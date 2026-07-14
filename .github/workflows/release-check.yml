@@ -16,6 +16,10 @@ jobs:
         run: |
           nix develop --command cargo package --list -p miku-domain
           nix develop --command cargo package --list -p miku-markdown
+      - name: Verify publish dry runs
+        run: |
+          nix develop --command cargo publish --dry-run -p miku-domain
+          nix develop --command cargo publish --dry-run -p miku-markdown
       - name: Verify private crates are not publishable
         run: |
           test "$(nix develop --command cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.name == "miku-app") | .publish')" = "false"
