@@ -1309,6 +1309,7 @@ dependencies = [
  "lazy_static",
  "miku-app",
  "miku-domain",
+ "miku-indexer",
  "miku-markdown",
  "minijinja",
  "notify",

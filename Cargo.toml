@@ -55,6 +55,7 @@ anyhow = "1"
 miku-domain = { path = "crates/miku-domain" }
 miku-app = { path = "crates/miku-app", features = ["postgres"] }
 miku-markdown = { path = "crates/miku-markdown" }
+miku-indexer = { path = "crates/miku-indexer" }
 thiserror = "2"
 
 # async runtime

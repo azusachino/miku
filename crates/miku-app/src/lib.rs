@@ -46,6 +46,12 @@ impl IndexApi {
         Self { reader, writer }
     }
 
+    /// Expose the mutation half to the filesystem indexer.
+    #[must_use]
+    pub fn writer(&self) -> Arc<dyn IndexWriter> {
+        Arc::clone(&self.writer)
+    }
+
     /// Return backend capabilities for health/configuration reporting.
     pub async fn capabilities(&self) -> StoreResult<IndexCapabilities> {
         self.reader.capabilities().await

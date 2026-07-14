@@ -3,6 +3,8 @@ use crate::markdown::{
 };
 use anyhow::Result;
 use comrak::nodes::NodeValue;
+use miku_domain::IndexWriter;
+use miku_indexer::build_page_index;
 use notify::Watcher;
 use regex::Regex;
 use sqlx::PgPool;
@@ -294,7 +296,148 @@ pub struct IndexerQueue {
     tasks: Vec<JoinHandle<()>>,
 }
 
+async fn index_store_file(
+    writer: &Arc<dyn IndexWriter>,
+    content_root: &Path,
+    events: &broadcast::Sender<String>,
+    relative: &Path,
+) -> miku_domain::StoreResult<()> {
+    let file = content_root.join(relative);
+    if !file.exists() {
+        return writer
+            .delete_page(&relative.to_string_lossy())
+            .await
+            .map(|_| ());
+    }
+    let bytes =
+        fs::read(&file).map_err(|error| miku_domain::StoreError::Operation(error.to_string()))?;
+    let mtime = fs::metadata(&file)
+        .ok()
+        .and_then(|metadata| metadata.modified().ok())
+        .and_then(|time| time.duration_since(std::time::UNIX_EPOCH).ok())
+        .map_or(0, |duration| duration.as_secs() as i64);
+    let path = relative.to_string_lossy().to_string();
+    writer
+        .replace_page(build_page_index(&path, &bytes, mtime))
+        .await?;
+    let _ = events.send(path.strip_suffix(".md").unwrap_or(&path).to_string());
+    Ok(())
+}
+
+async fn reconcile_store(
+    writer: &Arc<dyn IndexWriter>,
+    content_root: &Path,
+    events: &broadcast::Sender<String>,
+) -> miku_domain::StoreResult<()> {
+    let mut files = Vec::new();
+    walk_store_tree(content_root, &mut files)
+        .map_err(|error| miku_domain::StoreError::Operation(error.to_string()))?;
+    for file in files {
+        let relative = file
+            .strip_prefix(content_root)
+            .map_err(|error| miku_domain::StoreError::Operation(error.to_string()))?;
+        index_store_file(writer, content_root, events, relative).await?;
+    }
+    Ok(())
+}
+
+fn walk_store_tree(root: &Path, files: &mut Vec<PathBuf>) -> std::io::Result<()> {
+    for entry in fs::read_dir(root)? {
+        let path = entry?.path();
+        if path
+            .file_name()
+            .is_some_and(|name| name.to_string_lossy().starts_with('.'))
+        {
+            continue;
+        }
+        if path.is_dir() {
+            walk_store_tree(&path, files)?;
+        } else if path.extension().is_some_and(|ext| ext == "md") {
+            files.push(path);
+        }
+    }
+    Ok(())
+}
+
 impl IndexerQueue {
+    /// Start the backend-neutral filesystem indexer.
+    ///
+    /// # Panics
+    ///
+    /// This method does not intentionally panic; watcher callback paths are
+    /// checked against the watched root before being queued.
+    pub fn new_with_writer(
+        writer: Arc<dyn IndexWriter>,
+        content_root: PathBuf,
+        events: broadcast::Sender<String>,
+    ) -> Result<Self> {
+        if !content_root.exists() {
+            fs::create_dir_all(&content_root)?;
+        }
+        let (sender, mut receiver) = mpsc::channel(1024);
+        let reconcile_queued = Arc::new(AtomicBool::new(false));
+        let writer_task = Arc::clone(&writer);
+        let root_task = content_root.clone();
+        let events_task = events.clone();
+        let consumer_task = tokio::spawn(async move {
+            if let Err(error) = reconcile_store(&writer_task, &root_task, &events_task).await {
+                error!(?error, "backend-neutral startup reconcile failed");
+            }
+            while let Some(event) = receiver.recv().await {
+                let result = match event {
+                    WatcherEvent::Modified(path) => {
+                        index_store_file(&writer_task, &root_task, &events_task, &path).await
+                    }
+                    WatcherEvent::Deleted(path) => {
+                        let path = path.to_string_lossy().to_string();
+                        writer_task.delete_page(&path).await.map(|_| {
+                            let _ = events_task
+                                .send(path.strip_suffix(".md").unwrap_or(&path).to_string());
+                        })
+                    }
+                };
+                if let Err(error) = result {
+                    error!(?error, "backend-neutral index update failed");
+                }
+            }
+        });
+
+        let sender_for_watcher = sender.clone();
+        let root_for_watcher = content_root.clone();
+        let mut watcher = notify::RecommendedWatcher::new(
+            move |result: Result<notify::Event, notify::Error>| match result {
+                Ok(event) => {
+                    for path in event.paths {
+                        if path.extension().is_some_and(|ext| ext == "md")
+                            && !path.to_string_lossy().ends_with(".tmp")
+                            && path.strip_prefix(&root_for_watcher).is_ok()
+                        {
+                            let Some(relative) = path.strip_prefix(&root_for_watcher).ok() else {
+                                continue;
+                            };
+                            let relative = relative.to_path_buf();
+                            let event = if path.exists() {
+                                WatcherEvent::Modified(relative)
+                            } else {
+                                WatcherEvent::Deleted(relative)
+                            };
+                            let _ = sender_for_watcher.try_send(event);
+                        }
+                    }
+                }
+                Err(error) => error!(?error, "backend-neutral watcher failed"),
+            },
+            notify::Config::default(),
+        )?;
+        watcher.watch(&content_root, notify::RecursiveMode::Recursive)?;
+        Ok(Self {
+            sender,
+            reconcile_queued,
+            _watcher: watcher,
+            tasks: vec![consumer_task],
+        })
+    }
+
     pub fn new(
         db_pool: PgPool,
         content_root: PathBuf,

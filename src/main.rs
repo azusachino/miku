@@ -249,15 +249,18 @@ async fn main() -> Result<()> {
     let (events_tx, _) = tokio::sync::broadcast::channel::<String>(256);
 
     let state = AppState {
-        index,
+        index: index.clone(),
         templates: Arc::new(templates_env),
         events: events_tx.clone(),
     };
 
     // 6. Initialize background indexer
-    let indexer =
-        miku::indexer::IndexerQueue::new(pool, std::path::PathBuf::from("miku_docs"), events_tx)
-            .context("Failed to initialize background indexer")?;
+    let indexer = miku::indexer::IndexerQueue::new_with_writer(
+        index.writer(),
+        std::path::PathBuf::from("miku_docs"),
+        events_tx,
+    )
+    .context("Failed to initialize background indexer")?;
 
     // 7. Build Router & Configure axum routes
     let app = app(state);
