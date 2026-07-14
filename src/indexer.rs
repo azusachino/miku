@@ -1,5 +1,5 @@
 use anyhow::Result;
-use miku_domain::IndexWriter;
+use miku_domain::{IndexWriter, PageIndex};
 use miku_indexer::build_page_index;
 use notify::Watcher;
 use std::env;
@@ -15,6 +15,7 @@ use tokio::task::JoinHandle;
 use tracing::error;
 
 const RECONCILE_SENTINEL: &str = "__reconcile__";
+const RECONCILE_BATCH_SIZE: usize = 128;
 
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
 pub enum WatcherEvent {
@@ -25,6 +26,7 @@ pub enum WatcherEvent {
 pub struct IndexerQueue {
     sender: mpsc::Sender<WatcherEvent>,
     reconcile_queued: Arc<AtomicBool>,
+    ready: Arc<AtomicBool>,
     _watcher: notify::RecommendedWatcher,
     tasks: Vec<JoinHandle<()>>,
 }
@@ -65,11 +67,38 @@ async fn reconcile_store(
     let mut files = Vec::new();
     walk_store_tree(content_root, &mut files)
         .map_err(|error| miku_domain::StoreError::Operation(error.to_string()))?;
+    let mut pages = Vec::with_capacity(RECONCILE_BATCH_SIZE);
     for file in files {
         let relative = file
             .strip_prefix(content_root)
             .map_err(|error| miku_domain::StoreError::Operation(error.to_string()))?;
-        index_store_file(writer, content_root, events, relative).await?;
+        let bytes = fs::read(&file)
+            .map_err(|error| miku_domain::StoreError::Operation(error.to_string()))?;
+        let mtime = fs::metadata(&file)
+            .ok()
+            .and_then(|metadata| metadata.modified().ok())
+            .and_then(|time| time.duration_since(std::time::UNIX_EPOCH).ok())
+            .map_or(0, |duration| duration.as_secs() as i64);
+        pages.push(build_page_index(&relative.to_string_lossy(), &bytes, mtime));
+        if pages.len() == RECONCILE_BATCH_SIZE {
+            flush_reconcile_batch(writer, events, std::mem::take(&mut pages)).await?;
+        }
+    }
+    if !pages.is_empty() {
+        flush_reconcile_batch(writer, events, pages).await?;
+    }
+    Ok(())
+}
+
+async fn flush_reconcile_batch(
+    writer: &Arc<dyn IndexWriter>,
+    events: &broadcast::Sender<String>,
+    pages: Vec<PageIndex>,
+) -> miku_domain::StoreResult<()> {
+    for event in writer.replace_pages(pages).await? {
+        if let miku_domain::IndexEvent::PageIndexed { path } = event {
+            let _ = events.send(path.strip_suffix(".md").unwrap_or(&path).to_string());
+        }
     }
     Ok(())
 }
@@ -89,6 +118,7 @@ fn walk_store_tree(root: &Path, files: &mut Vec<PathBuf>) -> std::io::Result<()>
             files.push(path);
         }
     }
+    files.sort();
     Ok(())
 }
 
@@ -105,13 +135,18 @@ impl IndexerQueue {
 
         let (sender, mut receiver) = mpsc::channel(1024);
         let reconcile_queued = Arc::new(AtomicBool::new(false));
+        let ready = Arc::new(AtomicBool::new(false));
         let writer_task = Arc::clone(&writer);
         let root_task = content_root.clone();
         let events_task = events.clone();
         let reconcile_flag = Arc::clone(&reconcile_queued);
+        let ready_flag = Arc::clone(&ready);
         let consumer_task = tokio::spawn(async move {
-            if let Err(error) = reconcile_store(&writer_task, &root_task, &events_task).await {
+            let startup_result = reconcile_store(&writer_task, &root_task, &events_task).await;
+            if let Err(error) = startup_result {
                 error!(?error, "startup index reconcile failed");
+            } else {
+                ready_flag.store(true, Ordering::Release);
             }
             while let Some(event) = receiver.recv().await {
                 if event == WatcherEvent::Modified(PathBuf::from(RECONCILE_SENTINEL)) {
@@ -175,6 +210,7 @@ impl IndexerQueue {
         Ok(Self {
             sender,
             reconcile_queued,
+            ready,
             _watcher: watcher,
             tasks: vec![consumer_task, ticker_task],
         })
@@ -193,6 +229,11 @@ impl IndexerQueue {
 
     pub fn trigger_reconcile(&self) {
         Self::try_queue_reconcile(&self.sender, &self.reconcile_queued);
+    }
+
+    #[must_use]
+    pub fn ready_handle(&self) -> Arc<AtomicBool> {
+        Arc::clone(&self.ready)
     }
 
     fn reconcile_interval() -> Duration {

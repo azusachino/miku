@@ -181,6 +181,52 @@ impl IndexWriter for TursoIndex {
         Ok(IndexEvent::PageIndexed { path })
     }
 
+    async fn replace_pages(&self, pages: Vec<PageIndex>) -> StoreResult<Vec<IndexEvent>> {
+        if pages.is_empty() {
+            return Ok(Vec::new());
+        }
+        let mut transaction = self.connection.begin().await.map_err(driver_error)?;
+        for page in &pages {
+            let payload = serde_json::to_string(page).map_err(|error| {
+                StoreError::Operation(format!("encode local page projection: {error}"))
+            })?;
+            sqlx::query(
+                "INSERT INTO miku_page_index (path, payload, mtime) VALUES (?1, ?2, ?3)
+                 ON CONFLICT(path) DO UPDATE SET payload = excluded.payload, mtime = excluded.mtime",
+            )
+            .bind(&page.summary.path)
+            .bind(payload)
+            .bind(page.summary.mtime)
+            .execute(&mut *transaction)
+            .await
+            .map_err(driver_error)?;
+            sqlx::query("DELETE FROM miku_page_fts WHERE path = ?1")
+                .bind(&page.summary.path)
+                .execute(&mut *transaction)
+                .await
+                .map_err(driver_error)?;
+            sqlx::query("INSERT INTO miku_page_fts (path, title, body) VALUES (?1, ?2, ?3)")
+                .bind(&page.summary.path)
+                .bind(&page.summary.title)
+                .bind(&page.body)
+                .execute(&mut *transaction)
+                .await
+                .map_err(driver_error)?;
+        }
+        transaction.commit().await.map_err(driver_error)?;
+
+        let events = pages
+            .iter()
+            .map(|page| IndexEvent::PageIndexed {
+                path: page.summary.path.clone(),
+            })
+            .collect();
+        for page in pages {
+            self.memory.replace_page(page).await?;
+        }
+        Ok(events)
+    }
+
     async fn delete_page(&self, path: &str) -> StoreResult<IndexEvent> {
         let mut transaction = self.connection.begin().await.map_err(driver_error)?;
         sqlx::query("DELETE FROM miku_page_index WHERE path = ?1")

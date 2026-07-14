@@ -202,6 +202,18 @@ pub trait IndexWriter: Send + Sync {
     /// Replace one complete page projection atomically.
     async fn replace_page(&self, page: PageIndex) -> StoreResult<IndexEvent>;
 
+    /// Replace a batch of complete page projections.
+    ///
+    /// Backends may override this to commit the batch in one transaction;
+    /// the default keeps the contract compatible with simple writers.
+    async fn replace_pages(&self, pages: Vec<PageIndex>) -> StoreResult<Vec<IndexEvent>> {
+        let mut events = Vec::with_capacity(pages.len());
+        for page in pages {
+            events.push(self.replace_page(page).await?);
+        }
+        Ok(events)
+    }
+
     /// Delete one page projection and return the resulting event.
     async fn delete_page(&self, path: &str) -> StoreResult<IndexEvent>;
 }

@@ -7,6 +7,7 @@ import json
 import os
 import re
 import sys
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -18,6 +19,7 @@ QUERY = os.environ.get("MIKU_BLACKBOX_QUERY", "Index")
 CONTENT_ROOT = Path(os.environ.get("MIKU_CONTENT_ROOT", "miku_docs"))
 APP_CONTENT_ROOT = Path(os.environ.get("MIKU_APP_CONTENT_ROOT", "miku_docs"))
 PAGE_PREFIX = os.environ.get("MIKU_BLACKBOX_PAGE_PREFIX")
+READY_TIMEOUT_SECONDS = float(os.environ.get("MIKU_BLACKBOX_READY_TIMEOUT_SECONDS", "300"))
 
 
 def get(path: str) -> tuple[int, str, str]:
@@ -52,6 +54,22 @@ def validate_health(content_type: str, body: str) -> dict[str, object]:
     if health.get("status") != "ok":
         raise AssertionError(f"/api/health: unexpected payload {health}")
     return health
+
+
+def wait_for_index() -> dict[str, object]:
+    deadline = time.monotonic() + READY_TIMEOUT_SECONDS
+    last_health: dict[str, object] = {}
+    while time.monotonic() < deadline:
+        status, content_type, body = get("/api/health")
+        if status == 200:
+            last_health = validate_health(content_type, body)
+            if last_health.get("index_ready") is True:
+                return last_health
+        time.sleep(1)
+    raise AssertionError(
+        f"/api/health: index did not become ready within {READY_TIMEOUT_SECONDS:g}s; "
+        f"last payload={last_health}"
+    )
 
 
 def validate_page(body: str, page: str) -> None:
@@ -115,10 +133,8 @@ def main() -> int:
         f"folder={folder!r} tag={tag!r}"
     )
 
-    status, content_type, body = get("/api/health")
-    expect(status, 200, "/api/health")
-    health = validate_health(content_type, body)
-    print(f"ok: backend capabilities={health.get('capabilities', {})}")
+    health = wait_for_index()
+    print(f"ok: backend ready capabilities={health.get('capabilities', {})}")
 
     status, _, _ = get("/")
     expect(status, 200, "/")

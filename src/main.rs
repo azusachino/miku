@@ -21,7 +21,7 @@ use std::fs;
 use std::io::Write;
 use std::net::SocketAddr;
 use std::path::{Path as StdPath, PathBuf};
-use std::sync::Arc;
+use std::sync::{atomic::AtomicBool, Arc};
 use std::time::Instant;
 use tokio_stream::{wrappers::BroadcastStream, Stream, StreamExt};
 use tower_http::{services::ServeDir, trace::TraceLayer};
@@ -171,6 +171,7 @@ struct NavNode {
 struct AppState {
     index: IndexApi,
     templates: Arc<Environment<'static>>,
+    index_ready: Arc<AtomicBool>,
     // Broadcasts the relative path (`.md` stripped) of each page the background
     // indexer just re-indexed, so connected browsers can live-refresh via SSE.
     // Read-only fan-out: the SSE layer never writes the Postgres index.
@@ -259,19 +260,20 @@ async fn main() -> Result<()> {
     // subscribers see Lagged and resync on the next event.
     let (events_tx, _) = tokio::sync::broadcast::channel::<String>(256);
 
-    let state = AppState {
-        index: index.clone(),
-        templates: Arc::new(templates_env),
-        events: events_tx.clone(),
-    };
-
     // 6. Initialize background indexer
     let indexer = miku::indexer::IndexerQueue::new_with_writer(
         index.writer(),
         std::path::PathBuf::from("miku_docs"),
-        events_tx,
+        events_tx.clone(),
     )
     .context("Failed to initialize background indexer")?;
+
+    let state = AppState {
+        index: index.clone(),
+        templates: Arc::new(templates_env),
+        index_ready: indexer.ready_handle(),
+        events: events_tx,
+    };
 
     // 7. Build Router & Configure axum routes
     let app = app(state);
@@ -320,6 +322,7 @@ fn app(state: AppState) -> Router {
 struct HealthResponse {
     status: &'static str,
     capabilities: IndexCapabilities,
+    index_ready: bool,
 }
 
 async fn health(State(state): State<AppState>) -> Result<Json<HealthResponse>, StatusCode> {
@@ -331,6 +334,7 @@ async fn health(State(state): State<AppState>) -> Result<Json<HealthResponse>, S
     Ok(Json(HealthResponse {
         status: "ok",
         capabilities,
+        index_ready: state.index_ready.load(std::sync::atomic::Ordering::Acquire),
     }))
 }
 
@@ -2161,6 +2165,7 @@ mod tests {
                 .await
                 .expect("memory index API"),
             templates: Arc::new(templates_env),
+            index_ready: Arc::new(AtomicBool::new(true)),
             events,
         };
         // If `/events` (or any route) were malformed, `app` would panic here.
