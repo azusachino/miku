@@ -1,6 +1,6 @@
 use anyhow::Result;
 use miku_domain::{IndexReader, IndexWriter, PageIndex, PageSummary};
-use miku_indexer::{build_page_index, extract_mentions};
+use miku_indexer::{build_page_index, MentionMatcher};
 use notify::Watcher;
 use std::collections::{HashMap, HashSet};
 use std::env;
@@ -89,6 +89,7 @@ async fn reconcile_store(
         .into_iter()
         .map(|page| (page.path.clone(), page))
         .collect::<HashMap<String, PageSummary>>();
+    let mentions_ready = reader.mentions_ready().await?;
     let existing_duration = existing_started.elapsed();
     let scanned_files = files.len();
     let mut seen = HashSet::with_capacity(files.len());
@@ -119,7 +120,7 @@ async fn reconcile_store(
         seen.insert(path.clone());
         if existing
             .get(&path)
-            .is_some_and(|indexed| indexed.mtime == mtime)
+            .is_some_and(|indexed| indexed.mtime == mtime && mentions_ready)
         {
             unchanged_pages += 1;
             continue;
@@ -148,8 +149,13 @@ async fn reconcile_store(
         deleted_pages += 1;
     }
     let mention_started = Instant::now();
-    let mentions_updated = refresh_mentions_for_sources(reader, writer, &existing, changed_pages).await?;
+    let mentions_updated =
+        refresh_mentions_for_sources(reader, writer, &existing, changed_pages).await?;
     let mention_ms = mention_started.elapsed().as_secs_f64() * 1000.0;
+    let _ = writer
+        .mark_mentions_ready()
+        .await
+        .or_else(ignore_unsupported)?;
     if deleted {
         let _ = events.send(BULK_INDEX_REFRESH.to_string());
     }
@@ -196,9 +202,10 @@ async fn refresh_mentions_for_sources(
         candidates.retain(|candidate| candidate.summary.path != page.summary.path);
         candidates.push(page.clone());
     }
+    let matcher = MentionMatcher::new(&candidates);
     let mut updated = 0;
     for page in changed_pages {
-        refresh_mentions_for_source_with_candidates(writer, &candidates, page).await?;
+        refresh_mentions_for_source_with_matcher(writer, &matcher, page).await?;
         updated += 1;
     }
     let _ = reader;
@@ -217,12 +224,13 @@ async fn refresh_mentions_for_source(
         .map(summary_projection)
         .chain(std::iter::once(page.clone()))
         .collect::<Vec<_>>();
-    refresh_mentions_for_source_with_candidates(writer, &candidates, page).await
+    let matcher = MentionMatcher::new(&candidates);
+    refresh_mentions_for_source_with_matcher(writer, &matcher, page).await
 }
 
-async fn refresh_mentions_for_source_with_candidates(
+async fn refresh_mentions_for_source_with_matcher(
     writer: &Arc<dyn IndexWriter>,
-    candidates: &[PageIndex],
+    matcher: &MentionMatcher,
     page: PageIndex,
 ) -> miku_domain::StoreResult<()> {
     writer
@@ -230,7 +238,7 @@ async fn refresh_mentions_for_source_with_candidates(
         .await
         .or_else(ignore_unsupported)?;
     writer
-        .replace_mentions_for_source(&page.summary.path, extract_mentions(&page, candidates))
+        .replace_mentions_for_source(&page.summary.path, matcher.extract(&page))
         .await
         .or_else(ignore_unsupported)
 }

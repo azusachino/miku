@@ -35,6 +35,7 @@ const CREATE_MENTIONS: &str = "CREATE TABLE IF NOT EXISTS miku_mention_index (
 const CREATE_MENTIONS_TARGET: &str =
     "CREATE INDEX IF NOT EXISTS miku_mention_target ON miku_mention_index (target_path)";
 const SEARCH_READY_KEY: &str = "fts_ready";
+const MENTIONS_READY_KEY: &str = "mentions_ready";
 
 /// A local durable index using the Rust-built Turso engine.
 #[derive(Clone)]
@@ -42,6 +43,7 @@ pub struct TursoIndex {
     connection: Arc<Mutex<Connection>>,
     memory: MemoryIndex,
     search_available: Arc<AtomicBool>,
+    mentions_ready: Arc<AtomicBool>,
     hydrated: Arc<OnceCell<()>>,
 }
 
@@ -87,11 +89,29 @@ impl TursoIndex {
                     .and_then(|value| text_value(&value).ok())
             })
             .is_some_and(|value| value == "1");
+        let mut mention_rows = connection
+            .query(
+                "SELECT value FROM miku_index_meta WHERE key = ?1 LIMIT 1",
+                [MENTIONS_READY_KEY.to_string()],
+            )
+            .await
+            .map_err(driver_error)?;
+        let mentions_ready = mention_rows
+            .next()
+            .await
+            .map_err(driver_error)?
+            .and_then(|row| {
+                row.get_value(0)
+                    .ok()
+                    .and_then(|value| text_value(&value).ok())
+            })
+            .is_some_and(|value| value == "1");
 
         Ok(Self {
             connection: Arc::new(Mutex::new(connection)),
             memory: MemoryIndex::new(),
             search_available: Arc::new(AtomicBool::new(search_ready)),
+            mentions_ready: Arc::new(AtomicBool::new(mentions_ready)),
             hydrated: Arc::new(OnceCell::new()),
         })
     }
@@ -138,7 +158,9 @@ impl TursoIndex {
                         .push(mention);
                 }
                 for (source, mentions) in grouped {
-                    memory.replace_mentions_for_source(&source, mentions).await?;
+                    memory
+                        .replace_mentions_for_source(&source, mentions)
+                        .await?;
                 }
                 Ok(())
             })
@@ -270,6 +292,10 @@ impl IndexReader for TursoIndex {
     async fn mentions_for_target(&self, path: &str) -> StoreResult<Vec<MentionRecord>> {
         self.ensure_hydrated().await?;
         self.memory.mentions_for_target(path).await
+    }
+
+    async fn mentions_ready(&self) -> StoreResult<bool> {
+        Ok(self.mentions_ready.load(Ordering::Acquire))
     }
 
     async fn tags(&self) -> StoreResult<Vec<TagCount>> {
@@ -416,6 +442,20 @@ impl IndexWriter for TursoIndex {
             .map_err(driver_error)?;
         drop(connection);
         self.memory.delete_mentions_for_target(target_path).await
+    }
+
+    async fn mark_mentions_ready(&self) -> StoreResult<()> {
+        let connection = self.connection.lock().await;
+        connection
+            .execute(
+                "INSERT INTO miku_index_meta (key, value) VALUES (?1, '1')
+                 ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+                [MENTIONS_READY_KEY.to_string()],
+            )
+            .await
+            .map_err(driver_error)?;
+        self.mentions_ready.store(true, Ordering::Release);
+        Ok(())
     }
 
     async fn delete_page(&self, path: &str) -> StoreResult<IndexEvent> {
@@ -617,7 +657,9 @@ mod tests {
         ));
         let path_string = path.to_string_lossy().into_owned();
         {
-            let store = TursoIndex::open(&path_string).await.expect("open disk index");
+            let store = TursoIndex::open(&path_string)
+                .await
+                .expect("open disk index");
             store
                 .replace_page(page("Index.md", "Target"))
                 .await
@@ -640,7 +682,9 @@ mod tests {
                 .await
                 .expect("write mention");
         }
-        let reopened = TursoIndex::open(&path_string).await.expect("reopen disk index");
+        let reopened = TursoIndex::open(&path_string)
+            .await
+            .expect("reopen disk index");
         assert_eq!(
             reopened
                 .mentions_for_target("Index.md")

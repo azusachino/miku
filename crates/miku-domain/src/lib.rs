@@ -227,6 +227,11 @@ pub trait IndexReader: Send + Sync {
     /// Return derived unlinked mentions targeting a page path.
     async fn mentions_for_target(&self, path: &str) -> StoreResult<Vec<MentionRecord>>;
 
+    /// Whether the derived mention projection has completed at least one full build.
+    async fn mentions_ready(&self) -> StoreResult<bool> {
+        Ok(false)
+    }
+
     /// Return all tags and their page counts.
     async fn tags(&self) -> StoreResult<Vec<TagCount>>;
 
@@ -280,6 +285,13 @@ pub trait IndexWriter: Send + Sync {
 
     /// Remove every derived mention targeting one page.
     async fn delete_mentions_for_target(&self, _target_path: &str) -> StoreResult<()> {
+        Err(StoreError::Unsupported(
+            "derived unlinked mentions".to_string(),
+        ))
+    }
+
+    /// Mark the derived mention projection complete for the current page set.
+    async fn mark_mentions_ready(&self) -> StoreResult<()> {
         Err(StoreError::Unsupported(
             "derived unlinked mentions".to_string(),
         ))

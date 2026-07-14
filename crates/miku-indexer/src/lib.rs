@@ -4,9 +4,7 @@
 //! Markdown document into a domain [`miku_domain::PageIndex`]; a concrete
 //! [`miku_domain::IndexStore`] owns persistence and transaction semantics.
 
-use miku_domain::{
-    DocumentSignals, HeadingSummary, LinkKind, LinkRecord, PageIndex, PageSummary,
-};
+use miku_domain::{DocumentSignals, HeadingSummary, LinkKind, LinkRecord, PageIndex, PageSummary};
 use miku_markdown::{extract_title, is_asset_path, normalize_target, TAG_REGEX};
 use regex::Regex;
 use serde_json::Value;
@@ -14,7 +12,7 @@ use std::path::Path;
 
 mod mentions;
 
-pub use mentions::extract_mentions;
+pub use mentions::{extract_mentions, MentionMatcher};
 
 static WIKILINK_REGEX: std::sync::LazyLock<Regex> = std::sync::LazyLock::new(|| {
     Regex::new(r"(!?)\[\[([^\]|]+)(?:\|([^\]]+))?\]\]").expect("wikilink regex")

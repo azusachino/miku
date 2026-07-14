@@ -35,7 +35,7 @@ check-integration:
 	$(NIX_RUN)uv run python scripts/ci.py check-integration
 
 check-blackbox:
-	$(NIX_RUN)uv run python scripts/ci.py check-blackbox
+	MIKU_UX_AUTOSTART=1 uv run python scripts/ci.py check-blackbox
 
 check-ux-smoke:
 	MIKU_UX_AUTOSTART=1 uv run python scripts/ci.py check-ux-smoke

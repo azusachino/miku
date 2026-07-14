@@ -83,7 +83,7 @@ def scale() -> None:
 
 
 def blackbox() -> None:
-    run([sys.executable, "scripts/blackbox.py"])
+    run_ux_script("scripts/blackbox.py")
 
 
 def ux_smoke() -> None:

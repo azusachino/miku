@@ -71,3 +71,8 @@ CREATE TABLE tb_unlinked_mentions (
 );
 CREATE INDEX idx_unlinked_mentions_target ON tb_unlinked_mentions(target_path);
 CREATE INDEX idx_unlinked_mentions_source ON tb_unlinked_mentions(source_path);
+
+CREATE TABLE tb_index_meta (
+  key   TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);

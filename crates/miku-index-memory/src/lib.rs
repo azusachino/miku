@@ -131,6 +131,10 @@ impl IndexReader for MemoryIndex {
             .collect())
     }
 
+    async fn mentions_ready(&self) -> StoreResult<bool> {
+        Ok(true)
+    }
+
     async fn tags(&self) -> StoreResult<Vec<TagCount>> {
         let mut counts = BTreeMap::new();
         for page in self.read_pages()?.values() {
@@ -215,6 +219,10 @@ impl IndexWriter for MemoryIndex {
             .write()
             .map_err(|_| StoreError::Operation("memory mention lock poisoned".to_string()))?
             .retain(|(target, _, _), _| target != target_path);
+        Ok(())
+    }
+
+    async fn mark_mentions_ready(&self) -> StoreResult<()> {
         Ok(())
     }
 
@@ -310,7 +318,10 @@ mod tests {
             )
             .await
             .expect("replace mentions");
-        assert_eq!(index.mentions_for_target("Index.md").await.unwrap().len(), 1);
+        assert_eq!(
+            index.mentions_for_target("Index.md").await.unwrap().len(),
+            1
+        );
         assert_eq!(index.tags().await.expect("tags")[0].count, 2);
     }
 }

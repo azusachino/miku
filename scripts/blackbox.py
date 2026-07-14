@@ -190,7 +190,8 @@ def discover_unlinked_case() -> tuple[str, str, str, str] | None:
         for source_path, source_title, body in documents:
             if source_path == target_path:
                 continue
-            if pattern.search(body) and not re.search(
+            searchable_body = re.sub(r"!?\[[^\]]+\]\([^\)]*\)", "", body)
+            if pattern.search(searchable_body) and not re.search(
                 rf"\[\[{re.escape(target_title)}(?:\||\]\])", body, re.IGNORECASE
             ):
                 return target_path, source_path, target_title, source_title

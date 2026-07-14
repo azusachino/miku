@@ -178,18 +178,30 @@ impl IndexReader for PostgresIndex {
         .await
         .map(|rows| {
             rows.into_iter()
-                .map(|(target_path, source_path, source_title, matched_text, snippet)| {
-                    MentionRecord {
-                        target_path,
-                        source_path,
-                        source_title,
-                        matched_text,
-                        snippet,
-                    }
-                })
+                .map(
+                    |(target_path, source_path, source_title, matched_text, snippet)| {
+                        MentionRecord {
+                            target_path,
+                            source_path,
+                            source_title,
+                            matched_text,
+                            snippet,
+                        }
+                    },
+                )
                 .collect()
         })
         .map_err(database_error)
+    }
+
+    async fn mentions_ready(&self) -> StoreResult<bool> {
+        let value = sqlx::query_scalar::<_, Option<String>>(
+            "SELECT value FROM tb_index_meta WHERE key = 'mentions_ready'",
+        )
+        .fetch_one(self.pool())
+        .await
+        .map_err(database_error)?;
+        Ok(value.as_deref() == Some("1"))
     }
 
     async fn tags(&self) -> StoreResult<Vec<TagCount>> {
@@ -378,6 +390,17 @@ impl IndexWriter for PostgresIndex {
             .await
             .map_err(database_error)
             .map(|_| ())
+    }
+
+    async fn mark_mentions_ready(&self) -> StoreResult<()> {
+        sqlx::query(
+            "INSERT INTO tb_index_meta (key, value) VALUES ('mentions_ready', '1')
+             ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value",
+        )
+        .execute(self.pool())
+        .await
+        .map_err(database_error)
+        .map(|_| ())
     }
 
     async fn delete_page(&self, path: &str) -> StoreResult<IndexEvent> {

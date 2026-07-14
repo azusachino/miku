@@ -176,10 +176,7 @@ impl IndexApi {
     pub async fn mentions_for_target(&self, path: &str) -> StoreResult<Vec<MentionRecord>> {
         let mentions = self.reader.mentions_for_target(path).await?;
         if mentions.is_empty() && !path.ends_with(".md") {
-            return self
-                .reader
-                .mentions_for_target(&format!("{path}.md"))
-                .await;
+            return self.reader.mentions_for_target(&format!("{path}.md")).await;
         }
         Ok(mentions)
     }
@@ -350,6 +347,10 @@ impl IndexReader for CachedIndexReader {
         .await
     }
 
+    async fn mentions_ready(&self) -> StoreResult<bool> {
+        self.primary.mentions_ready().await
+    }
+
     async fn tags(&self) -> StoreResult<Vec<TagCount>> {
         self.read_through("tags".to_string(), self.primary.tags())
             .await
@@ -403,6 +404,12 @@ impl IndexWriter for CachedIndexWriter {
 
     async fn delete_mentions_for_target(&self, target_path: &str) -> StoreResult<()> {
         let result = self.primary.delete_mentions_for_target(target_path).await;
+        let _ = self.cache.lock().await.clear().await;
+        result
+    }
+
+    async fn mark_mentions_ready(&self) -> StoreResult<()> {
+        let result = self.primary.mark_mentions_ready().await;
         let _ = self.cache.lock().await.clear().await;
         result
     }
