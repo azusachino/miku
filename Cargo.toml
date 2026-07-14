@@ -28,6 +28,7 @@ members = [
   "crates/miku-indexer",
   "crates/miku-index-memory",
   "crates/miku-app",
+  "crates/miku-index-postgres",
 ]
 resolver = "2"
 

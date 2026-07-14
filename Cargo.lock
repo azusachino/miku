@@ -1273,6 +1273,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "miku-index-postgres"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "miku-domain",
+ "miku-indexer",
+ "serde_json",
+ "sqlx",
+]
+
+[[package]]
 name = "miku-indexer"
 version = "0.1.0"
 dependencies = [
