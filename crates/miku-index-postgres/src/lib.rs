@@ -2,9 +2,9 @@
 
 use async_trait::async_trait;
 use miku_domain::{
-    Backlink, IndexCapabilities, IndexEvent, IndexReader, IndexWriter, LinkKind, PageIndex,
-    PageSummary, SearchHit, SearchRequest, SearchScope, StoreError, StoreResult, TagCount,
-    UnlinkedMention,
+    Backlink, IndexCapabilities, IndexEvent, IndexReader, IndexWriter, LinkKind, MentionRecord,
+    PageIndex, PageSummary, SearchHit, SearchRequest, SearchScope, StoreError, StoreResult,
+    TagCount,
 };
 use miku_indexer::page_slug;
 use sqlx::PgPool;
@@ -165,7 +165,7 @@ impl IndexReader for PostgresIndex {
         .map_err(database_error)
     }
 
-    async fn unlinked_mentions(&self, _path: &str) -> StoreResult<Vec<UnlinkedMention>> {
+    async fn mentions_for_target(&self, _path: &str) -> StoreResult<Vec<MentionRecord>> {
         // The raw Markdown body belongs to the filesystem source of truth and
         // is intentionally not duplicated in the Postgres projection.
         Ok(Vec::new())

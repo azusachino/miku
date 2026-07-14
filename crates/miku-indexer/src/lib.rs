@@ -4,7 +4,7 @@
 //! Markdown document into a domain [`miku_domain::PageIndex`]; a concrete
 //! [`miku_domain::IndexStore`] owns persistence and transaction semantics.
 
-use miku_domain::{LinkKind, LinkRecord, PageIndex, PageSummary};
+use miku_domain::{DocumentSignals, LinkKind, LinkRecord, PageIndex, PageSummary};
 use miku_markdown::{extract_title, is_asset_path, normalize_target, TAG_REGEX};
 use regex::Regex;
 use serde_json::Value;
@@ -67,6 +67,7 @@ pub fn build_page_index(path: &str, raw: &[u8], mtime: i64) -> PageIndex {
         tags,
         aliases,
         has_mermaid: body.lines().any(|line| line.trim() == "```mermaid"),
+        signals: DocumentSignals::default(),
     }
 }
 

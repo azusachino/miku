@@ -6,8 +6,8 @@
 //! the request layer.
 
 use miku_domain::{
-    Backlink, IndexCapabilities, IndexEvent, IndexReader, IndexStore, IndexWriter, PageIndex,
-    PageSummary, SearchHit, SearchRequest, StoreResult, TagCount, UnlinkedMention,
+    Backlink, IndexCapabilities, IndexEvent, IndexReader, IndexStore, IndexWriter, MentionRecord,
+    PageIndex, PageSummary, SearchHit, SearchRequest, StoreResult, TagCount,
 };
 use std::sync::Arc;
 #[cfg(feature = "valkey")]
@@ -173,8 +173,8 @@ impl IndexApi {
     }
 
     /// Find plain-text mentions of the requested page.
-    pub async fn unlinked_mentions(&self, path: &str) -> StoreResult<Vec<UnlinkedMention>> {
-        self.reader.unlinked_mentions(path).await
+    pub async fn mentions_for_target(&self, path: &str) -> StoreResult<Vec<MentionRecord>> {
+        self.reader.mentions_for_target(path).await
     }
 
     /// Return tag counts.
@@ -335,10 +335,10 @@ impl IndexReader for CachedIndexReader {
             .await
     }
 
-    async fn unlinked_mentions(&self, path: &str) -> StoreResult<Vec<UnlinkedMention>> {
+    async fn mentions_for_target(&self, path: &str) -> StoreResult<Vec<MentionRecord>> {
         self.read_through(
-            format!("unlinked_mentions:{path}"),
-            self.primary.unlinked_mentions(path),
+            format!("mentions_for_target:{path}"),
+            self.primary.mentions_for_target(path),
         )
         .await
     }
@@ -404,6 +404,7 @@ mod tests {
             tags: Vec::new(),
             aliases: Vec::new(),
             has_mermaid: false,
+            signals: Default::default(),
         })
         .await
         .expect("write page");

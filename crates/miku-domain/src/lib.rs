@@ -54,6 +54,29 @@ pub struct PageIndex {
     pub aliases: Vec<String>,
     /// Whether the rendered page needs the Mermaid client asset.
     pub has_mermaid: bool,
+    /// Deterministic signals extracted from the same Markdown parse.
+    #[serde(default)]
+    pub signals: DocumentSignals,
+}
+
+/// Lightweight, deterministic signals used by navigation and future discovery surfaces.
+#[derive(Debug, Clone, Default, Eq, PartialEq, Serialize, Deserialize)]
+pub struct DocumentSignals {
+    /// First meaningful paragraph from the Markdown body, if present.
+    pub lead: String,
+    /// Heading text and nesting level in document order.
+    pub headings: Vec<HeadingSummary>,
+    /// Count of visible, whitespace-separated words in the body.
+    pub word_count: usize,
+}
+
+/// A heading extracted from a Markdown document.
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+pub struct HeadingSummary {
+    /// ATX/setext heading level.
+    pub level: u8,
+    /// Plain visible heading text.
+    pub text: String,
 }
 
 /// An outgoing page or asset link in a page projection.
@@ -133,6 +156,21 @@ pub struct UnlinkedMention {
     pub snippet: String,
 }
 
+/// A persisted plain-text occurrence that may be promoted to a wikilink.
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+pub struct MentionRecord {
+    /// Target page path whose title or alias was mentioned.
+    pub target_path: String,
+    /// Source page path containing the occurrence.
+    pub source_path: String,
+    /// Source page display title.
+    pub source_title: String,
+    /// Matched title or alias text as it appeared in the source.
+    pub matched_text: String,
+    /// Short context around the occurrence.
+    pub snippet: String,
+}
+
 /// A tag and its indexed page count.
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct TagCount {
@@ -186,8 +224,8 @@ pub trait IndexReader: Send + Sync {
     /// Return explicit backlinks for a page path.
     async fn backlinks(&self, path: &str) -> StoreResult<Vec<Backlink>>;
 
-    /// Return unlinked mentions for a page path.
-    async fn unlinked_mentions(&self, path: &str) -> StoreResult<Vec<UnlinkedMention>>;
+    /// Return derived unlinked mentions targeting a page path.
+    async fn mentions_for_target(&self, path: &str) -> StoreResult<Vec<MentionRecord>>;
 
     /// Return all tags and their page counts.
     async fn tags(&self) -> StoreResult<Vec<TagCount>>;
@@ -220,6 +258,24 @@ pub trait IndexWriter: Send + Sync {
     /// no-op implementation.
     async fn rebuild_search_index(&self) -> StoreResult<()> {
         Ok(())
+    }
+
+    /// Replace every derived mention emitted by one source page.
+    async fn replace_mentions_for_source(
+        &self,
+        _source_path: &str,
+        _mentions: Vec<MentionRecord>,
+    ) -> StoreResult<()> {
+        Err(StoreError::Unsupported(
+            "derived unlinked mentions".to_string(),
+        ))
+    }
+
+    /// Remove every derived mention emitted by one source page.
+    async fn delete_mentions_for_source(&self, _source_path: &str) -> StoreResult<()> {
+        Err(StoreError::Unsupported(
+            "derived unlinked mentions".to_string(),
+        ))
     }
 
     /// Delete one page projection and return the resulting event.
@@ -255,6 +311,7 @@ mod tests {
             tags: vec!["daily".to_string()],
             aliases: Vec::new(),
             has_mermaid: false,
+            signals: DocumentSignals::default(),
         };
 
         let encoded = serde_json::to_string(&page).expect("encode page index");

@@ -5,8 +5,8 @@
 
 use async_trait::async_trait;
 use miku_domain::{
-    Backlink, IndexCapabilities, IndexEvent, IndexReader, IndexWriter, PageIndex, PageSummary,
-    SearchHit, SearchRequest, StoreError, StoreResult, TagCount, UnlinkedMention,
+    Backlink, IndexCapabilities, IndexEvent, IndexReader, IndexWriter, MentionRecord, PageIndex,
+    PageSummary, SearchHit, SearchRequest, StoreError, StoreResult, TagCount,
 };
 use std::collections::BTreeMap;
 use std::sync::{Arc, RwLock};
@@ -15,6 +15,7 @@ use std::sync::{Arc, RwLock};
 #[derive(Clone, Default)]
 pub struct MemoryIndex {
     pages: Arc<RwLock<BTreeMap<String, PageIndex>>>,
+    mentions: Arc<RwLock<BTreeMap<(String, String, String), MentionRecord>>>,
 }
 
 impl MemoryIndex {
@@ -119,24 +120,14 @@ impl IndexReader for MemoryIndex {
             .collect())
     }
 
-    async fn unlinked_mentions(&self, path: &str) -> StoreResult<Vec<UnlinkedMention>> {
-        let Some(target) = self.read_pages()?.get(path).cloned() else {
-            return Ok(Vec::new());
-        };
-        let needle = target.summary.title.to_lowercase();
-        if needle.is_empty() {
-            return Ok(Vec::new());
-        }
-
+    async fn mentions_for_target(&self, path: &str) -> StoreResult<Vec<MentionRecord>> {
         Ok(self
-            .read_pages()?
+            .mentions
+            .read()
+            .map_err(|_| StoreError::Operation("memory mention lock poisoned".to_string()))?
             .values()
-            .filter(|page| page.summary.path != path && page.body.to_lowercase().contains(&needle))
-            .map(|page| UnlinkedMention {
-                path: page.summary.path.clone(),
-                title: page.summary.title.clone(),
-                snippet: snippet(&page.body, &needle),
-            })
+            .filter(|mention| mention.target_path == path)
+            .cloned()
             .collect())
     }
 
@@ -188,6 +179,37 @@ impl IndexWriter for MemoryIndex {
         Ok(events)
     }
 
+    async fn replace_mentions_for_source(
+        &self,
+        source_path: &str,
+        mentions: Vec<MentionRecord>,
+    ) -> StoreResult<()> {
+        let mut indexed = self
+            .mentions
+            .write()
+            .map_err(|_| StoreError::Operation("memory mention lock poisoned".to_string()))?;
+        indexed.retain(|(_, source, _), _| source != source_path);
+        for mention in mentions {
+            indexed.insert(
+                (
+                    mention.target_path.clone(),
+                    mention.source_path.clone(),
+                    mention.matched_text.to_lowercase(),
+                ),
+                mention,
+            );
+        }
+        Ok(())
+    }
+
+    async fn delete_mentions_for_source(&self, source_path: &str) -> StoreResult<()> {
+        self.mentions
+            .write()
+            .map_err(|_| StoreError::Operation("memory mention lock poisoned".to_string()))?
+            .retain(|(_, source, _), _| source != source_path);
+        Ok(())
+    }
+
     async fn delete_page(&self, path: &str) -> StoreResult<IndexEvent> {
         self.write_pages()?.remove(path);
         Ok(IndexEvent::PageDeleted {
@@ -224,6 +246,7 @@ mod tests {
             tags: vec!["notes".to_string()],
             aliases: Vec::new(),
             has_mermaid: false,
+            signals: Default::default(),
         }
     }
 
@@ -259,12 +282,27 @@ mod tests {
         );
         assert_eq!(
             index
-                .unlinked_mentions("Index.md")
+                .mentions_for_target("Index.md")
                 .await
                 .expect("mentions")
                 .len(),
-            1
+            0
         );
+
+        index
+            .replace_mentions_for_source(
+                "Source.md",
+                vec![MentionRecord {
+                    target_path: "Index.md".to_string(),
+                    source_path: "Source.md".to_string(),
+                    source_title: "Source".to_string(),
+                    matched_text: "Index".to_string(),
+                    snippet: "Today references Index.".to_string(),
+                }],
+            )
+            .await
+            .expect("replace mentions");
+        assert_eq!(index.mentions_for_target("Index.md").await.unwrap().len(), 1);
         assert_eq!(index.tags().await.expect("tags")[0].count, 2);
     }
 }

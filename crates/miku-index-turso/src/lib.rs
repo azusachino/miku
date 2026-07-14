@@ -2,8 +2,8 @@
 
 use async_trait::async_trait;
 use miku_domain::{
-    Backlink, IndexCapabilities, IndexEvent, IndexReader, IndexWriter, PageIndex, PageSummary,
-    SearchHit, SearchRequest, StoreError, StoreResult, TagCount, UnlinkedMention,
+    Backlink, IndexCapabilities, IndexEvent, IndexReader, IndexWriter, MentionRecord, PageIndex,
+    PageSummary, SearchHit, SearchRequest, StoreError, StoreResult, TagCount,
 };
 use miku_index_memory::MemoryIndex;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -224,9 +224,8 @@ impl IndexReader for TursoIndex {
         self.memory.backlinks(path).await
     }
 
-    async fn unlinked_mentions(&self, path: &str) -> StoreResult<Vec<UnlinkedMention>> {
-        self.ensure_hydrated().await?;
-        self.memory.unlinked_mentions(path).await
+    async fn mentions_for_target(&self, path: &str) -> StoreResult<Vec<MentionRecord>> {
+        self.memory.mentions_for_target(path).await
     }
 
     async fn tags(&self) -> StoreResult<Vec<TagCount>> {
@@ -306,6 +305,20 @@ impl IndexWriter for TursoIndex {
         Ok(())
     }
 
+    async fn replace_mentions_for_source(
+        &self,
+        source_path: &str,
+        mentions: Vec<MentionRecord>,
+    ) -> StoreResult<()> {
+        self.memory
+            .replace_mentions_for_source(source_path, mentions)
+            .await
+    }
+
+    async fn delete_mentions_for_source(&self, source_path: &str) -> StoreResult<()> {
+        self.memory.delete_mentions_for_source(source_path).await
+    }
+
     async fn delete_page(&self, path: &str) -> StoreResult<IndexEvent> {
         let connection = self.connection.lock().await;
         let transaction = connection
@@ -342,6 +355,7 @@ mod tests {
             tags: Vec::new(),
             aliases: Vec::new(),
             has_mermaid: false,
+            signals: Default::default(),
         }
     }
 
