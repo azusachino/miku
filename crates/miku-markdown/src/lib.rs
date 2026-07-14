@@ -126,6 +126,30 @@ pub struct Heading {
     pub id: String,
 }
 
+/// Extract the first meaningful paragraph from a Markdown body.
+pub fn extract_lead(body: &str) -> String {
+    let arena = comrak::Arena::new();
+    let root = comrak::parse_document(&arena, body, &comrak_options());
+    for node in root.descendants() {
+        if matches!(&node.data.borrow().value, NodeValue::Paragraph) {
+            let mut text = String::new();
+            heading_text_append(node, &mut text);
+            let lead = text.split_whitespace().collect::<Vec<_>>().join(" ");
+            if !lead.is_empty() {
+                return lead;
+            }
+        }
+    }
+    String::new()
+}
+
+/// Extract document headings without rendering the body.
+pub fn extract_headings(body: &str) -> Vec<Heading> {
+    let arena = comrak::Arena::new();
+    let root = comrak::parse_document(&arena, body, &comrak_options());
+    collect_toc(root)
+}
+
 /// Concatenate the visible text of a wikilink node's children (its display
 /// label / alias).
 fn node_label<'a>(node: &'a AstNode<'a>) -> String {
@@ -691,5 +715,18 @@ mod tests {
         assert!(html.contains("admonition ad-note"));
         assert!(html.contains("Custom Note Title"));
         assert!(html.contains("<strong>bold</strong>"));
+    }
+
+    #[test]
+    fn extracts_lead_and_headings_from_markdown() {
+        let body = "# Title\n\nThis is the lead.\n\n## Details\n\nMore text.";
+        assert_eq!(extract_lead(body), "This is the lead.");
+        assert_eq!(
+            extract_headings(body)
+                .into_iter()
+                .map(|heading| (heading.level, heading.text))
+                .collect::<Vec<_>>(),
+            vec![(1, "Title".to_string()), (2, "Details".to_string())]
+        );
     }
 }

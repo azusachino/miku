@@ -4,7 +4,9 @@
 //! Markdown document into a domain [`miku_domain::PageIndex`]; a concrete
 //! [`miku_domain::IndexStore`] owns persistence and transaction semantics.
 
-use miku_domain::{DocumentSignals, LinkKind, LinkRecord, PageIndex, PageSummary};
+use miku_domain::{
+    DocumentSignals, HeadingSummary, LinkKind, LinkRecord, PageIndex, PageSummary,
+};
 use miku_markdown::{extract_title, is_asset_path, normalize_target, TAG_REGEX};
 use regex::Regex;
 use serde_json::Value;
@@ -20,6 +22,13 @@ pub fn build_page_index(path: &str, raw: &[u8], mtime: i64) -> PageIndex {
     let (frontmatter, body) = miku_markdown::parse_frontmatter(&content);
     let frontmatter = frontmatter.unwrap_or_else(|| Value::Object(serde_json::Map::new()));
     let title = extract_title(path, Some(&frontmatter), body);
+    let headings = miku_markdown::extract_headings(body)
+        .into_iter()
+        .map(|heading| HeadingSummary {
+            level: heading.level,
+            text: heading.text,
+        })
+        .collect();
 
     let links = WIKILINK_REGEX
         .captures_iter(body)
@@ -67,7 +76,11 @@ pub fn build_page_index(path: &str, raw: &[u8], mtime: i64) -> PageIndex {
         tags,
         aliases,
         has_mermaid: body.lines().any(|line| line.trim() == "```mermaid"),
-        signals: DocumentSignals::default(),
+        signals: DocumentSignals {
+            lead: miku_markdown::extract_lead(body),
+            headings,
+            word_count: body.split_whitespace().count(),
+        },
     }
 }
 
