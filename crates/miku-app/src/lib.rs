@@ -374,10 +374,6 @@ impl IndexWriter for CachedIndexWriter {
         let _ = self.cache.lock().await.clear().await;
         Ok(result)
     }
-
-    async fn search_index_needs_rebuild(&self) -> StoreResult<bool> {
-        self.primary.search_index_needs_rebuild().await
-    }
 }
 
 fn missing_feature(backend: &str, feature: &str) -> miku_domain::StoreError {

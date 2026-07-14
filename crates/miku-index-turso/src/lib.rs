@@ -306,10 +306,6 @@ impl IndexWriter for TursoIndex {
         Ok(())
     }
 
-    async fn search_index_needs_rebuild(&self) -> StoreResult<bool> {
-        Ok(!self.search_available.load(Ordering::Acquire))
-    }
-
     async fn delete_page(&self, path: &str) -> StoreResult<IndexEvent> {
         let connection = self.connection.lock().await;
         let transaction = connection
