@@ -50,8 +50,11 @@ export DATABASE_URL=postgres://localhost/miku
 ```bash
 nix develop       # enter the devShell (provisions all tools)
 make run          # run the server (expects DATABASE_URL already set)
-make check        # fmt-check + lint + test (before commit)
-make validate     # check + release build (before PR)
+uv run python scripts/ci.py check       # default fmt + lint + tests
+uv run python scripts/ci.py featured    # all Cargo features
+uv run python scripts/ci.py integration # optional service-backed probes
+uv run python scripts/ci.py release     # crates.io package dry-runs
+make validate                         # check + release build (compatibility alias)
 ```
 
 Project automation/scripts are Python run via `uv run python scripts/<x>.py`
