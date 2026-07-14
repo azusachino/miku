@@ -138,7 +138,11 @@ pub async fn compose_index(config: IndexConfig) -> StoreResult<IndexApi> {
     }
 }
 
-#[allow(dead_code)]
+#[cfg(any(
+    not(feature = "memory"),
+    not(feature = "sqlite"),
+    not(feature = "postgres")
+))]
 fn missing_feature(backend: &str, feature: &str) -> miku_domain::StoreError {
     miku_domain::StoreError::Unsupported(format!(
         "{backend} backend requires the `{feature}` Cargo feature"
