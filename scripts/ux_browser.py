@@ -39,6 +39,20 @@ def check_shell(page: Page) -> None:
     page.screenshot(path=str(ARTIFACT_DIR / "reading.png"), full_page=True)
 
 
+def check_persistence(page: Page) -> None:
+    state = page.evaluate("""() => {
+        const keys = Object.keys(localStorage);
+        return { keys, state: JSON.parse(localStorage.getItem('miku:ui:v1') || 'null') };
+    }""")
+    if state["state"] is None or state["state"].get("version") != 1:
+        raise AssertionError("versioned UI state was not persisted")
+    legacy = [key for key in state["keys"] if key.startswith("miku:") and key != "miku:ui:v1"]
+    if legacy:
+        raise AssertionError(f"legacy UI state keys remain: {legacy}")
+    page.reload(wait_until="domcontentloaded")
+    page.wait_for_function("document.documentElement.dataset.theme === 'dark'")
+
+
 def check_palette(page: Page) -> None:
     page.keyboard.press("Control+K")
     page.locator(".mk-command-modal").wait_for(state="visible")
@@ -125,6 +139,7 @@ def main() -> int:
         page.on("console", record_console)
         try:
             check_shell(page)
+            check_persistence(page)
             check_palette(page)
             check_tags(page)
             check_zen_mode(page)
