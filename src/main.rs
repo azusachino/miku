@@ -157,13 +157,6 @@ fn attach_server_timing(response: &mut Response, name: &str, elapsed_ms: f64) {
     }
 }
 
-fn escape_like(query: &str) -> String {
-    query
-        .replace('\\', "\\\\")
-        .replace('%', "\\%")
-        .replace('_', "\\_")
-}
-
 #[derive(serde::Serialize)]
 struct NavNode {
     name: String,         // folder segment name, or page title for leaves
@@ -1467,100 +1460,6 @@ async fn quickswitch(
     Ok(response)
 }
 
-async fn search_rows(
-    db: &sqlx::PgPool,
-    query: &str,
-    scope: SearchScope,
-) -> Result<Vec<(String, String)>, sqlx::Error> {
-    let escaped = escape_like(query);
-    let like = format!("%{escaped}%");
-    let prefix = format!("{escaped}%");
-
-    match scope {
-        SearchScope::Title => {
-            sqlx::query_as(
-                "SELECT path, title
-                 FROM tb_pages
-                 WHERE title ILIKE $1 ESCAPE '\\'
-                    OR path ILIKE $1 ESCAPE '\\'
-                    OR slug ILIKE $1 ESCAPE '\\'
-                 ORDER BY
-                   CASE
-                     WHEN title ILIKE $2 ESCAPE '\\' THEN 0
-                     WHEN path ILIKE $2 ESCAPE '\\' THEN 1
-                     WHEN slug ILIKE $2 ESCAPE '\\' THEN 2
-                     ELSE 3
-                   END,
-                   title
-                 LIMIT 50",
-            )
-            .bind(&like)
-            .bind(&prefix)
-            .fetch_all(db)
-            .await
-        }
-        SearchScope::Body => {
-            sqlx::query_as(
-                "WITH query AS (
-                   SELECT websearch_to_tsquery('english', $1) AS tsq
-                 ),
-                 candidates AS MATERIALIZED (
-                   SELECT p.path, p.title, p.body_tsv
-                   FROM tb_pages p, query
-                   WHERE p.body_tsv @@ query.tsq
-                   LIMIT 250
-                 )
-                 SELECT candidates.path, candidates.title
-                 FROM candidates, query
-                 ORDER BY ts_rank(candidates.body_tsv, query.tsq) DESC, candidates.title
-                 LIMIT 50",
-            )
-            .bind(query)
-            .fetch_all(db)
-            .await
-        }
-        SearchScope::All => {
-            sqlx::query_as(
-                "WITH query AS (
-                   SELECT websearch_to_tsquery('english', $1) AS tsq
-                 ),
-                 body_candidates AS MATERIALIZED (
-                   SELECT p.path, p.title, p.body_tsv
-                   FROM tb_pages p, query
-                   WHERE p.body_tsv @@ query.tsq
-                   LIMIT 250
-                 ),
-                 matched AS (
-                   SELECT path, title,
-                     CASE
-                       WHEN title ILIKE $3 ESCAPE '\\' THEN 100.0
-                       WHEN path ILIKE $3 ESCAPE '\\' THEN 90.0
-                       WHEN slug ILIKE $3 ESCAPE '\\' THEN 80.0
-                       ELSE 60.0
-                     END AS score
-                   FROM tb_pages
-                   WHERE title ILIKE $2 ESCAPE '\\'
-                      OR path ILIKE $2 ESCAPE '\\'
-                      OR slug ILIKE $2 ESCAPE '\\'
-                   UNION ALL
-                   SELECT body_candidates.path, body_candidates.title, ts_rank(body_candidates.body_tsv, query.tsq) * 40.0 AS score
-                   FROM body_candidates, query
-                 )
-                 SELECT path, title
-                 FROM matched
-                 GROUP BY path, title
-                 ORDER BY MAX(score) DESC, title
-                 LIMIT 50",
-            )
-            .bind(query)
-            .bind(&like)
-            .bind(&prefix)
-            .fetch_all(db)
-            .await
-        }
-    }
-}
-
 async fn search(
     Query(params): Query<SearchParams>,
     State(state): State<AppState>,
@@ -1575,16 +1474,31 @@ async fn search(
         Vec::new()
     } else {
         let db_started = Instant::now();
-        let rows = search_rows(&state.db, &query_str, scope)
+        let rows = state
+            .index
+            .search(miku_domain::SearchRequest {
+                query: query_str.clone(),
+                scope: match scope {
+                    SearchScope::All => miku_domain::SearchScope::All,
+                    SearchScope::Title => miku_domain::SearchScope::Title,
+                    SearchScope::Body => miku_domain::SearchScope::Body,
+                },
+                limit: 50,
+            })
             .await
+            .map_err(|error| anyhow::anyhow!(error))
             .context("Failed to execute search")?;
         let db_ms = timing_ms(db_started);
 
         let snippet_started = Instant::now();
         let results = rows
             .into_iter()
-            .map(|(path, title)| {
-                let display_path = path.strip_suffix(".md").unwrap_or(&path).to_string();
+            .map(|hit| {
+                let display_path = hit
+                    .path
+                    .strip_suffix(".md")
+                    .unwrap_or(&hit.path)
+                    .to_string();
                 // The index stores only body_tsv, not the raw body, so build the
                 // snippet from the file on disk (the source of truth).
                 let snippet = safe_file_path(&display_path)
@@ -1598,7 +1512,7 @@ async fn search(
 
                 SearchResult {
                     path: display_path,
-                    title,
+                    title: hit.title,
                     snippet,
                 }
             })
