@@ -76,19 +76,24 @@ def main() -> int:
     samples: list[tuple[int, float]] = []
     rounds = 0
     next_report = started + 10
-    with ThreadPoolExecutor(max_workers=5) as pool:
-        while time.monotonic() - started < DURATION:
-            samples.extend(pool.map(get, action_paths(rounds)))
-            rounds += 1
-            now = time.monotonic()
-            if now >= next_report:
-                failures = sum(status < 200 or status >= 400 for status, _ in samples)
-                print(
-                    f"progress elapsed={now - started:.0f}s rounds={rounds} "
-                    f"requests={len(samples)} failures={failures}",
-                    flush=True,
-                )
-                next_report = now + 10
+    interrupted = False
+    try:
+        with ThreadPoolExecutor(max_workers=5) as pool:
+            while time.monotonic() - started < DURATION:
+                samples.extend(pool.map(get, action_paths(rounds)))
+                rounds += 1
+                now = time.monotonic()
+                if now >= next_report:
+                    failures = sum(status < 200 or status >= 400 for status, _ in samples)
+                    print(
+                        f"progress elapsed={now - started:.0f}s rounds={rounds} "
+                        f"requests={len(samples)} failures={failures}",
+                        flush=True,
+                    )
+                    next_report = now + 10
+    except KeyboardInterrupt:
+        interrupted = True
+        print("interrupted: reporting partial soak metrics", flush=True)
 
     latencies = [elapsed for status, elapsed in samples]
     failures = [(status, elapsed) for status, elapsed in samples if status < 200 or status >= 400]
@@ -96,11 +101,14 @@ def main() -> int:
     first_p95 = p95(latencies[:split])
     last_p95 = p95(latencies[-split:])
     print(
-        f"UX soak duration={time.monotonic() - started:.1f}s rounds={rounds} "
+        f"UX soak interrupted={str(interrupted).lower()} "
+        f"duration={time.monotonic() - started:.1f}s rounds={rounds} "
         f"requests={len(samples)} failures={len(failures)} "
         f"first_p95={first_p95:.3f}s last_p95={last_p95:.3f}s "
         f"max={max(latencies, default=0):.3f}s"
     )
+    if interrupted:
+        return 130
     if failures:
         raise AssertionError(f"UX soak observed failed HTTP statuses: {failures[:5]}")
     if last_p95 > MAX_P95:

@@ -160,6 +160,43 @@ def discover_tag() -> str | None:
     return None
 
 
+def discover_unlinked_case() -> tuple[str, str, str, str] | None:
+    """Find a unique page title used as ordinary text in another page."""
+    documents: list[tuple[str, str, str]] = []
+    for path in sorted(CONTENT_ROOT.rglob("*.md")):
+        if any(part.startswith(".") for part in path.relative_to(CONTENT_ROOT).parts):
+            continue
+        raw = path.read_text(encoding="utf-8", errors="replace")
+        body = re.sub(r"\A---\r?\n.*?\r?\n---\r?\n?", "", raw, count=1, flags=re.DOTALL)
+        title_match = re.search(r"^title:\s*[\"']?(.+?)[\"']?\s*$", raw, re.MULTILINE)
+        h1_match = re.search(r"^#\s+(.+?)\s*$", body, re.MULTILINE)
+        title = (
+            title_match.group(1) if title_match else h1_match.group(1) if h1_match else path.stem
+        ).strip()
+        if len(title) >= 4:
+            documents.append(
+                (path.relative_to(CONTENT_ROOT).with_suffix("").as_posix(), title, body)
+            )
+
+    owners: dict[str, list[tuple[str, str]]] = {}
+    for path, title, _ in documents:
+        owners.setdefault(title.casefold(), []).append((path, title))
+    for target_path, target_title, _ in documents:
+        if len(owners[target_title.casefold()]) != 1:
+            continue
+        pattern = re.compile(
+            r"(?<![\w\[])" + re.escape(target_title) + r"(?![\w\]])", re.IGNORECASE
+        )
+        for source_path, source_title, body in documents:
+            if source_path == target_path:
+                continue
+            if pattern.search(body) and not re.search(
+                rf"\[\[{re.escape(target_title)}(?:\||\]\])", body, re.IGNORECASE
+            ):
+                return target_path, source_path, target_title, source_title
+    return None
+
+
 def main() -> int:
     page, query_text, folder = discover_fixture()
     app_page = app_page_path(page)
@@ -185,6 +222,20 @@ def main() -> int:
 
     health = wait_for_index()
     print(f"ok: backend ready capabilities={health.get('capabilities', {})}")
+
+    mention_case = discover_unlinked_case()
+    if mention_case:
+        target_path, source_path, target_title, source_title = mention_case
+        status, _, body = get(f"/p/{urllib.parse.quote(target_path, safe='/')}")
+        expect(status, 200, f"/p/{target_path} derived mentions")
+        if "UNLINKED MENTIONS" not in body or source_title not in body:
+            raise AssertionError(
+                f"/p/{target_path}: missing derived mention from {source_path} ({target_title!r})"
+            )
+        print(f"ok: derived mention target={target_path} source={source_path}")
+    else:
+        print("skip: no unique plain-text mention found in corpus")
+
     stress_navigation()
 
     status, _, body = get("/metrics")
