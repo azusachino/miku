@@ -27,6 +27,7 @@ members = [
   "crates/miku-markdown",
   "crates/miku-indexer",
   "crates/miku-index-memory",
+  "crates/miku-app",
 ]
 resolver = "2"
 
