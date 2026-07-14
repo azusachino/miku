@@ -807,37 +807,36 @@ fn template_seed(id: &str) -> &'static str {
 }
 
 async fn load_slug_map(
-    db: &sqlx::PgPool,
+    index: &IndexApi,
 ) -> Result<std::collections::HashMap<String, String>, AppError> {
-    let pages: Vec<(String, String)> = sqlx::query_as("SELECT slug, path FROM tb_pages")
-        .fetch_all(db)
+    let pages = index
+        .list_pages()
         .await
+        .map_err(|error| anyhow::anyhow!(error))
         .context("Failed to load pages for wikilink resolution")?;
 
-    let aliases: Vec<(String, String)> = sqlx::query_as(
-        "SELECT a.alias, p.path FROM tb_page_aliases a JOIN tb_pages p ON a.page_id = p.id",
-    )
-    .fetch_all(db)
-    .await
-    .unwrap_or_default();
-
     let mut slug_map = std::collections::HashMap::new();
-    for (slug, p_path) in pages {
-        let path_without_md = if p_path.ends_with(".md") {
-            p_path[..p_path.len() - 3].to_string()
-        } else {
-            p_path
-        };
+    for page in pages {
+        let path_without_md = page
+            .path
+            .strip_suffix(".md")
+            .unwrap_or(&page.path)
+            .to_string();
+        let slug = std::path::Path::new(&path_without_md)
+            .file_stem()
+            .and_then(|stem| stem.to_str())
+            .unwrap_or(&path_without_md);
         slug_map.insert(slug.to_lowercase(), path_without_md.clone());
-        slug_map.insert(path_without_md.to_lowercase(), path_without_md);
-    }
-    for (alias, p_path) in aliases {
-        let path_without_md = if p_path.ends_with(".md") {
-            p_path[..p_path.len() - 3].to_string()
-        } else {
-            p_path
-        };
-        slug_map.insert(alias.to_lowercase(), path_without_md);
+        slug_map.insert(path_without_md.to_lowercase(), path_without_md.clone());
+        if let Some(aliases) = page
+            .frontmatter
+            .get("aliases")
+            .and_then(|value| value.as_array())
+        {
+            for alias in aliases.iter().filter_map(|value| value.as_str()) {
+                slug_map.insert(alias.to_lowercase(), path_without_md.clone());
+            }
+        }
     }
     Ok(slug_map)
 }
@@ -894,7 +893,7 @@ async fn page_view(path: String, state: AppState) -> Result<Response, AppError> 
     // distinctly. The index is a disposable read model; a freshly saved page
     // may briefly resolve as missing until the background indexer catches up.
     let render_started = Instant::now();
-    let slug_map = load_slug_map(&state.db).await?;
+    let slug_map = load_slug_map(&state.index).await?;
     let (content_html, toc) = render_html_with_toc(body, &|norm| slug_map.get(norm).cloned());
     let markdown_ms = timing_ms(render_started);
 
@@ -903,39 +902,16 @@ async fn page_view(path: String, state: AppState) -> Result<Response, AppError> 
 
     // Load backlinks: pages that link TO this page
     let backlinks_started = Instant::now();
-    let page_id_result: Option<(i64,)> = sqlx::query_as("SELECT id FROM tb_pages WHERE path = $1")
-        .bind(format!("{path}.md"))
-        .fetch_optional(&state.db)
+    let backlinks = state
+        .index
+        .backlinks(&path)
         .await
-        .context("Failed to query page id for backlinks")?;
-
-    let backlinks = if let Some((page_id,)) = page_id_result {
-        let rows: Vec<(String, String)> = sqlx::query_as(
-            "SELECT DISTINCT src.path, src.title
-             FROM tb_links l
-             JOIN tb_pages src ON src.id = l.src_id
-             WHERE l.target_id = $1 AND l.kind = 'page'
-             ORDER BY src.title
-             LIMIT 50",
-        )
-        .bind(page_id)
-        .fetch_all(&state.db)
-        .await
+        .map_err(|error| anyhow::anyhow!(error))
         .context("Failed to load backlinks")?;
-
-        rows.into_iter()
-            .map(|(p, t)| Backlink {
-                path: p.strip_suffix(".md").unwrap_or(&p).to_string(),
-                title: t,
-            })
-            .collect()
-    } else {
-        Vec::new()
-    };
     let backlink_count = backlinks.len();
     let linked_paths: std::collections::HashSet<String> =
         backlinks.iter().map(|link| link.path.clone()).collect();
-    let unlinked_mentions = unlinked_mentions(&state.db, &path, &title, &linked_paths).await?;
+    let unlinked_mentions = unlinked_mentions(&state.index, &path, &title, &linked_paths).await?;
     let backlinks_ms = timing_ms(backlinks_started);
     let unlinked_mention_count = unlinked_mentions.len();
     let frontmatter =
@@ -980,7 +956,7 @@ async fn page_view(path: String, state: AppState) -> Result<Response, AppError> 
 }
 
 async fn unlinked_mentions(
-    db: &sqlx::PgPool,
+    index: &IndexApi,
     current_path: &str,
     current_title: &str,
     linked_paths: &std::collections::HashSet<String>,
@@ -988,21 +964,23 @@ async fn unlinked_mentions(
     // Narrow candidates with FTS first (mirrors `search`) so a page view reads
     // only the handful of pages that actually mention the title — never the
     // whole vault from disk on every render.
-    let rows: Vec<(String, String)> = sqlx::query_as(
-        "SELECT path, title
-         FROM tb_pages
-         WHERE body_tsv @@ websearch_to_tsquery('english', $1)
-         ORDER BY ts_rank(body_tsv, websearch_to_tsquery('english', $1)) DESC
-         LIMIT 100",
-    )
-    .bind(current_title)
-    .fetch_all(db)
-    .await
-    .context("Failed to load pages for unlinked mentions")?;
+    let rows = index
+        .search(miku_domain::SearchRequest {
+            query: current_title.to_string(),
+            scope: miku_domain::SearchScope::Body,
+            limit: 100,
+        })
+        .await
+        .map_err(|error| anyhow::anyhow!(error))
+        .context("Failed to load pages for unlinked mentions")?;
 
     let mut mentions = Vec::new();
-    for (path, title) in rows {
-        let display_path = path.strip_suffix(".md").unwrap_or(&path).to_string();
+    for hit in rows {
+        let display_path = hit
+            .path
+            .strip_suffix(".md")
+            .unwrap_or(&hit.path)
+            .to_string();
         if display_path == current_path || linked_paths.contains(&display_path) {
             continue;
         }
@@ -1018,7 +996,7 @@ async fn unlinked_mentions(
         }
         mentions.push(UnlinkedMention {
             path: display_path,
-            title,
+            title: hit.title,
             snippet: search_snippet(body, current_title),
         });
         if mentions.len() >= 20 {
@@ -1077,7 +1055,7 @@ async fn preview(
     State(state): State<AppState>,
     Form(form): Form<PreviewForm>,
 ) -> Result<impl IntoResponse, AppError> {
-    let slug_map = load_slug_map(&state.db).await?;
+    let slug_map = load_slug_map(&state.index).await?;
     let (_, body) = parse_frontmatter(&form.body);
     let (content_html, _) = render_html_with_toc(body, &|norm| slug_map.get(norm).cloned());
 
