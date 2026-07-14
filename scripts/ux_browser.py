@@ -101,7 +101,10 @@ def check_zen_mode(page: Page) -> None:
 
 
 def check_navigation(page: Page) -> None:
-    page.locator("a[href='/p/Features']").first.click()
+    tree_link = page.locator(".tree-link[href='/p/Features']").first
+    if tree_link.get_attribute("hx-boost") != "false":
+        raise AssertionError("tree page links must use full navigation")
+    tree_link.click()
     page.wait_for_url("**/p/Features")
     if "Features" not in page.locator(".mk-h1").inner_text():
         raise AssertionError("page navigation did not render Features")

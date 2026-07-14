@@ -9,7 +9,7 @@
          @dragstart="$store.tree.startDrag('{{ node.path }}', $event)"
          @dragend="$store.tree.endDrag()"
          @contextmenu="$store.tree.openMenu($event, '{{ node.path }}')">
-      <a href="/p/{{ node.path }}" draggable="false" class="mk-tree-item tree-link {% if active == node.path %}is-active active{% endif %}"
+      <a href="/p/{{ node.path }}" draggable="false" hx-boost="false" class="mk-tree-item tree-link {% if active == node.path %}is-active active{% endif %}"
          {% if active == node.path %}aria-current="page"{% endif %}
          @click="$dispatch('miku-close-sidebar')">
         <span class="mk-dot" aria-hidden="true"></span>
@@ -31,11 +31,13 @@
          x-data="{
            path: '',
            open: {{ 'true' if is_parent else 'false' }},
+           activeBranch: {{ 'true' if is_parent else 'false' }},
            loaded: {{ 'true' if node.children else 'false' }},
            init() {
              this.path = this.$el.dataset.folderPath || '';
-             this.open = (window.mikuStorage && window.mikuStorage.get('folders', []).includes(this.path)) || this.open;
-             this.loadChildren();
+             const remembered = window.mikuStorage && window.mikuStorage.get('folders', []).includes(this.path);
+             this.open = this.activeBranch || (remembered && this.loaded);
+             if (this.activeBranch) this.loadChildren();
            },
            loadChildren() {
              if (!this.open || this.loaded) return;
