@@ -178,6 +178,22 @@ struct FolderPage {
     path: String,
 }
 
+#[derive(serde::Serialize)]
+struct ReaderPagePayload {
+    path: String,
+    title: String,
+    exists: bool,
+    content_html: String,
+    toc: Vec<Heading>,
+    backlinks: Vec<Backlink>,
+    unlinked_mentions: Vec<UnlinkedMention>,
+    word_count: usize,
+    backlink_count: usize,
+    updated: String,
+    frontmatter: serde_json::Value,
+    breadcrumbs: Vec<BreadcrumbItem>,
+}
+
 fn search_snippet(body: &str, query: &str) -> String {
     let plain = body.split_whitespace().collect::<Vec<_>>().join(" ");
     if plain.is_empty() {
@@ -958,6 +974,94 @@ async fn load_slug_map(
         }
     }
     Ok(slug_map)
+}
+
+async fn reader_page_payload(path: &str, state: &AppState) -> Result<ReaderPagePayload, AppError> {
+    let file_path = safe_file_path(path)?;
+    if !file_path.exists() {
+        let title = format!("Create Page: {path}");
+        return Ok(ReaderPagePayload {
+            path: path.to_string(),
+            title: title.clone(),
+            exists: false,
+            content_html: String::new(),
+            toc: Vec::new(),
+            backlinks: Vec::new(),
+            unlinked_mentions: Vec::new(),
+            word_count: 0,
+            backlink_count: 0,
+            updated: "Missing".to_string(),
+            frontmatter: serde_json::Value::Object(serde_json::Map::new()),
+            breadcrumbs: breadcrumb_items(path, &title),
+        });
+    }
+
+    let raw_content = fs::read_to_string(&file_path)
+        .context(format!("Failed to read file: {}", file_path.display()))?;
+    let (frontmatter, body) = parse_frontmatter(&raw_content);
+    let title = extract_title(path, frontmatter.as_ref(), body);
+    let word_count = body.split_whitespace().count();
+    let updated = format_modified_time(&file_path);
+    let slug_map = load_slug_map(&state.index).await?;
+    let (content_html, toc) = render_html_with_toc(body, &|norm| slug_map.get(norm).cloned());
+    let backlinks = state
+        .index
+        .backlinks(path)
+        .await
+        .map_err(|error| anyhow::anyhow!(error))
+        .context("Failed to load backlinks")?
+        .into_iter()
+        .map(|backlink| Backlink {
+            path: backlink.path,
+            title: backlink.title,
+        })
+        .collect::<Vec<_>>();
+    let unlinked_mentions = state
+        .index
+        .mentions_for_target(path)
+        .await
+        .map_err(|error| anyhow::anyhow!(error))?
+        .into_iter()
+        .map(|mention| UnlinkedMention {
+            path: mention
+                .source_path
+                .strip_suffix(".md")
+                .unwrap_or(&mention.source_path)
+                .to_string(),
+            title: mention.source_title,
+            snippet: mention.snippet,
+        })
+        .collect();
+    let frontmatter =
+        frontmatter.unwrap_or_else(|| serde_json::Value::Object(serde_json::Map::new()));
+
+    Ok(ReaderPagePayload {
+        path: path.to_string(),
+        title: title.clone(),
+        exists: true,
+        content_html,
+        toc,
+        backlink_count: backlinks.len(),
+        backlinks,
+        unlinked_mentions,
+        word_count,
+        updated,
+        frontmatter,
+        breadcrumbs: breadcrumb_items(path, &title),
+    })
+}
+
+async fn reader_page_api(
+    Path(path): Path<String>,
+    State(state): State<AppState>,
+) -> Result<Response, AppError> {
+    let started = Instant::now();
+    let payload = reader_page_payload(&path, &state).await?;
+    let total_ms = timing_ms(started);
+    info!(path = %path, total_ms, "reader page API rendered");
+    let mut response = Json(payload).into_response();
+    attach_server_timing(&mut response, "reader_page", total_ms);
+    Ok(response)
 }
 
 // Render the read-only page view

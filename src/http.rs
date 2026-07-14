@@ -47,6 +47,7 @@ pub(super) fn router(state: AppState) -> Router {
         .route("/tags/{tag}", get(super::tag_filter))
         .route("/folders/{*path}", get(super::folder_view))
         .route("/preview", post(super::preview))
+        .route("/api/v1/pages/{*path}", get(super::reader_page_api))
         .route(
             "/p/{*path}",
             get(super::page_handler).post(super::page_save),
