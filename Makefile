@@ -9,7 +9,7 @@ PRETTIER_FILES := "**/*.{md,json,yaml,yml}"
 # On macOS with podman, start the VM first: `podman machine init && podman machine start`.
 COMPOSE ?= podman compose
 
-.PHONY: fmt fmt-check lint test check check-all-features check-integration check-blackbox check-ux-smoke check-ux-soak check-ux-browser release validate benchmark inspect-index run clean daily stack-up stack-down stack-build stack-logs db-init db-up db-down db-reset db-psql dev dev-tmux
+.PHONY: fmt fmt-check css lint test check check-all-features check-integration check-blackbox check-ux-smoke check-ux-soak check-ux-browser release validate benchmark inspect-index run clean daily stack-up stack-down stack-build stack-logs db-init db-up db-down db-reset db-psql dev dev-tmux
 
 fmt:
 	$(NIX_RUN)cargo fmt --all
@@ -18,6 +18,10 @@ fmt:
 fmt-check:
 	$(NIX_RUN)cargo fmt --all -- --check
 	$(NIX_RUN)prettier --check $(PRETTIER_FILES)
+
+css:
+	$(NIX_RUN)bun install --frozen-lockfile
+	$(NIX_RUN)bun run css
 
 lint:
 	$(NIX_RUN)cargo clippy --workspace --all-targets -- -D warnings
@@ -106,7 +110,7 @@ dev-tmux: db-up
 	tmux select-pane -t miku:miku.0
 	tmux attach -t miku
 
-run:
+run: css
 	MIKU_INDEX_BACKEND="$(MIKU_INDEX_BACKEND)" MIKU_INDEX_PATH="$(MIKU_INDEX_PATH)" MIKU_RECONCILE_BATCH_SIZE="$(MIKU_RECONCILE_BATCH_SIZE)" MIKU_PARSE_CONCURRENCY="$(MIKU_PARSE_CONCURRENCY)" $(NIX_RUN)cargo run
 
 clean:

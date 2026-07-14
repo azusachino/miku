@@ -44,6 +44,8 @@ def cargo(*args: str) -> None:
 
 
 def check() -> None:
+    run(["bun", "install", "--frozen-lockfile"])
+    run(["bun", "run", "css"])
     run(["cargo", "fmt", "--all", "--", "--check"])
     run(["prettier", "--check", "**/*.{md,json,yaml,yml}"])
     run(["ruff", "check", "scripts"])

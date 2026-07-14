@@ -23,23 +23,7 @@
         })();
     </script>
 
-    <script src="https://unpkg.com/@tailwindcss/browser@4"></script>
-    <style type="tailwindcss">
-        @theme {
-            --color-teal: var(--teal);
-            --color-pink: var(--pink);
-            --color-border: var(--border);
-            --color-panel: var(--panel);
-            --color-panel2: var(--panel2);
-            --color-text-base: var(--text);
-            --color-muted: var(--muted);
-            --color-bg-base: var(--bg);
-            --font-display: var(--font-display);
-            --font-body: var(--font-body);
-            --font-mono: var(--font-mono);
-        }
-        @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
-    </style>
+    <link rel="stylesheet" href="/static/tailwind.generated.css">
     <link rel="stylesheet" href="/static/miku.css">
     <style>
         [x-cloak] { display: none !important; }

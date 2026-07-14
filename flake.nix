@@ -21,6 +21,7 @@
             clippy
             # python scripting/automation (run via `uv run`, replaces bash glue)
             uv
+            bun
             # HTTP smoke/load probe used by make bench when a server is running
             oha
             # Repeatable command and request timing comparisons.

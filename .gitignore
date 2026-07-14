@@ -40,6 +40,9 @@ miku_docs/geektime-docs/
 __pycache__/
 *.py[cod]
 
+# Frontend dependency cache
+node_modules/
+
 # Local SQLite/Turso-compatible index projection
 miku_docs/.miku-index.sqlite*
 miku_docs/.miku-index.turso*
