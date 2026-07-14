@@ -220,10 +220,12 @@
         .wiki-embed { max-width: 100%; height: auto; border-radius: var(--radius-ctl); }
         .tag-inline {
             display: inline-block;
-            padding: 0 .45em;
-            border-radius: 999px;
-            background: var(--tealsoft);
-            color: var(--teal);
+            padding: 2px 6px;
+            border: 1px solid var(--border);
+            border-radius: 5px;
+            background: transparent;
+            color: var(--muted);
+            font-size: .78em;
             font-weight: 700;
             white-space: nowrap;
         }
@@ -313,7 +315,7 @@
                     </button>
                 </div>
                 <button type="button" class="mk-topbar-action" @click="openPalette('commands')" aria-label="Open command palette">
-                    <svg class="mk-icon" aria-hidden="true"><use href="/static/lucide.svg#command"></use></svg>
+                    <svg class="mk-icon" aria-hidden="true"><use href="/static/lucide.svg#terminal"></use></svg>
                     <span>Commands</span>
                 </button>
                 <button type="button" class="mk-topbar-action" @click="settingsOpen = true" aria-label="Open settings">

@@ -458,8 +458,8 @@ a { color: var(--teal); }
 .mk-lede em { color: var(--text); font-style: normal; font-weight: 700; }
 
 .mk-meta { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 24px; }
-.mk-tag { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 700; padding: 5px 11px; border-radius: 9px; background: var(--tealsoft); text-decoration: none; }
-.mk-tag.teal { color: var(--teal); } .mk-tag.pink { color: var(--pink); }
+.mk-tag { display: inline-flex; align-items: center; gap: 4px; padding: 2px 6px; border: 1px solid var(--border); border-radius: 5px; color: var(--muted); background: transparent; font-size: 11px; font-weight: 700; text-decoration: none; }
+.mk-tag:hover { color: var(--teal); border-color: var(--teal); background: var(--tealsoft); }
 .mk-inline-tag { display: inline-flex; align-items: center; margin-left: 4px; padding: 2px 6px; border: 1px solid var(--border); border-radius: 5px; color: var(--muted); background: transparent; font-size: 11px; font-weight: 700; text-decoration: none; }
 .mk-inline-tag:hover { color: var(--teal); border-color: var(--teal); background: var(--tealsoft); }
 .mk-meta .when { font-size: 12.5px; font-weight: 600; color: var(--muted); margin-left: 4px; }
