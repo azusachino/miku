@@ -1027,16 +1027,25 @@ async fn page_view(path: String, state: AppState) -> Result<Response, AppError> 
         .map_err(|error| anyhow::anyhow!(error))
         .context("Failed to load backlinks")?;
     let backlink_count = backlinks.len();
-    let linked_paths: std::collections::HashSet<String> =
-        backlinks.iter().map(|link| link.path.clone()).collect();
     let backlinks_ms = timing_ms(backlinks_started);
-    let unlinked_started = Instant::now();
-    let unlinked_mentions = if state.index_ready.load(Ordering::Acquire) {
-        unlinked_mentions(&state.index, &path, &title, &linked_paths).await?
-    } else {
-        Vec::new()
-    };
-    let unlinked_ms = timing_ms(unlinked_started);
+    let mentions_started = Instant::now();
+    let unlinked_mentions = state
+        .index
+        .mentions_for_target(&path)
+        .await
+        .map_err(|error| anyhow::anyhow!(error))?
+        .into_iter()
+        .map(|mention| UnlinkedMention {
+            path: mention
+                .source_path
+                .strip_suffix(".md")
+                .unwrap_or(&mention.source_path)
+                .to_string(),
+            title: mention.source_title,
+            snippet: mention.snippet,
+        })
+        .collect::<Vec<_>>();
+    let mentions_ms = timing_ms(mentions_started);
     let unlinked_mention_count = unlinked_mentions.len();
     let frontmatter =
         frontmatter.unwrap_or_else(|| serde_json::Value::Object(serde_json::Map::new()));
@@ -1071,68 +1080,13 @@ async fn page_view(path: String, state: AppState) -> Result<Response, AppError> 
         file_ms,
         markdown_ms,
         backlinks_ms,
-        unlinked_ms,
+        mentions_ms,
         total_ms,
         "page_view rendered"
     );
     let mut response = Html(rendered).into_response();
     attach_server_timing(&mut response, "page_view", total_ms);
     Ok(response)
-}
-
-async fn unlinked_mentions(
-    index: &IndexApi,
-    current_path: &str,
-    current_title: &str,
-    linked_paths: &std::collections::HashSet<String>,
-) -> Result<Vec<UnlinkedMention>, AppError> {
-    // Narrow candidates with FTS first (mirrors `search`) so a page view reads
-    // only the handful of pages that actually mention the title — never the
-    // whole vault from disk on every render.
-    let rows = index
-        .search(miku_domain::SearchRequest {
-            // Turso's Tantivy query parser treats title-case input such as
-            // `Miku` as a field expression in some paths. Search is
-            // case-insensitive, so normalize before handing it to a backend.
-            query: current_title.to_lowercase(),
-            scope: miku_domain::SearchScope::Body,
-            limit: 100,
-        })
-        .await
-        .map_err(|error| anyhow::anyhow!(error))
-        .context("Failed to load pages for unlinked mentions")?;
-
-    let mut mentions = Vec::new();
-    for hit in rows {
-        let display_path = hit
-            .path
-            .strip_suffix(".md")
-            .unwrap_or(&hit.path)
-            .to_string();
-        if display_path == current_path || linked_paths.contains(&display_path) {
-            continue;
-        }
-        let Some(raw) = safe_file_path(&display_path)
-            .ok()
-            .and_then(|file_path| fs::read_to_string(file_path).ok())
-        else {
-            continue;
-        };
-        let (_, body) = parse_frontmatter(&raw);
-        if first_plain_mention_range(body, current_title).is_none() {
-            continue;
-        }
-        mentions.push(UnlinkedMention {
-            path: display_path,
-            title: hit.title,
-            snippet: search_snippet(body, current_title),
-        });
-        if mentions.len() >= 20 {
-            break;
-        }
-    }
-
-    Ok(mentions)
 }
 
 // Render the edit page

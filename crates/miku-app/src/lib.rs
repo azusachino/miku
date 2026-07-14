@@ -174,7 +174,14 @@ impl IndexApi {
 
     /// Find plain-text mentions of the requested page.
     pub async fn mentions_for_target(&self, path: &str) -> StoreResult<Vec<MentionRecord>> {
-        self.reader.mentions_for_target(path).await
+        let mentions = self.reader.mentions_for_target(path).await?;
+        if mentions.is_empty() && !path.ends_with(".md") {
+            return self
+                .reader
+                .mentions_for_target(&format!("{path}.md"))
+                .await;
+        }
+        Ok(mentions)
     }
 
     /// Return tag counts.
