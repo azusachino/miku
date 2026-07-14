@@ -64,6 +64,7 @@ pub(super) fn router(state: AppState) -> Router {
         .route("/api/v1/trash/purge", post(super::trash_purge))
         .route("/api/v1/promote-mention", post(super::promote_mention))
         .route("/api/v1/nav/children", get(super::nav_children_handler))
+        .route("/api/v1/tags", get(super::tags_api))
         .route("/api/v1/quickswitch", get(super::quickswitch))
         .nest_service("/static", ServeDir::new("static"))
         .nest_service("/assets", ServeDir::new("miku_docs/assets"))

@@ -379,7 +379,7 @@
                                 :class="{ 'is-active': sidebarTab === 'tags' }"
                                 :aria-selected="sidebarTab === 'tags'"
                                 aria-controls="sidebar-tags"
-                                @click="sidebarTab = 'tags'">Tags</button>
+                                @click="sidebarTab = 'tags'; $dispatch('miku-tags-open')">Tags</button>
                         <button type="button" role="tab" class="mk-tab"
                                 :class="{ 'is-active': sidebarTab === 'trash' }"
                                 :aria-selected="sidebarTab === 'trash'"
@@ -453,20 +453,33 @@
                       </section>
 
                       <section id="sidebar-tags" class="mk-sidebar-panel mk-sidebar-tools" role="tabpanel"
+                               x-data="{ tags: [], tagsLoading: false, tagsLoaded: false, async loadTags() {
+                                 if (this.tagsLoaded || this.tagsLoading) return;
+                                 this.tagsLoading = true;
+                                 try {
+                                   const response = await fetch('/api/v1/tags', { headers: { 'Accept': 'application/json' } });
+                                   this.tags = response.ok ? await response.json() : [];
+                                 } finally {
+                                   this.tagsLoaded = true;
+                                   this.tagsLoading = false;
+                                 }
+                               } }"
+                               @miku-tags-open.window="loadTags()"
                                x-show="sidebarTab === 'tags'" :hidden="sidebarTab !== 'tags'">
                         <div class="mk-section-label">Tags</div>
-                        {% if tags is defined and tags %}
-                          <div class="mk-shortcut-list">
-                            {% for t in tags %}
-                              <a class="mk-tagrow" href="/tags/{{ t.tag }}">
-                                <span class="name">#{{ t.tag }}</span>
-                                <span class="count">{{ t.count }}</span>
-                              </a>
-                            {% endfor %}
-                          </div>
-                        {% else %}
-                          <div class="mk-sidebar-empty">No tags found in the current index.</div>
-                        {% endif %}
+                        <div class="mk-sidebar-empty" x-show="tagsLoading" x-cloak>Loading tags…</div>
+                        <div class="mk-sidebar-empty" x-show="tagsLoaded && !tags.length" x-cloak>No tags found in the current index.</div>
+                        <div class="mk-shortcut-list" x-show="tags.length" x-cloak>
+                          <template x-for="tag in tags" :key="tag.tag">
+                            <a class="mk-tagrow" :href="'/tags/' + encodeURIComponent(tag.tag)">
+                              <span class="name" x-text="'#' + tag.tag"></span>
+                              <span class="count" x-text="tag.count"></span>
+                            </a>
+                          </template>
+                        </div>
+                        <div class="mk-sidebar-empty" x-show="!tagsLoaded && !tagsLoading" x-cloak>
+                          Open Tags to load the index.
+                        </div>
                         <a class="mk-sidebar-link" href="/tags">Open full tag index <span aria-hidden="true">→</span></a>
                       </section>
 

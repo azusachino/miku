@@ -969,11 +969,6 @@ async fn page_view(path: String, state: AppState) -> Result<Response, AppError> 
     let nav_started = Instant::now();
     let nav = nav_pages(&state.index, &path).await?;
     let nav_ms = timing_ms(nav_started);
-    let tags = state
-        .index
-        .tags()
-        .await
-        .map_err(|error| anyhow::anyhow!(error))?;
 
     if !file_path.exists() {
         let title = format!("Create Page: {path}");
@@ -995,7 +990,6 @@ async fn page_view(path: String, state: AppState) -> Result<Response, AppError> 
             breadcrumb_parent => breadcrumb_parent(&path),
             nav_pages => nav,
             breadcrumbs => breadcrumb_items(&path, &title),
-            tags => tags,
         })?;
         let total_ms = timing_ms(started);
         info!(path = %path, exists = false, nav_ms, total_ms, "page_view rendered");
@@ -1075,7 +1069,6 @@ async fn page_view(path: String, state: AppState) -> Result<Response, AppError> 
         breadcrumb_parent => breadcrumb_parent(&path),
         nav_pages => nav,
         breadcrumbs => breadcrumb_items(&path, &title),
-        tags => tags,
     })?;
 
     let total_ms = timing_ms(started);
@@ -1612,6 +1605,24 @@ async fn search(
     let mut response = Html(rendered).into_response();
     attach_server_timing(&mut response, "search", total_ms);
     Ok(response)
+}
+
+// Tags are a secondary sidebar surface. Keep them off the page render path and
+// fetch them only when the user opens the Tags tab.
+async fn tags_api(State(state): State<AppState>) -> Result<Json<Vec<TagCount>>, AppError> {
+    let tags = state
+        .index
+        .tags()
+        .await
+        .map_err(|error| anyhow::anyhow!(error))
+        .context("Failed to load tags")?
+        .into_iter()
+        .map(|tag| TagCount {
+            tag: tag.tag,
+            count: tag.count,
+        })
+        .collect();
+    Ok(Json(tags))
 }
 
 // Tags index handler: list all tags with their counts
