@@ -9,7 +9,9 @@
          @dragstart="$store.tree.startDrag('{{ node.path }}', $event)"
          @dragend="$store.tree.endDrag()"
          @contextmenu="$store.tree.openMenu($event, '{{ node.path }}')">
-      <a href="/p/{{ node.path }}" draggable="false" class="mk-tree-item tree-link {% if active == node.path %}is-active active{% endif %}">
+      <a href="/p/{{ node.path }}" draggable="false" class="mk-tree-item tree-link {% if active == node.path %}is-active active{% endif %}"
+         {% if active == node.path %}aria-current="page"{% endif %}
+         @click="$dispatch('miku-close-sidebar')">
         <span class="mk-dot" aria-hidden="true"></span>
         <span class="mk-tree-label">
           <span class="name" title="{{ node.name }}">{{ node.name }}</span>
@@ -47,8 +49,9 @@
              };
              load();
            }
-         }"
-         x-init="init()">
+           }"
+         x-init="init()"
+         :aria-expanded="open">
       <div class="mk-tree-folder tree-row tree-folder-row cursor-pointer select-none"
            :class="{ 'drag-over': $store.tree.dropTarget === path }"
            @dragover.prevent="$store.tree.dropTarget = path"

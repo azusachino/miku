@@ -297,6 +297,10 @@
             justify-content: space-between;
             gap: 12px;
         }
+        .mk-sidebar-heading { display: flex; align-items: end; justify-content: space-between; gap: 12px; padding: 14px 4px 10px; }
+        .mk-sidebar-heading h2 { margin: 2px 0 0; font-size: 14px; line-height: 1.2; font-weight: 750; letter-spacing: -.01em; }
+        .mk-section-eyebrow { color: var(--muted); font-size: 10px; font-weight: 750; letter-spacing: .1em; text-transform: uppercase; }
+        .mk-sidebar-heading-hint { color: var(--muted); font-size: 11px; white-space: nowrap; }
     </style>
 
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" id="prism-theme">
@@ -389,6 +393,13 @@
                     <div class="mk-sidebar-scroll flex-1 overflow-auto min-h-0 px-3 pb-3">
                       <section id="sidebar-files" class="mk-sidebar-panel" role="tabpanel"
                                x-show="sidebarTab === 'files'" :hidden="sidebarTab !== 'files'">
+                        <div class="mk-sidebar-heading">
+                          <div>
+                            <span class="mk-section-eyebrow">Workspace</span>
+                            <h2>All pages</h2>
+                          </div>
+                          <span class="mk-sidebar-heading-hint">Browse your notes</span>
+                        </div>
                         <button type="button" class="mk-newpage new-page-form" data-go-new
                                 @click="openCreate()">
                           <span class="new-page-btn" aria-hidden="true">+</span>
