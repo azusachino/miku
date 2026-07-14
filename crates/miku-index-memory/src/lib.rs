@@ -11,11 +11,14 @@ use miku_domain::{
 use std::collections::BTreeMap;
 use std::sync::{Arc, RwLock};
 
+type MentionKey = (String, String, String);
+type MentionMap = BTreeMap<MentionKey, MentionRecord>;
+
 /// An in-memory index keyed by source-relative page path.
 #[derive(Clone, Default)]
 pub struct MemoryIndex {
     pages: Arc<RwLock<BTreeMap<String, PageIndex>>>,
-    mentions: Arc<RwLock<BTreeMap<(String, String, String), MentionRecord>>>,
+    mentions: Arc<RwLock<MentionMap>>,
 }
 
 impl MemoryIndex {

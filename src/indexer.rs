@@ -1,5 +1,5 @@
 use anyhow::Result;
-use miku_domain::{IndexReader, IndexWriter, PageIndex, PageSummary};
+use miku_domain::{DocumentSignals, IndexReader, IndexWriter, PageIndex, PageSummary};
 use miku_indexer::{build_page_index, MentionMatcher};
 use notify::Watcher;
 use std::collections::{HashMap, HashSet};
@@ -153,7 +153,7 @@ async fn reconcile_store(
     let mentions_updated =
         refresh_mentions_for_sources(reader, writer, &existing, changed_pages).await?;
     let mention_ms = mention_started.elapsed().as_secs_f64() * 1000.0;
-    let _ = writer
+    writer
         .mark_mentions_ready()
         .await
         .or_else(ignore_unsupported)?;
@@ -290,7 +290,7 @@ fn summary_projection(summary: PageSummary) -> PageIndex {
         tags: Vec::new(),
         aliases,
         has_mermaid: false,
-        signals: Default::default(),
+        signals: DocumentSignals::default(),
     }
 }
 
