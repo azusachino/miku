@@ -13,7 +13,10 @@ miku-domain = { path = "../miku-domain" }
 miku-index-memory = { path = "../miku-index-memory", optional = true }
 miku-index-postgres = { path = "../miku-index-postgres", optional = true }
 miku-index-turso = { path = "../miku-index-turso", optional = true }
+miku-cache-valkey = { path = "../miku-cache-valkey", optional = true }
 sqlx = { version = "0.8", optional = true, features = ["postgres", "runtime-tokio-rustls"] }
+serde.workspace = true
+serde_json.workspace = true
 tokio.workspace = true
 
 [features]
@@ -21,8 +24,8 @@ default = ["memory", "sqlite"]
 memory = ["dep:miku-index-memory"]
 sqlite = ["dep:miku-index-turso"]
 postgres = ["dep:miku-index-postgres", "dep:sqlx"]
+valkey = ["dep:miku-cache-valkey"]
 
 [dev-dependencies]
 miku-index-memory = { path = "../miku-index-memory" }
-serde_json.workspace = true
 tokio.workspace = true

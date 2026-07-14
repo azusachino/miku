@@ -82,4 +82,30 @@ impl ValkeyCache {
             .query_async::<()>(&mut self.connection)
             .await
     }
+
+    /// Invalidate every entry owned by this cache namespace.
+    pub async fn clear(&mut self) -> redis::RedisResult<()> {
+        let pattern = format!("{}:*", self.namespace);
+        let mut cursor = 0_u64;
+        loop {
+            let (next, keys): (u64, Vec<String>) = redis::cmd("SCAN")
+                .arg(cursor)
+                .arg("MATCH")
+                .arg(&pattern)
+                .arg("COUNT")
+                .arg(128)
+                .query_async(&mut self.connection)
+                .await?;
+            if !keys.is_empty() {
+                redis::cmd("DEL")
+                    .arg(keys)
+                    .query_async::<()>(&mut self.connection)
+                    .await?;
+            }
+            cursor = next;
+            if cursor == 0 {
+                return Ok(());
+            }
+        }
+    }
 }

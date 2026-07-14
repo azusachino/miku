@@ -10,6 +10,8 @@ use miku_domain::{
     PageSummary, SearchHit, SearchRequest, StoreResult, TagCount, UnlinkedMention,
 };
 use std::sync::Arc;
+#[cfg(feature = "valkey")]
+use tokio::sync::Mutex;
 
 /// Explicitly selected deployment tier and primary index.
 #[derive(Debug, Clone)]
@@ -20,6 +22,13 @@ pub enum IndexConfig {
     LocalSqlite { path: String },
     /// Durable Postgres backend for the scale tier.
     Postgres { database_url: String },
+    /// Postgres primary with an optional Valkey read-through cache.
+    #[cfg(feature = "valkey")]
+    PostgresValkey {
+        database_url: String,
+        valkey_url: String,
+        namespace: String,
+    },
 }
 
 /// Backend-neutral operations consumed by Miku's HTTP and indexing layers.
@@ -146,6 +155,130 @@ pub async fn compose_index(config: IndexConfig) -> StoreResult<IndexApi> {
                 Err(missing_feature("Postgres", "postgres"))
             }
         }
+        #[cfg(feature = "valkey")]
+        IndexConfig::PostgresValkey {
+            database_url,
+            valkey_url,
+            namespace,
+        } => {
+            #[cfg(feature = "postgres")]
+            {
+                let pool = sqlx::PgPool::connect(&database_url)
+                    .await
+                    .map_err(|error| miku_domain::StoreError::Unavailable(error.to_string()))?;
+                let primary: Arc<dyn IndexStore> =
+                    Arc::new(miku_index_postgres::PostgresIndex::new(pool));
+                let cache = miku_cache_valkey::ValkeyCache::connect(&valkey_url, namespace)
+                    .await
+                    .map_err(|error| miku_domain::StoreError::Unavailable(error.to_string()))?;
+                let cache = Arc::new(Mutex::new(cache));
+                return Ok(IndexApi::from_parts(
+                    Arc::new(CachedIndexReader {
+                        primary: primary.clone(),
+                        cache: cache.clone(),
+                    }),
+                    Arc::new(CachedIndexWriter { primary, cache }),
+                ));
+            }
+            #[cfg(not(feature = "postgres"))]
+            {
+                let _ = (database_url, valkey_url, namespace);
+                Err(missing_feature("Postgres", "postgres"))
+            }
+        }
+    }
+}
+
+#[cfg(feature = "valkey")]
+struct CachedIndexReader {
+    primary: Arc<dyn IndexReader>,
+    cache: Arc<Mutex<miku_cache_valkey::ValkeyCache>>,
+}
+
+#[cfg(feature = "valkey")]
+impl CachedIndexReader {
+    async fn read_through<T, F>(&self, key: String, load: F) -> StoreResult<T>
+    where
+        T: serde::Serialize + serde::de::DeserializeOwned,
+        F: std::future::Future<Output = StoreResult<T>>,
+    {
+        if let Ok(Some(value)) = self.cache.lock().await.get_json(&key).await {
+            return Ok(value);
+        }
+        let value = load.await?;
+        let _ = self.cache.lock().await.set_json(&key, &value, 60).await;
+        Ok(value)
+    }
+}
+
+#[cfg(feature = "valkey")]
+#[async_trait::async_trait]
+impl IndexReader for CachedIndexReader {
+    async fn capabilities(&self) -> StoreResult<IndexCapabilities> {
+        self.primary.capabilities().await
+    }
+
+    async fn list_pages(&self) -> StoreResult<Vec<PageSummary>> {
+        self.read_through("list_pages".to_string(), self.primary.list_pages())
+            .await
+    }
+
+    async fn page(&self, path: &str) -> StoreResult<Option<PageSummary>> {
+        self.read_through(format!("page:{path}"), self.primary.page(path))
+            .await
+    }
+
+    async fn search(&self, request: SearchRequest) -> StoreResult<Vec<SearchHit>> {
+        let key = format!(
+            "search:{}",
+            serde_json::to_string(&request).unwrap_or_default()
+        );
+        self.read_through(key, self.primary.search(request)).await
+    }
+
+    async fn backlinks(&self, path: &str) -> StoreResult<Vec<Backlink>> {
+        self.read_through(format!("backlinks:{path}"), self.primary.backlinks(path))
+            .await
+    }
+
+    async fn unlinked_mentions(&self, path: &str) -> StoreResult<Vec<UnlinkedMention>> {
+        self.read_through(
+            format!("unlinked_mentions:{path}"),
+            self.primary.unlinked_mentions(path),
+        )
+        .await
+    }
+
+    async fn tags(&self) -> StoreResult<Vec<TagCount>> {
+        self.read_through("tags".to_string(), self.primary.tags())
+            .await
+    }
+
+    async fn pages_with_tag(&self, tag: &str) -> StoreResult<Vec<PageSummary>> {
+        self.read_through(format!("tag:{tag}"), self.primary.pages_with_tag(tag))
+            .await
+    }
+}
+
+#[cfg(feature = "valkey")]
+struct CachedIndexWriter {
+    primary: Arc<dyn IndexStore>,
+    cache: Arc<Mutex<miku_cache_valkey::ValkeyCache>>,
+}
+
+#[cfg(feature = "valkey")]
+#[async_trait::async_trait]
+impl IndexWriter for CachedIndexWriter {
+    async fn replace_page(&self, page: PageIndex) -> StoreResult<IndexEvent> {
+        let result = self.primary.replace_page(page).await?;
+        let _ = self.cache.lock().await.clear().await;
+        Ok(result)
+    }
+
+    async fn delete_page(&self, path: &str) -> StoreResult<IndexEvent> {
+        let result = self.primary.delete_page(path).await?;
+        let _ = self.cache.lock().await.clear().await;
+        Ok(result)
     }
 }
 
