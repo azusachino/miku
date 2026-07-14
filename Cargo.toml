@@ -40,6 +40,7 @@ repository = "https://github.com/azusachino/miku"
 
 [workspace.dependencies]
 async-trait = "0.1"
+aho-corasick = "1"
 comrak = { version = "0.52", default-features = false }
 lazy_static = "1"
 regex = "1"

@@ -1972,6 +1972,7 @@ dependencies = [
 name = "miku-indexer"
 version = "0.0.2"
 dependencies = [
+ "aho-corasick",
  "miku-domain",
  "miku-markdown",
  "regex",

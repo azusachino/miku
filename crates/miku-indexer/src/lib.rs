@@ -12,6 +12,10 @@ use regex::Regex;
 use serde_json::Value;
 use std::path::Path;
 
+mod mentions;
+
+pub use mentions::extract_mentions;
+
 static WIKILINK_REGEX: std::sync::LazyLock<Regex> = std::sync::LazyLock::new(|| {
     Regex::new(r"(!?)\[\[([^\]|]+)(?:\|([^\]]+))?\]\]").expect("wikilink regex")
 });
