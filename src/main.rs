@@ -636,15 +636,24 @@ async fn nav_children_handler(
     let started = Instant::now();
     let dir = params.dir.unwrap_or_default();
     let db_started = Instant::now();
-    let rows: Vec<(String, String)> =
-        sqlx::query_as("SELECT path, title FROM tb_pages ORDER BY title")
-            .fetch_all(&state.db)
-            .await
-            .context("Failed to load nav children")?;
+    let rows = state
+        .index
+        .list_pages()
+        .await
+        .map_err(|error| anyhow::anyhow!(error))
+        .context("Failed to load nav children")?;
     let db_ms = timing_ms(db_started);
     let stripped_rows: Vec<(String, String)> = rows
         .into_iter()
-        .map(|(path, title)| (path.strip_suffix(".md").unwrap_or(&path).to_string(), title))
+        .map(|page| {
+            (
+                page.path
+                    .strip_suffix(".md")
+                    .unwrap_or(&page.path)
+                    .to_string(),
+                page.title,
+            )
+        })
         .collect();
     let tree = build_nav_tree(stripped_rows);
     let mut nodes = if dir.is_empty() {
@@ -1415,31 +1424,30 @@ async fn quickswitch(
     let started = Instant::now();
     let query = params.q.as_deref().unwrap_or("").trim();
     let rows: Vec<(String, String)> = if query.is_empty() {
-        sqlx::query_as("SELECT path, title FROM tb_pages ORDER BY title LIMIT 20")
-            .fetch_all(&state.db)
+        state
+            .index
+            .list_pages()
             .await
+            .map_err(|error| anyhow::anyhow!(error))
             .context("Failed to load quickswitch pages")?
+            .into_iter()
+            .take(20)
+            .map(|page| (page.path, page.title))
+            .collect()
     } else {
-        let escaped = escape_like(query);
-        let like = format!("%{escaped}%");
-        sqlx::query_as(
-            "SELECT path, title
-             FROM tb_pages
-             WHERE title ILIKE $1 ESCAPE '\\' OR path ILIKE $1 ESCAPE '\\'
-             ORDER BY
-               CASE
-                 WHEN title ILIKE $2 ESCAPE '\\' THEN 0
-                 WHEN path ILIKE $2 ESCAPE '\\' THEN 1
-                 ELSE 2
-               END,
-               title
-             LIMIT 20",
-        )
-        .bind(&like)
-        .bind(format!("{escaped}%"))
-        .fetch_all(&state.db)
-        .await
-        .context("Failed to execute quickswitch search")?
+        state
+            .index
+            .search(miku_domain::SearchRequest {
+                query: query.to_string(),
+                scope: miku_domain::SearchScope::Title,
+                limit: 20,
+            })
+            .await
+            .map_err(|error| anyhow::anyhow!(error))
+            .context("Failed to execute quickswitch search")?
+            .into_iter()
+            .map(|hit| (hit.path, hit.title))
+            .collect()
     };
 
     let result_count = rows.len();
