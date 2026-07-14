@@ -30,6 +30,7 @@ members = [
   "crates/miku-app",
   "crates/miku-index-postgres",
   "crates/miku-index-turso",
+  "crates/miku-cache-valkey",
 ]
 resolver = "2"
 
