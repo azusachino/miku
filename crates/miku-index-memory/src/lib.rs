@@ -5,8 +5,8 @@
 
 use async_trait::async_trait;
 use miku_domain::{
-    Backlink, IndexCapabilities, IndexEvent, IndexStore, PageIndex, PageSummary, SearchHit,
-    SearchRequest, StoreError, StoreResult, TagCount, UnlinkedMention,
+    Backlink, IndexCapabilities, IndexEvent, IndexReader, IndexWriter, PageIndex, PageSummary,
+    SearchHit, SearchRequest, StoreError, StoreResult, TagCount, UnlinkedMention,
 };
 use std::collections::BTreeMap;
 use std::sync::{Arc, RwLock};
@@ -42,7 +42,7 @@ impl MemoryIndex {
 }
 
 #[async_trait]
-impl IndexStore for MemoryIndex {
+impl IndexReader for MemoryIndex {
     async fn capabilities(&self) -> StoreResult<IndexCapabilities> {
         Ok(IndexCapabilities {
             durable: false,
@@ -66,19 +66,6 @@ impl IndexStore for MemoryIndex {
             .read_pages()?
             .get(path)
             .map(|page| page.summary.clone()))
-    }
-
-    async fn replace_page(&self, page: PageIndex) -> StoreResult<IndexEvent> {
-        let path = page.summary.path.clone();
-        self.write_pages()?.insert(path.clone(), page);
-        Ok(IndexEvent::PageIndexed { path })
-    }
-
-    async fn delete_page(&self, path: &str) -> StoreResult<IndexEvent> {
-        self.write_pages()?.remove(path);
-        Ok(IndexEvent::PageDeleted {
-            path: path.to_string(),
-        })
     }
 
     async fn search(&self, request: SearchRequest) -> StoreResult<Vec<SearchHit>> {
@@ -164,6 +151,22 @@ impl IndexStore for MemoryIndex {
             .into_iter()
             .map(|(tag, count)| TagCount { tag, count })
             .collect())
+    }
+}
+
+#[async_trait]
+impl IndexWriter for MemoryIndex {
+    async fn replace_page(&self, page: PageIndex) -> StoreResult<IndexEvent> {
+        let path = page.summary.path.clone();
+        self.write_pages()?.insert(path.clone(), page);
+        Ok(IndexEvent::PageIndexed { path })
+    }
+
+    async fn delete_page(&self, path: &str) -> StoreResult<IndexEvent> {
+        self.write_pages()?.remove(path);
+        Ok(IndexEvent::PageDeleted {
+            path: path.to_string(),
+        })
     }
 }
 

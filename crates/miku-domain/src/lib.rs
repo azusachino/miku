@@ -168,9 +168,9 @@ pub enum IndexEvent {
     Reconciled,
 }
 
-/// The storage contract shared by memory, Turso/SQLite, and Postgres indexes.
+/// Read operations shared by memory, Turso/SQLite, and Postgres indexes.
 #[async_trait]
-pub trait IndexStore: Send + Sync {
+pub trait IndexReader: Send + Sync {
     /// Return the capabilities of this concrete store.
     async fn capabilities(&self) -> StoreResult<IndexCapabilities>;
 
@@ -179,12 +179,6 @@ pub trait IndexStore: Send + Sync {
 
     /// Load one indexed page summary, if it exists.
     async fn page(&self, path: &str) -> StoreResult<Option<PageSummary>>;
-
-    /// Replace one complete page projection atomically.
-    async fn replace_page(&self, page: PageIndex) -> StoreResult<IndexEvent>;
-
-    /// Delete one page projection and return the resulting event.
-    async fn delete_page(&self, path: &str) -> StoreResult<IndexEvent>;
 
     /// Search indexed pages according to the shared request semantics.
     async fn search(&self, request: SearchRequest) -> StoreResult<Vec<SearchHit>>;
@@ -198,6 +192,21 @@ pub trait IndexStore: Send + Sync {
     /// Return all tags and their page counts.
     async fn tags(&self) -> StoreResult<Vec<TagCount>>;
 }
+
+/// Mutation operations shared by durable and in-memory index stores.
+#[async_trait]
+pub trait IndexWriter: Send + Sync {
+    /// Replace one complete page projection atomically.
+    async fn replace_page(&self, page: PageIndex) -> StoreResult<IndexEvent>;
+
+    /// Delete one page projection and return the resulting event.
+    async fn delete_page(&self, path: &str) -> StoreResult<IndexEvent>;
+}
+
+/// The complete storage contract used when the application owns one backend.
+pub trait IndexStore: IndexReader + IndexWriter {}
+
+impl<T> IndexStore for T where T: IndexReader + IndexWriter {}
 
 #[cfg(test)]
 mod tests {
