@@ -19,7 +19,7 @@ Three principles, distilled from VS Code, Zed, Obsidian, and SilverBullet (the c
 | App              | What we borrow                                                                                                                                                        | What we skip                                                                 |
 | ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
 | **SilverBullet** | Live preview in-place editing; `[[ ]]` autocomplete with create-on-click for missing pages; `/` slash commands; `Cmd-k` page switcher; linked mentions at page bottom | Lua end-user scripting / live queries (out of scope for a personal wiki)     |
-| **Obsidian**     | Reading ⇄ editing toggle (`Cmd-E`); **properties** panel (frontmatter as structured fields); quick switcher; linked **and** unlinked mentions                         | Plugin ecosystem; tabs/panes sprawl; graph as a feature centerpiece          |
+| **Obsidian**     | Reading ⇄ editing toggle (`Cmd-E`); **properties** panel (frontmatter as structured fields); quick switcher; linked **and unlinked mentions**                         | Plugin ecosystem; tabs/panes sprawl; graph as a feature centerpiece          |
 | **Zed**          | Minimalism as a _constraint_; UI recedes; speed is non-negotiable; command palette as the control center; progressive disclosure ("Tesla door handle")                | Native/GPU rendering (we're a browser app — borrow the _feel_, not the tech) |
 | **VS Code**      | Command palette + quick-open as one type-to-filter surface; Zen/focus mode; sensible defaults with optional customization; everything keyboard-reachable              | Activity bar / heavy multi-panel workbench                                   |
 
@@ -31,7 +31,7 @@ Three principles, distilled from VS Code, Zed, Obsidian, and SilverBullet (the c
 - **No editor intelligence.** Plain CodeMirror markdown: no `[[` autocomplete, no `/` slash commands, no create-missing-page flow. (An autocomplete endpoint was sketched in `frontend_design.md` but
   never built.)
 - **Frontmatter is read-only display.** Properties show as a bullet list; you can't edit them without hand-typing YAML in the source.
-- **Backlinks only.** We show "linked from" but no _unlinked_ mentions.
+- **Unlinked mentions are not on the critical path.** Explicit backlinks are available immediately; possible plain-text mentions are a deferred, optional discovery surface.
 
 ## 4. The roadmap
 
@@ -75,7 +75,7 @@ Make the chrome recede (the core "I don't like the UX" complaint):
 ### Epic 5 — Knowledge surfaces · _M_
 
 - **Properties panel:** frontmatter as structured, editable fields (text/date/list/checkbox), Obsidian-style — writes back to the `.md`.
-- **Linked + unlinked mentions:** add unlinked text matches beneath the existing backlinks, each one-click promotable to a real `[[link]]`.
+- **Derived mention discovery:** maintain title/alias matches during background indexing; expose them beneath backlinks as an optional, eventually consistent panel. Each result is one-click promotable to a real `[[link]]` after exact source verification.
 - (Stretch) local backlink graph / context snippets.
 
 ### Epic 6 — Native-feel polish · _S–M_
@@ -109,7 +109,7 @@ Canonical, dispatchable task state lives in the asobi graph under the `miku:ux-2
 | task-2 | Live-preview editing: one surface, `Cmd-E` reading toggle      | READY\* | —      |
 | task-3 | Editor intelligence: `[[ ]]` autocomplete + `/` slash commands | BLOCKED | task-2 |
 | task-4 | Visual calm: recede chrome, type/spacing scale, Zen mode       | READY   | —      |
-| task-5 | Knowledge surfaces: editable properties + unlinked mentions    | READY   | —      |
+| task-5 | Knowledge surfaces: editable properties + derived mentions       | READY   | —      |
 | task-6 | Native-feel polish: prefetch, optimistic nav, trim CDN weight  | READY   | —      |
 
 \* task-2 is gated on the §6 open decisions (editor depth + bundler) before dispatch. Each task entity carries a `plan:` observation with concrete file paths and line numbers.

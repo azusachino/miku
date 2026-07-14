@@ -46,5 +46,6 @@ this folder.
 | [0012](0012-scale-tier-postgres-valkey.md)    | Scale deployment tier with Postgres and Valkey | Accepted | 2026-07-14 |
 | [0013](0013-crates-io-release-surface.md)     | crates.io release surface                      | Accepted | 2026-07-14 |
 | [0014](0014-native-turso-07-local-backend.md) | Native Turso 0.7 local backend                 | Accepted | 2026-07-14 |
+| [0015](0015-derived-unlinked-mention-index.md) | Derived unlinked-mention index                | Accepted | 2026-07-14 |
 
 Staged (proposed, not yet verified) in `docs/decisions.md`: none outstanding.

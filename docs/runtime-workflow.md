@@ -41,9 +41,10 @@ For `GET /p/Index`:
 1. Axum routes the request to `page_handler`.
 2. The handler reads the Markdown source from `miku_docs/` and renders the page directly; it does not wait for `index_ready`.
 3. Relationship data is read through the backend-neutral `IndexApi`.
-4. Unlinked-mention candidates use backend search, then the handler confirms the match against the source Markdown before rendering it.
-5. If the indexer is currently writing, Turso search falls back to the in-process projection rather than waiting on the backend mutex or returning `concurrent use forbidden`.
-6. The response is returned independently of whether the background reconcile has finished. New index events are delivered to browsers through SSE at `/events`.
+4. Explicit backlinks are read from the index projection.
+5. Unlinked mentions, when enabled, are read from a derived target-keyed relation. A missing or stale relation returns an empty secondary panel; the handler does not issue a body search or reread the vault to discover candidates.
+6. If the indexer is currently writing, the page route remains independent of the Turso writer and serves the filesystem page plus the available in-process projection.
+7. The response is returned independently of whether the background reconcile has finished. New index events are delivered to browsers through SSE at `/events`.
 
 The important distinction is that the page source is filesystem-owned, while search, backlinks, tags, and navigation metadata are projection-backed. A partially rebuilt projection can be temporarily
 stale; it must not make the source page inaccessible.
@@ -71,9 +72,7 @@ make check-blackbox              # waits for /readyz index_ready=true
 MIKU_BLACKBOX_URL=... make check-blackbox
 ```
 
-The live blackbox sequence must exercise `/healthz`, `/readyz`, `/metrics`, `/`, `/p/{path}`, `/p/{path}/edit`, `/search`, `/tags`, and folder routes when the fixture has them. It also sends a title-case `Miku` body
-search because this is the same class of query used by page-view unlinked mentions. The blackbox must be run against a real process and corpus; helper-only tests are not sufficient proof of this
-workflow.
+The live blackbox sequence must exercise `/healthz`, `/readyz`, `/metrics`, `/`, `/p/{path}`, `/p/{path}/edit`, `/search`, `/tags`, and folder routes when the fixture has them. Once derived mentions are implemented, it must also verify a visible mention, a false-positive exclusion, source/target changes, restart recovery, and page access while mention indexing is running. The blackbox must be run against a real process and corpus; helper-only tests are not sufficient proof of this workflow.
 
 When diagnosing startup behavior, inspect both signals:
 
