@@ -133,22 +133,26 @@ def main() -> int:
         f"folder={folder!r} tag={tag!r}"
     )
 
+    encoded_page = urllib.parse.quote(app_page, safe="/")
+
+    # The page source must remain available before the background indexer is
+    # ready. This is the regression path for a fresh/large Turso projection.
+    status, _, body = get(f"/p/{encoded_page}")
+    expect(status, 200, f"/p/{page} before index ready")
+    validate_page(body, page)
+    mention_query = urllib.parse.urlencode({"q": "Miku", "scope": "body"})
+    status, _, _ = get(f"/search?{mention_query}")
+    expect(status, 200, "/search?query=Miku&scope=body before index ready")
+
     health = wait_for_index()
     print(f"ok: backend ready capabilities={health.get('capabilities', {})}")
 
     status, _, _ = get("/")
     expect(status, 200, "/")
 
-    encoded_page = urllib.parse.quote(app_page, safe="/")
     status, _, body = get(f"/p/{encoded_page}")
     expect(status, 200, f"/p/{page}")
     validate_page(body, page)
-
-    # Exercise the title-case FTS path used by page-view unlinked mentions.
-    # This must remain available while the background indexer is reconciling.
-    mention_query = urllib.parse.urlencode({"q": "Miku", "scope": "body"})
-    status, _, _ = get(f"/search?{mention_query}")
-    expect(status, 200, "/search?query=Miku&scope=body")
 
     status, _, body = get(f"/p/{encoded_page}/edit")
     expect(status, 200, f"/p/{page}/edit")

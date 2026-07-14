@@ -140,7 +140,13 @@ impl IndexReader for TursoIndex {
             return self.memory.search(request).await;
         }
 
-        let connection = self.connection.lock().await;
+        let Ok(connection) = self.connection.try_lock() else {
+            // Reconciliation may hold the single Turso connection while
+            // Tantivy commits. The HTTP read path must stay responsive; the
+            // in-process projection may be briefly stale, but it is safe to
+            // serve from it while the durable index is busy.
+            return self.memory.search(request).await;
+        };
         let mut rows = connection
             .query(
                 "SELECT path, title FROM miku_page_index
@@ -287,6 +293,28 @@ mod tests {
         );
         write.expect("concurrent write");
         read.expect("concurrent read");
+    }
+
+    #[tokio::test]
+    async fn search_falls_back_without_waiting_for_a_durable_write() {
+        let store = TursoIndex::open(":memory:")
+            .await
+            .expect("open local index");
+        store
+            .replace_page(page("Miku.md", "A note about Miku"))
+            .await
+            .expect("write projection");
+
+        let _connection = store.connection.lock().await;
+        let hits = store
+            .search(SearchRequest {
+                query: "Miku".to_string(),
+                scope: miku_domain::SearchScope::Body,
+                limit: 10,
+            })
+            .await
+            .expect("fallback search");
+        assert_eq!(hits.len(), 1);
     }
 
     #[tokio::test]
