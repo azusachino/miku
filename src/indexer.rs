@@ -335,23 +335,26 @@ impl IndexerQueue {
         )?;
         watcher.watch(&content_root, notify::RecursiveMode::Recursive)?;
 
-        let reconcile_sender = sender.clone();
-        let reconcile_flag = Arc::clone(&reconcile_queued);
-        let ticker_task = tokio::spawn(async move {
-            let mut ticker = tokio::time::interval(Self::reconcile_interval());
-            ticker.tick().await;
-            loop {
+        let mut tasks = vec![consumer_task];
+        if let Some(interval) = Self::reconcile_interval() {
+            let reconcile_sender = sender.clone();
+            let reconcile_flag = Arc::clone(&reconcile_queued);
+            tasks.push(tokio::spawn(async move {
+                let mut ticker = tokio::time::interval(interval);
                 ticker.tick().await;
-                Self::try_queue_reconcile(&reconcile_sender, &reconcile_flag);
-            }
-        });
+                loop {
+                    ticker.tick().await;
+                    Self::try_queue_reconcile(&reconcile_sender, &reconcile_flag);
+                }
+            }));
+        }
 
         Ok(Self {
             sender,
             reconcile_queued,
             ready,
             _watcher: watcher,
-            tasks: vec![consumer_task, ticker_task],
+            tasks,
         })
     }
 
@@ -375,12 +378,12 @@ impl IndexerQueue {
         Arc::clone(&self.ready)
     }
 
-    fn reconcile_interval() -> Duration {
+    fn reconcile_interval() -> Option<Duration> {
         env::var("MIKU_RECONCILE_INTERVAL_SECS")
             .ok()
             .and_then(|value| value.parse::<u64>().ok())
             .filter(|seconds| *seconds > 0)
-            .map_or_else(|| Duration::from_secs(30), Duration::from_secs)
+            .map(Duration::from_secs)
     }
 
     fn reconcile_batch_size() -> usize {
@@ -430,9 +433,12 @@ mod tests {
     #[test]
     fn test_reconcile_interval_defaults_and_reads_env() {
         env::remove_var("MIKU_RECONCILE_INTERVAL_SECS");
-        assert_eq!(IndexerQueue::reconcile_interval(), Duration::from_secs(30));
+        assert_eq!(IndexerQueue::reconcile_interval(), None);
         env::set_var("MIKU_RECONCILE_INTERVAL_SECS", "45");
-        assert_eq!(IndexerQueue::reconcile_interval(), Duration::from_secs(45));
+        assert_eq!(
+            IndexerQueue::reconcile_interval(),
+            Some(Duration::from_secs(45))
+        );
         env::remove_var("MIKU_RECONCILE_INTERVAL_SECS");
         env::remove_var("MIKU_RECONCILE_BATCH_SIZE");
         assert_eq!(IndexerQueue::reconcile_batch_size(), 512);
