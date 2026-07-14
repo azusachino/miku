@@ -18,8 +18,8 @@ use tokio::sync::Mutex;
 pub enum IndexConfig {
     /// Disposable in-process backend for tests and temporary runs.
     Memory,
-    /// Durable local SQLite-compatible backend.
-    LocalSqlite { path: String },
+    /// Durable local Turso backend.
+    Turso { path: String },
     /// Durable Postgres backend for the scale tier.
     Postgres { database_url: String },
     /// Postgres primary with an optional Valkey read-through cache.
@@ -127,16 +127,16 @@ pub async fn compose_index(config: IndexConfig) -> StoreResult<IndexApi> {
                 Err(missing_feature("memory", "memory"))
             }
         }
-        IndexConfig::LocalSqlite { path } => {
-            #[cfg(feature = "sqlite")]
+        IndexConfig::Turso { path } => {
+            #[cfg(feature = "turso")]
             {
                 let store = miku_index_turso::TursoIndex::open(&path).await?;
                 Ok(IndexApi::from_store(Arc::new(store)))
             }
-            #[cfg(not(feature = "sqlite"))]
+            #[cfg(not(feature = "turso"))]
             {
                 let _ = path;
-                Err(missing_feature("SQLite", "sqlite"))
+                Err(missing_feature("Turso", "turso"))
             }
         }
         IndexConfig::Postgres { database_url } => {
@@ -284,7 +284,7 @@ impl IndexWriter for CachedIndexWriter {
 
 #[cfg(any(
     not(feature = "memory"),
-    not(feature = "sqlite"),
+    not(feature = "turso"),
     not(feature = "postgres")
 ))]
 fn missing_feature(backend: &str, feature: &str) -> miku_domain::StoreError {

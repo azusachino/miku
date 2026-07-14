@@ -214,17 +214,17 @@ async fn main() -> Result<()> {
 
     info!("Starting Miku Server...");
 
-    // 2. Select the durable index. Local SQLite/Turso is the default; the
+    // 2. Select the durable index. Local Turso is the default; the
     // Postgres tier is explicit for the native and Compose deployment profiles.
-    let backend = env::var("MIKU_INDEX_BACKEND").unwrap_or_else(|_| "sqlite".to_string());
+    let backend = env::var("MIKU_INDEX_BACKEND").unwrap_or_else(|_| "turso".to_string());
     let index = match backend.as_str() {
-        "sqlite" | "turso" => {
+        "turso" => {
             let path = env::var("MIKU_INDEX_PATH")
-                .unwrap_or_else(|_| "miku_docs/.miku-index.sqlite".to_string());
-            compose_index(IndexConfig::LocalSqlite { path })
+                .unwrap_or_else(|_| "miku_docs/.miku-index.turso".to_string());
+            compose_index(IndexConfig::Turso { path })
                 .await
                 .map_err(|error| anyhow::anyhow!(error))
-                .context("Failed to compose local SQLite/Turso index API")?
+                .context("Failed to compose local Turso index API")?
         }
         "postgres" => {
             let database_url =
@@ -246,9 +246,7 @@ async fn main() -> Result<()> {
                 .map_err(|error| anyhow::anyhow!(error))
                 .context("Failed to compose Postgres index API")?
         }
-        other => anyhow::bail!(
-            "MIKU_INDEX_BACKEND must be `sqlite`, `turso`, or `postgres`; got {other}"
-        ),
+        other => anyhow::bail!("MIKU_INDEX_BACKEND must be `turso` or `postgres`; got {other}"),
     };
 
     // 5. Initialize Minijinja template environment

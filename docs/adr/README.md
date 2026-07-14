@@ -51,5 +51,6 @@ implementation. Implementation builds against this folder.
 | [0011](0011-local-tier-turso-index.md) | Local deployment tier with Turso index | Accepted | 2026-07-14 |
 | [0012](0012-scale-tier-postgres-valkey.md) | Scale deployment tier with Postgres and Valkey | Accepted | 2026-07-14 |
 | [0013](0013-crates-io-release-surface.md) | crates.io release surface | Accepted | 2026-07-14 |
+| [0014](0014-native-turso-07-local-backend.md) | Native Turso 0.7 local backend | Accepted | 2026-07-14 |
 
 Staged (proposed, not yet verified) in `docs/decisions.md`: none outstanding.

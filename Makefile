@@ -54,8 +54,8 @@ PGDATA  ?= .pgdata
 PGPORT  ?= 55432
 PGHOST  := $(abspath $(PGDATA))
 DATABASE_URL ?= postgres://miku@localhost:$(PGPORT)/miku
-MIKU_INDEX_BACKEND ?= sqlite
-MIKU_INDEX_PATH ?= miku_docs/.miku-index.sqlite
+MIKU_INDEX_BACKEND ?= turso
+MIKU_INDEX_PATH ?= miku_docs/.miku-index.turso
 
 # One-time cluster init. Superuser is `miku` and auth is trust (local dev only),
 # so the DATABASE_URL needs no password and is username-agnostic across hosts.

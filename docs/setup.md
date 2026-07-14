@@ -20,8 +20,8 @@ make db-down      # stop Postgres
 make db-reset     # stop + delete .pgdata (index is rebuilt from miku_docs/**/*.md)
 ```
 
-The app defaults to the local SQLite/Turso-compatible index at
-`miku_docs/.miku-index.sqlite`. `make dev` selects the explicit Postgres profile
+The app defaults to the local Rust-built Turso index at
+`miku_docs/.miku-index.turso`. `make dev` selects the explicit Postgres profile
 and sets `DATABASE_URL=postgres://miku@localhost:55432/miku` (trust auth, no
 password); migrations run on startup. Override with `MIKU_INDEX_BACKEND=…`,
 `MIKU_INDEX_PATH=…`, `PGPORT=…`, `PGDATA=…`, or `DATABASE_URL=…`.
@@ -52,14 +52,14 @@ export MIKU_INDEX_BACKEND=postgres
 
 ```bash
 nix develop       # enter the devShell (provisions all tools)
-make run          # run the server with the default local SQLite/Turso index
+make run          # run the server with the default local Turso index
 make check                             # default fmt + lint + tests
 make check-all-features                # all Cargo features
 make check-integration                 # optional service-backed probes
 make release                           # crates.io package dry-runs
 make validate                          # check + release build
 make check-blackbox                    # live HTTP checks against a running app
-MIKU_BENCH_BACKEND=sqlite make benchmark # benchmark a running local Turso app
+MIKU_BENCH_BACKEND=turso make benchmark # benchmark a running local Turso app
 ```
 
 All quality targets are thin Make wrappers around `uv run python scripts/ci.py`,
