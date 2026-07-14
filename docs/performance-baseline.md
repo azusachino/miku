@@ -54,8 +54,9 @@ MIKU_INDEX_LOG=/tmp/miku-index.log \
 ```
 
 The Rust indexer emits `startup index reconcile ready elapsed_ms=...`, one `index reconcile batch committed ... write_ms=...` event per batch, and an
-`index reconcile finished ... parse_ms=... write_ms=... total_ms=...` summary. Use `oha` for the HTTP latency distribution and `hyperfine` for repeatable read-path comparisons while the server is
-running:
+`index reconcile finished ... indexed_pages=... unchanged_pages=... parse_ms=... write_ms=... total_ms=...` summary. A same-directory no-op restart should show all source files under `unchanged_pages`
+and `indexed_pages=0`; it still walks the tree and stats files, but it does not reread or reparse unchanged Markdown. Use `oha` for the HTTP latency distribution and `hyperfine` for repeatable
+read-path comparisons while the server is running:
 
 ```bash
 hyperfine --warmup 2 --runs 10 'curl -fsS http://127.0.0.1:3000/p/Index'

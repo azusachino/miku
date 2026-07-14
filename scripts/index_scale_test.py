@@ -92,7 +92,7 @@ def check_reconcile_metrics() -> bool:
 
     summary_re = re.compile(
         r"index reconcile finished.*?scanned_files=(\d+).*?indexed_pages=(\d+)"
-        r".*?deleted_pages=(\d+).*?batches=(\d+)"
+        r".*?unchanged_pages=(\d+).*?deleted_pages=(\d+).*?batches=(\d+)"
         r".*?parse_ms=([\d.]+).*?write_ms=([\d.]+).*?total_ms=([\d.]+)"
     )
     batch_re = re.compile(
@@ -112,10 +112,11 @@ def check_reconcile_metrics() -> bool:
         print("skip: no reconcile timing metrics found in MIKU_INDEX_LOG")
         return True
 
-    scanned, indexed, deleted, batch_count, parse_ms, write_ms, total_ms = summaries[-1]
+    scanned, indexed, unchanged, deleted, batch_count, parse_ms, write_ms, total_ms = summaries[-1]
     print(
         "reconcile_metrics="
-        f"scanned:{scanned},indexed:{indexed},deleted:{deleted},batches:{batch_count},"
+        f"scanned:{scanned},indexed:{indexed},unchanged:{unchanged},deleted:{deleted},"
+        f"batches:{batch_count},"
         f"parse_ms:{parse_ms},write_ms:{write_ms},total_ms:{total_ms}"
     )
     if batches:

@@ -82,19 +82,19 @@ async fn reconcile_store(
     let batch_size = IndexerQueue::reconcile_batch_size();
     let mut pages = Vec::with_capacity(batch_size);
     let mut indexed_pages = 0usize;
+    let mut unchanged_pages = 0usize;
     let mut batches = 0usize;
     let mut parse_duration = Duration::ZERO;
     let mut write_duration = Duration::ZERO;
     for file in files {
-        let parse_started = Instant::now();
         let relative = file
             .strip_prefix(content_root)
             .map_err(|error| miku_domain::StoreError::Operation(error.to_string()))?;
-        let bytes = fs::read(&file)
+        let metadata = fs::metadata(&file)
             .map_err(|error| miku_domain::StoreError::Operation(error.to_string()))?;
-        let mtime = fs::metadata(&file)
+        let mtime = metadata
+            .modified()
             .ok()
-            .and_then(|metadata| metadata.modified().ok())
             .and_then(|time| time.duration_since(std::time::UNIX_EPOCH).ok())
             .map_or(0, |duration| duration.as_secs() as i64);
         let path = relative.to_string_lossy().into_owned();
@@ -103,8 +103,12 @@ async fn reconcile_store(
             .get(&path)
             .is_some_and(|indexed| indexed.mtime == mtime)
         {
+            unchanged_pages += 1;
             continue;
         }
+        let parse_started = Instant::now();
+        let bytes = fs::read(&file)
+            .map_err(|error| miku_domain::StoreError::Operation(error.to_string()))?;
         pages.push(build_page_index(&relative.to_string_lossy(), &bytes, mtime));
         parse_duration += parse_started.elapsed();
         if pages.len() == batch_size {
@@ -132,6 +136,7 @@ async fn reconcile_store(
     info!(
         scanned_files,
         indexed_pages,
+        unchanged_pages,
         deleted_pages,
         batches,
         parse_ms = parse_duration.as_secs_f64() * 1000.0,
