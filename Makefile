@@ -9,7 +9,7 @@ PRETTIER_FILES := "**/*.{md,json,yaml,yml}"
 # On macOS with podman, start the VM first: `podman machine init && podman machine start`.
 COMPOSE ?= podman compose
 
-.PHONY: fmt fmt-check lint test check check-all-features check-integration check-blackbox check-ux-smoke release validate benchmark inspect-index run clean daily stack-up stack-down stack-build stack-logs db-init db-up db-down db-reset db-psql dev dev-tmux
+.PHONY: fmt fmt-check lint test check check-all-features check-integration check-blackbox check-ux-smoke check-ux-soak release validate benchmark inspect-index run clean daily stack-up stack-down stack-build stack-logs db-init db-up db-down db-reset db-psql dev dev-tmux
 
 fmt:
 	$(NIX_RUN)cargo fmt --all
@@ -39,6 +39,9 @@ check-blackbox:
 
 check-ux-smoke:
 	$(NIX_RUN)uv run python scripts/ci.py check-ux-smoke
+
+check-ux-soak:
+	$(NIX_RUN)uv run python scripts/ci.py check-ux-soak
 
 release:
 	$(NIX_RUN)uv run python scripts/ci.py release

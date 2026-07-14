@@ -79,6 +79,10 @@ def ux_smoke() -> None:
     run([sys.executable, "scripts/ux_smoke.py"])
 
 
+def ux_soak() -> None:
+    run([sys.executable, "scripts/ux_soak.py"])
+
+
 def validate() -> None:
     check()
     cargo("build", "--release")
@@ -92,6 +96,7 @@ COMMANDS = {
     "benchmark": scale,
     "check-blackbox": blackbox,
     "check-ux-smoke": ux_smoke,
+    "check-ux-soak": ux_soak,
     "validate": validate,
 }
 
