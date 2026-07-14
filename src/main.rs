@@ -168,7 +168,6 @@ struct NavNode {
 
 #[derive(Clone)]
 struct AppState {
-    db: sqlx::PgPool,
     index: IndexApi,
     templates: Arc<Environment<'static>>,
     // Broadcasts the relative path (`.md` stripped) of each page the background
@@ -250,7 +249,6 @@ async fn main() -> Result<()> {
     let (events_tx, _) = tokio::sync::broadcast::channel::<String>(256);
 
     let state = AppState {
-        db: pool.clone(),
         index,
         templates: Arc::new(templates_env),
         events: events_tx.clone(),
@@ -673,7 +671,7 @@ async fn nav_children_handler(
 }
 
 async fn folder_children(
-    db: &sqlx::PgPool,
+    index: &IndexApi,
     folder_path: &str,
 ) -> Result<(Vec<FolderChild>, Vec<FolderPage>), AppError> {
     let prefix = if folder_path.is_empty() {
@@ -681,23 +679,17 @@ async fn folder_children(
     } else {
         format!("{folder_path}/")
     };
-    let like = format!("{}%", prefix.replace('%', "\\%").replace('_', "\\_"));
-    let rows: Vec<(String, String)> = sqlx::query_as(
-        "SELECT path, title
-         FROM tb_pages
-         WHERE path LIKE $1 ESCAPE '\\'
-         ORDER BY path",
-    )
-    .bind(&like)
-    .fetch_all(db)
-    .await
-    .context("Failed to load folder children")?;
+    let rows = index
+        .list_pages()
+        .await
+        .map_err(|error| anyhow::anyhow!(error))
+        .context("Failed to load folder children")?;
 
     let mut folders = std::collections::BTreeMap::<String, String>::new();
     let mut pages = Vec::new();
 
-    for (raw_path, title) in rows {
-        let page_path = raw_path.strip_suffix(".md").unwrap_or(&raw_path);
+    for page in rows {
+        let page_path = page.path.strip_suffix(".md").unwrap_or(&page.path);
         let Some(rest) = page_path.strip_prefix(&prefix) else {
             continue;
         };
@@ -710,7 +702,7 @@ async fn folder_children(
                 .or_insert_with(|| format!("{prefix}{folder}"));
         } else {
             pages.push(FolderPage {
-                title,
+                title: page.title,
                 path: page_path.to_string(),
             });
         }
@@ -741,7 +733,7 @@ async fn folder_view(
     let template = state.templates.get_template("folder.html")?;
     let db_started = Instant::now();
     let nav = nav_pages(&state.index, &path).await?;
-    let (folders, pages) = folder_children(&state.db, &path).await?;
+    let (folders, pages) = folder_children(&state.index, &path).await?;
     let db_ms = timing_ms(db_started);
     let folder_count = folders.len();
     let page_count = pages.len();
@@ -2132,8 +2124,6 @@ mod tests {
         let mut templates_env = Environment::new();
         templates_env.set_loader(minijinja::path_loader("src/templates"));
         let state = AppState {
-            db: sqlx::PgPool::connect_lazy("postgres://localhost/miku_test_unused")
-                .expect("lazy pool"),
             index: compose_index(IndexConfig::Memory)
                 .await
                 .expect("memory index API"),
