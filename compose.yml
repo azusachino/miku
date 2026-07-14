@@ -41,7 +41,7 @@ services:
     volumes:
       # Markdown is the source of truth; bind-mount so browser edits persist to
       # the host and the background watcher reindexes them.
-      - ./miku:/app/miku
+      - ./miku_docs:/app/miku_docs
 
 volumes:
   miku-pgdata:

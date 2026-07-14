@@ -59,6 +59,10 @@ make validate                          # check + release build
 All quality targets are thin Make wrappers around `uv run python scripts/ci.py`,
 so local and GitHub CI use the same implementation. The Python commands can also
 be invoked directly when debugging a single matrix slice.
+
+The `scripts/` suite is a first-class non-Rust test surface: `pytest` covers
+black-box validation helpers, and `ruff` checks/lints the automation code. The
+HTTP black-box probe requires a running app and is invoked with `make blackbox`.
 ```
 
 Project automation/scripts are Python run via `uv run python scripts/<x>.py`

@@ -12,6 +12,7 @@ use axum::{
 use chrono::{DateTime, Local};
 use miku::markdown::{extract_title, parse_frontmatter, render_html_with_toc, Heading};
 use miku_app::{compose_index, IndexApi, IndexConfig};
+use miku_domain::IndexCapabilities;
 use minijinja::{context, Environment};
 use sha2::{Digest, Sha256};
 use sqlx::postgres::PgPoolOptions;
@@ -291,6 +292,7 @@ fn app(state: AppState) -> Router {
         .route("/preview", post(preview))
         .route("/p/{*path}", get(page_handler).post(page_save))
         .route("/events", get(events))
+        .route("/api/health", get(health))
         .route("/api/move", post(page_move))
         .route("/api/trash", post(page_trash).get(trash_list))
         .route("/api/trash/restore", post(trash_restore))
@@ -302,6 +304,24 @@ fn app(state: AppState) -> Router {
         .nest_service("/assets", ServeDir::new("miku_docs/assets"))
         .layer(TraceLayer::new_for_http())
         .with_state(state)
+}
+
+#[derive(serde::Serialize)]
+struct HealthResponse {
+    status: &'static str,
+    capabilities: IndexCapabilities,
+}
+
+async fn health(State(state): State<AppState>) -> Result<Json<HealthResponse>, StatusCode> {
+    let capabilities = state
+        .index
+        .capabilities()
+        .await
+        .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?;
+    Ok(Json(HealthResponse {
+        status: "ok",
+        capabilities,
+    }))
 }
 
 // Redirect root "/" to "/p/Index"

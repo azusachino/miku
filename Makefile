@@ -8,7 +8,7 @@ NIX_RUN := $(if $(IN_NIX_SHELL),,nix develop --command )
 # On macOS with podman, start the VM first: `podman machine init && podman machine start`.
 COMPOSE ?= podman compose
 
-.PHONY: fmt fmt-check lint test check all-features integration release validate bench run clean daily stack-up stack-down stack-build stack-logs db-init db-up db-down db-reset db-psql dev dev-tmux
+.PHONY: fmt fmt-check lint test check all-features integration release validate blackbox bench run clean daily stack-up stack-down stack-build stack-logs db-init db-up db-down db-reset db-psql dev dev-tmux
 
 fmt:
 	$(NIX_RUN)cargo fmt --all
@@ -32,6 +32,9 @@ all-features:
 
 integration:
 	$(NIX_RUN)uv run python scripts/ci.py integration
+
+blackbox:
+	$(NIX_RUN)uv run python scripts/ci.py blackbox
 
 release:
 	$(NIX_RUN)uv run python scripts/ci.py release

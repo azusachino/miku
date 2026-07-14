@@ -7,6 +7,7 @@ Run through uv:
     uv run python scripts/ci.py all-features
     uv run python scripts/ci.py integration
     uv run python scripts/ci.py release
+    uv run python scripts/ci.py blackbox
 
 The default path never needs Postgres or Valkey. Service-backed checks are
 opt-in through environment variables so local development stays lightweight.
@@ -33,6 +34,9 @@ def cargo(*args: str) -> None:
 def check() -> None:
     run(["cargo", "fmt", "--all", "--", "--check"])
     run(["prettier", "--check", "**/*.{json,yaml,yml}"])
+    run(["ruff", "check", "scripts"])
+    run(["ruff", "format", "--check", "scripts"])
+    run(["pytest", "scripts"])
     cargo("clippy", "--workspace", "--all-targets", "--", "-D", "warnings")
     cargo("test", "--workspace")
 
@@ -66,6 +70,10 @@ def scale() -> None:
     run([sys.executable, "scripts/index_scale_test.py"])
 
 
+def blackbox() -> None:
+    run([sys.executable, "scripts/blackbox.py"])
+
+
 def validate() -> None:
     check()
     cargo("build", "--release")
@@ -77,6 +85,7 @@ COMMANDS = {
     "integration": integration,
     "release": release,
     "scale": scale,
+    "blackbox": blackbox,
     "validate": validate,
 }
 
