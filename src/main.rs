@@ -245,16 +245,24 @@ struct AppState {
 }
 
 // Custom error handling for Axum route handlers
-struct AppError(anyhow::Error);
+struct AppError {
+    error: anyhow::Error,
+    status: StatusCode,
+}
+
+impl AppError {
+    fn bad_request(error: impl Into<anyhow::Error>) -> Self {
+        Self {
+            error: error.into(),
+            status: StatusCode::BAD_REQUEST,
+        }
+    }
+}
 
 impl IntoResponse for AppError {
     fn into_response(self) -> Response {
-        warn!("Handler error: {:?}", self.0);
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            format!("Something went wrong: {}", self.0),
-        )
-            .into_response()
+        warn!(error = ?self.error, status = %self.status, "Handler error");
+        (self.status, format!("Something went wrong: {}", self.error)).into_response()
     }
 }
 
@@ -263,7 +271,10 @@ where
     E: Into<anyhow::Error>,
 {
     fn from(err: E) -> Self {
-        Self(err.into())
+        Self {
+            error: err.into(),
+            status: StatusCode::INTERNAL_SERVER_ERROR,
+        }
     }
 }
 
@@ -436,7 +447,9 @@ async fn events(
 // Helper to get safe path under miku_docs/ and check for directory traversal
 fn safe_file_path(path: &str) -> Result<PathBuf, AppError> {
     if path.contains("..") || path.starts_with('/') {
-        return Err(anyhow::anyhow!("Invalid path: path traversal detected").into());
+        return Err(AppError::bad_request(anyhow::anyhow!(
+            "Invalid path: path traversal detected"
+        )));
     }
     Ok(StdPath::new("miku_docs").join(format!("{path}.md")))
 }
@@ -444,7 +457,9 @@ fn safe_file_path(path: &str) -> Result<PathBuf, AppError> {
 fn validate_folder_path(path: &str) -> Result<String, AppError> {
     let trimmed = path.trim_matches('/');
     if trimmed.contains("..") || path.starts_with('/') {
-        return Err(anyhow::anyhow!("Invalid folder path: path traversal detected").into());
+        return Err(AppError::bad_request(anyhow::anyhow!(
+            "Invalid folder path: path traversal detected"
+        )));
     }
     Ok(trimmed.to_string())
 }
