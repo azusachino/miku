@@ -1,0 +1,17 @@
+[package]
+name = "miku-index-turso"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Durable local Turso index store for Miku"
+
+[dependencies]
+async-trait.workspace = true
+miku-domain = { path = "../miku-domain" }
+miku-index-memory = { path = "../miku-index-memory" }
+serde_json.workspace = true
+sqlx = { version = "0.8", features = ["sqlite", "runtime-tokio-rustls"] }
+
+[dev-dependencies]
+tokio.workspace = true
