@@ -37,13 +37,13 @@ def check() -> None:
     cargo("test", "--workspace")
 
 
-def featured() -> None:
+def all_features() -> None:
     cargo("check", "--workspace", "--all-features")
     cargo("test", "--workspace", "--all-features")
 
 
 def integration() -> None:
-    featured()
+    all_features()
     database_url = os.environ.get("DATABASE_URL")
     valkey_url = os.environ.get("VALKEY_URL") or os.environ.get("REDIS_URL")
     if database_url:
@@ -73,7 +73,7 @@ def validate() -> None:
 
 COMMANDS = {
     "check": check,
-    "all-features": featured,
+    "all-features": all_features,
     "integration": integration,
     "release": release,
     "scale": scale,
