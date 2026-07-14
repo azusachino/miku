@@ -6,6 +6,7 @@ use miku_domain::{
     SearchHit, SearchRequest, StoreError, StoreResult, TagCount, UnlinkedMention,
 };
 use miku_index_memory::MemoryIndex;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use turso::{transaction::Transaction, Builder, Connection, Value};
@@ -25,6 +26,7 @@ const CREATE_SEARCH: &str =
 pub struct TursoIndex {
     connection: Arc<Mutex<Connection>>,
     memory: MemoryIndex,
+    search_available: Arc<AtomicBool>,
 }
 
 impl TursoIndex {
@@ -61,6 +63,7 @@ impl TursoIndex {
         Ok(Self {
             connection: Arc::new(Mutex::new(connection)),
             memory,
+            search_available: Arc::new(AtomicBool::new(true)),
         })
     }
 
@@ -140,6 +143,9 @@ impl IndexReader for TursoIndex {
             return self.memory.search(request).await;
         }
 
+        if !self.search_available.load(Ordering::Acquire) {
+            return self.memory.search(request).await;
+        }
         let Ok(connection) = self.connection.try_lock() else {
             // Reconciliation may hold the single Turso connection while
             // Tantivy commits. The HTTP read path must stay responsive; the
@@ -196,6 +202,13 @@ impl IndexWriter for TursoIndex {
         if pages.is_empty() {
             return Ok(Vec::new());
         }
+        if pages.len() > 1 && self.search_available.swap(false, Ordering::AcqRel) {
+            let connection = self.connection.lock().await;
+            connection
+                .execute("DROP INDEX IF EXISTS miku_page_search", ())
+                .await
+                .map_err(driver_error)?;
+        }
         let connection = self.connection.lock().await;
         let mut transaction = connection
             .unchecked_transaction()
@@ -216,6 +229,16 @@ impl IndexWriter for TursoIndex {
             self.memory.replace_page(page).await?;
         }
         Ok(events)
+    }
+
+    async fn rebuild_search_index(&self) -> StoreResult<()> {
+        let connection = self.connection.lock().await;
+        connection
+            .execute(CREATE_SEARCH, ())
+            .await
+            .map_err(driver_error)?;
+        self.search_available.store(true, Ordering::Release);
+        Ok(())
     }
 
     async fn delete_page(&self, path: &str) -> StoreResult<IndexEvent> {
@@ -315,6 +338,44 @@ mod tests {
             .await
             .expect("fallback search");
         assert_eq!(hits.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn bulk_projection_rebuilds_search_once_after_writes() {
+        let store = TursoIndex::open(":memory:")
+            .await
+            .expect("open local index");
+        store
+            .replace_pages(vec![
+                page("First.md", "bulk alpha"),
+                page("Second.md", "bulk beta"),
+            ])
+            .await
+            .expect("write bulk projection");
+
+        let fallback_hits = store
+            .search(SearchRequest {
+                query: "bulk".to_string(),
+                scope: miku_domain::SearchScope::Body,
+                limit: 10,
+            })
+            .await
+            .expect("search in-memory bulk projection");
+        assert_eq!(fallback_hits.len(), 2);
+
+        store
+            .rebuild_search_index()
+            .await
+            .expect("rebuild durable search index");
+        let durable_hits = store
+            .search(SearchRequest {
+                query: "alpha".to_string(),
+                scope: miku_domain::SearchScope::Body,
+                limit: 10,
+            })
+            .await
+            .expect("search rebuilt index");
+        assert_eq!(durable_hits.len(), 1);
     }
 
     #[tokio::test]

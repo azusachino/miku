@@ -23,6 +23,17 @@ Captured 2026-07-14 from the real `miku_docs` corpus and local Turso 0.7 runtime
 - Busy Turso search falls back to the in-process projection; the page may show temporarily stale index metadata, but it remains readable.
 - Same-directory restart reuses committed projections and skips unchanged files by mtime.
 
+## Measured bulk-FTS change
+
+The initial per-page FTS maintenance path was unacceptable on the real corpus: a 150-second bounded run committed only 512 pages, or about 3.41 pages/sec. The Turso file reached 52 MB while the first
+transaction was still in flight.
+
+After deferring FTS maintenance until the bulk projection is complete, the same 150-second bounded run committed all 14,311 pages with 124.9 MB of payload in a 542 MB Turso file. This is at least 95.4
+pages/sec, approximately 28x the old observed rate. The run completed before the timeout; an exact ready-time sample should be refreshed after the next benchmark pass.
+
+The new path drops the FTS index once before multi-page reconcile writes, persists the page projection without per-document FTS maintenance, and rebuilds the FTS index once at the end. Search uses the
+in-memory projection while FTS is suspended.
+
 ## Tunable benchmark matrix
 
 The reconcile batch defaults to 512. Compare the write/event overhead with the same corpus and fresh index path:

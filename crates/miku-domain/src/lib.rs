@@ -214,6 +214,14 @@ pub trait IndexWriter: Send + Sync {
         Ok(events)
     }
 
+    /// Rebuild any derived full-text structures after a bulk projection load.
+    ///
+    /// Stores without a separate derived search structure can keep the default
+    /// no-op implementation.
+    async fn rebuild_search_index(&self) -> StoreResult<()> {
+        Ok(())
+    }
+
     /// Delete one page projection and return the resulting event.
     async fn delete_page(&self, path: &str) -> StoreResult<IndexEvent>;
 }

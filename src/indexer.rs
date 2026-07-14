@@ -140,6 +140,7 @@ async fn reconcile_store(
     if deleted {
         let _ = events.send(BULK_INDEX_REFRESH.to_string());
     }
+    writer.rebuild_search_index().await?;
     info!(
         scanned_files,
         indexed_pages,
