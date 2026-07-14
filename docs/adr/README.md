@@ -46,5 +46,10 @@ implementation. Implementation builds against this folder.
 | [0006](0006-watcher-at-scale.md) | Filesystem watcher at scale | Accepted | 2026-06-26 |
 | [0007](0007-frontend-rendering.md) | Frontend rendering & client-JS budget | Accepted | 2026-06-26 |
 | [0008](0008-theme-switching.md) | Theme switching (palette × mode) | Accepted | 2026-06-26 |
+| [0009](0009-index-store-composition.md) | Index store and cache composition | Accepted | 2026-07-14 |
+| [0010](0010-workspace-crate-boundaries.md) | Cargo workspace and crate boundaries | Accepted | 2026-07-14 |
+| [0011](0011-local-tier-turso-index.md) | Local deployment tier with Turso index | Accepted | 2026-07-14 |
+| [0012](0012-scale-tier-postgres-valkey.md) | Scale deployment tier with Postgres and Valkey | Accepted | 2026-07-14 |
+| [0013](0013-crates-io-release-surface.md) | crates.io release surface | Accepted | 2026-07-14 |
 
 Staged (proposed, not yet verified) in `docs/decisions.md`: none outstanding.
