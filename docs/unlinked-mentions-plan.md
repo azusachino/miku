@@ -2,18 +2,20 @@
 
 ## Goal
 
-Keep the useful part of the Obsidian-style feature—discovering ordinary text that could become a page link—without making `/p/:path` pay for a vault-wide search. Obsidian exposes this as a secondary Backlinks section alongside linked mentions; Miku will keep the same distinction while making the feature asynchronous and disposable. [Obsidian Backlinks](https://obsidian.md/help/plugins/backlinks)
+Keep the useful part of the Obsidian-style feature—discovering ordinary text that could become a page link—without making `/p/:path` pay for a vault-wide search. Obsidian exposes this as a secondary
+Backlinks section alongside linked mentions; Miku will keep the same distinction while making the feature asynchronous and disposable. [Obsidian Backlinks](https://obsidian.md/help/plugins/backlinks)
 
 ## Current path and measured problem
 
-The page handler currently loads explicit backlinks, then calls `unlinked_mentions`. That helper performs a body search, reads each hit from the filesystem, reparses Markdown, and verifies the first plain-text occurrence before rendering. On the real `miku_docs` corpus, this produced approximately:
+The page handler currently loads explicit backlinks, then calls `unlinked_mentions`. That helper performs a body search, reads each hit from the filesystem, reparses Markdown, and verifies the first
+plain-text occurrence before rendering. On the real `miku_docs` corpus, this produced approximately:
 
-| Operation | Observed time |
-| --- | ---: |
-| Page view unlinked-mention phase | 1.60–1.62 s |
-| Body search | 1.62–1.80 s |
-| Quick switch search | 0.70 s |
-| Navigation/folder query | 0.05 s |
+| Operation                        | Observed time |
+| -------------------------------- | ------------: |
+| Page view unlinked-mention phase |   1.60–1.62 s |
+| Body search                      |   1.62–1.80 s |
+| Quick switch search              |        0.70 s |
+| Navigation/folder query          |        0.05 s |
 
 The same work also contends with Turso's single connection while the background indexer is committing. The feature is therefore a secondary-index problem, not a page-render problem.
 
@@ -58,15 +60,18 @@ DocumentSignals {
 }
 ```
 
-The first “insight” surface should therefore be a compact **Highlights** block made from the lead paragraph and the most relevant headings. It should not claim to be a semantic summary. The parser already has the frontmatter split, title resolution, heading extraction, tags, and wikilink projection needed to produce these fields during one parse.
+The first “insight” surface should therefore be a compact **Highlights** block made from the lead paragraph and the most relevant headings. It should not claim to be a semantic summary. The parser
+already has the frontmatter split, title resolution, heading extraction, tags, and wikilink projection needed to produce these fields during one parse.
 
 ### Semantic summaries — later and optional
 
-Actual prose such as “this document argues that…” is a summarization feature, not an index feature. It should be an asynchronous, explicitly configured provider with its own cache, model/version, failure state, and privacy controls. It must never be required for search, backlinks, or page rendering, and it must never overwrite Markdown source.
+Actual prose such as “this document argues that…” is a summarization feature, not an index feature. It should be an asynchronous, explicitly configured provider with its own cache, model/version,
+failure state, and privacy controls. It must never be required for search, backlinks, or page rendering, and it must never overwrite Markdown source.
 
 ### Tantivy boundary
 
-Tantivy can help rank existing terms and retrieve relevant passages, but it is not by itself a key-insight extractor. Its tokenization, term frequency, positions, and BM25-style ranking are useful inputs for later extractive ranking; they do not understand document claims, causality, or correctness. The initial Highlights block should come from Markdown structure, not from an opaque score.
+Tantivy can help rank existing terms and retrieve relevant passages, but it is not by itself a key-insight extractor. Its tokenization, term frequency, positions, and BM25-style ranking are useful
+inputs for later extractive ranking; they do not understand document claims, causality, or correctness. The initial Highlights block should come from Markdown structure, not from an opaque score.
 
 ## Proposed projection
 
@@ -84,9 +89,11 @@ unlinked_mentions(
 )
 ```
 
-The first durable implementation can use a Turso table with a composite primary key `(target_path, source_path, matched_text)` and an index on `target_path`. The row is derived and may be deleted and rebuilt without touching Markdown files or the primary page projection.
+The first durable implementation can use a Turso table with a composite primary key `(target_path, source_path, matched_text)` and an index on `target_path`. The row is derived and may be deleted and
+rebuilt without touching Markdown files or the primary page projection.
 
-The in-memory backend should maintain the same observable behavior using a target-keyed map. It must not implement the current full `BTreeMap` body scan as the production behavior; that implementation is retained only as a small contract-test reference until the derived relation exists.
+The in-memory backend should maintain the same observable behavior using a target-keyed map. It must not implement the current full `BTreeMap` body scan as the production behavior; that implementation
+is retained only as a small contract-test reference until the derived relation exists.
 
 ## Matching pipeline
 
@@ -99,11 +106,13 @@ The in-memory backend should maintain the same observable behavior using a targe
 5. Emit at most one relation per `(source, target, matched text)` with a short context snippet.
 6. Replace all rows for the changed source in one transaction.
 
-An Aho–Corasick-style multi-pattern matcher is the preferred implementation if the title dictionary is large: it scans the source body once for all known names. A simpler exact matcher is acceptable for the first benchmark, provided it has the same exclusions and emits deterministic results.
+An Aho–Corasick-style multi-pattern matcher is the preferred implementation if the title dictionary is large: it scans the source body once for all known names. A simpler exact matcher is acceptable
+for the first benchmark, provided it has the same exclusions and emits deterministic results.
 
 ### Phase 2: aliases and invalidation
 
-Add frontmatter aliases after title-only matching is measured. A title or alias change invalidates the affected target's mention rows; a source edit invalidates only that source's rows. A full relation rebuild remains available for database recovery and matcher/schema changes.
+Add frontmatter aliases after title-only matching is measured. A title or alias change invalidates the affected target's mention rows; a source edit invalidates only that source's rows. A full
+relation rebuild remains available for database recovery and matcher/schema changes.
 
 ### Ambiguity policy
 
@@ -115,10 +124,13 @@ Tantivy is useful in four bounded ways:
 
 1. **Ordinary search.** Its tokenized inverted index is the right engine for user-entered full-text queries.
 2. **Candidate retrieval during migration.** For a temporary implementation, a normalized title query can narrow candidate pages before exact Markdown verification.
-3. **Incremental indexing mechanics.** Its `IndexWriter` accepts additions and deletions, publishes changes on commit, and merges immutable segments in the background. This maps well to a background batch indexer. [Tantivy IndexWriter](https://docs.rs/tantivy/latest/tantivy/indexer/struct.IndexWriter.html)
-4. **Tokenizer and position support.** Custom tokenizers and indexed positions can support exact term/phrase candidates, but multilingual matching needs an explicit tokenizer decision; the default tokenizer is not a complete CJK phrase matcher. [Tantivy tokenizers](https://docs.rs/tantivy/latest/tantivy/tokenizer/index.html)
+3. **Incremental indexing mechanics.** Its `IndexWriter` accepts additions and deletions, publishes changes on commit, and merges immutable segments in the background. This maps well to a background
+   batch indexer. [Tantivy IndexWriter](https://docs.rs/tantivy/latest/tantivy/indexer/struct.IndexWriter.html)
+4. **Tokenizer and position support.** Custom tokenizers and indexed positions can support exact term/phrase candidates, but multilingual matching needs an explicit tokenizer decision; the default
+   tokenizer is not a complete CJK phrase matcher. [Tantivy tokenizers](https://docs.rs/tantivy/latest/tantivy/tokenizer/index.html)
 
-Tantivy does not replace the derived relation. It does not know whether a match is inside a wikilink, code block, frontmatter, or a safe promotion span. It also does not provide the target-oriented relation that the page view needs without another mapping layer.
+Tantivy does not replace the derived relation. It does not know whether a match is inside a wikilink, code block, frontmatter, or a safe promotion span. It also does not provide the target-oriented
+relation that the page view needs without another mapping layer.
 
 ## Implementation sequence
 
@@ -128,7 +140,8 @@ Tantivy does not replace the derived relation. It does not know whether a match 
 4. Add a deterministic title dictionary and exact title matcher; benchmark simple matching against a multi-pattern matcher before choosing the implementation.
 5. Wire changed-source and changed-target invalidation into reconcile and watcher events.
 6. Remove synchronous mention discovery from `page_view`; render the relation lookup as optional secondary data.
-7. Add blackbox coverage for a visible mention, an existing wikilink, code/frontmatter false positives, ambiguous titles, changed source, changed target, restart, and an indexer-in-progress page request.
+7. Add blackbox coverage for a visible mention, an existing wikilink, code/frontmatter false positives, ambiguous titles, changed source, changed target, restart, and an indexer-in-progress page
+   request.
 8. Add metrics: `mention_scan_pages_total`, `mention_scan_duration_seconds`, `mention_rows`, `mention_rebuild_total`, and page-view `mentions_lookup_ms`.
 9. Compare before/after on the 14k-page corpus. The page route must not regress when the relation is unavailable; the desired steady-state lookup is single-digit milliseconds locally.
 10. Add `DocumentSignals` only after mention extraction is stable; persist compact signals separately from the full page payload so they can evolve without invalidating the primary projection.

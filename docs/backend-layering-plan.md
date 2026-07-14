@@ -100,7 +100,8 @@ The application-facing operations should cover the existing routes and indexer:
 
 Do not expose `PgPool`, SQLite connections, Valkey clients, SQL strings, or backend-specific row structs above this layer.
 
-Unlinked mentions are a derived index capability, not a requirement for page readability. The contract must provide target-keyed lookup and source-keyed replacement/invalidation so each backend can maintain the relation without exposing its indexing strategy. A backend may report the relation as temporarily unavailable while returning ordinary page, search, and backlink results.
+Unlinked mentions are a derived index capability, not a requirement for page readability. The contract must provide target-keyed lookup and source-keyed replacement/invalidation so each backend can
+maintain the relation without exposing its indexing strategy. A backend may report the relation as temporarily unavailable while returning ordinary page, search, and backlink results.
 
 ### Capability model
 

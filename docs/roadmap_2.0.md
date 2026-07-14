@@ -75,7 +75,8 @@ Make the chrome recede (the core "I don't like the UX" complaint):
 ### Epic 5 — Knowledge surfaces · _M_
 
 - **Properties panel:** frontmatter as structured, editable fields (text/date/list/checkbox), Obsidian-style — writes back to the `.md`.
-- **Derived mention discovery:** maintain title/alias matches during background indexing; expose them beneath backlinks as an optional, eventually consistent panel. Each result is one-click promotable to a real `[[link]]` after exact source verification.
+- **Derived mention discovery:** maintain title/alias matches during background indexing; expose them beneath backlinks as an optional, eventually consistent panel. Each result is one-click promotable
+  to a real `[[link]]` after exact source verification.
 - (Stretch) local backlink graph / context snippets.
 
 ### Epic 6 — Native-feel polish · _S–M_
@@ -109,7 +110,7 @@ Canonical, dispatchable task state lives in the asobi graph under the `miku:ux-2
 | task-2 | Live-preview editing: one surface, `Cmd-E` reading toggle      | READY\* | —      |
 | task-3 | Editor intelligence: `[[ ]]` autocomplete + `/` slash commands | BLOCKED | task-2 |
 | task-4 | Visual calm: recede chrome, type/spacing scale, Zen mode       | READY   | —      |
-| task-5 | Knowledge surfaces: editable properties + derived mentions       | READY   | —      |
+| task-5 | Knowledge surfaces: editable properties + derived mentions     | READY   | —      |
 | task-6 | Native-feel polish: prefetch, optimistic nav, trim CDN weight  | READY   | —      |
 
 \* task-2 is gated on the §6 open decisions (editor depth + bundler) before dispatch. Each task entity carries a `plan:` observation with concrete file paths and line numbers.

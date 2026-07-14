@@ -94,7 +94,8 @@ without vendor lock-in: the _content_ (Markdown files) is the source of truth, a
   they do.
 - **`[[wikilink]]` autocomplete is the core interaction.** Typing `[[` and fuzzy-picking an existing page (or creating one inline) is what makes linking effortless enough to actually do. This is the
   one interaction Miku must nail.
-- **Backlinks first, unlinked mentions second.** Explicit backlinks are a core relationship surface. Unlinked textual mentions are an optional discovery aid, maintained as a background-derived relation and never allowed to delay page rendering. They may be stale while indexing is in progress.
+- **Backlinks first, unlinked mentions second.** Explicit backlinks are a core relationship surface. Unlinked textual mentions are an optional discovery aid, maintained as a background-derived
+  relation and never allowed to delay page rendering. They may be stale while indexing is in progress.
 - **Local graph view** is the demo that sells it, even if rarely used daily. Defer for v0, but it's the screenshot that makes Aiko's worldbuilding click.
 - **Plugins are why it's sticky — and why it's heavy.** Obsidian's power is a plugin ecosystem; its cost is a JS-heavy Electron app. Miku's bet is the opposite: server-side indexing, no bundler, the
   browser as a thin client. _Don't_ chase plugins in v0 — the server-owned index is our differentiator.
