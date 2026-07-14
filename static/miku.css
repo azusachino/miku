@@ -127,6 +127,18 @@ a { color: var(--teal); }
 .mk-history-controls { display: flex; gap: 4px; }
 .mk-history-controls .mk-icon-btn { width: 34px; height: 34px; border-radius: 9px; }
 .mk-mobile-menu { display: none; }
+.mk-topbar-action {
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 34px; padding: 7px 10px;
+  border: 1px solid var(--border); border-radius: 9px; background: var(--panel); color: var(--muted);
+  font: 700 12px/1 var(--font-body); cursor: pointer; transition: .18s;
+}
+.mk-topbar-action:hover { color: var(--teal); border-color: var(--teal); }
+.mk-topbar-action .mk-icon { width: 15px; height: 15px; }
+.mk-sidebar-link {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 12px; padding: 8px 10px;
+  border: 1px solid var(--border); border-radius: 9px; color: var(--muted); font-size: 12px; font-weight: 700; text-decoration: none;
+}
+.mk-sidebar-link:hover { color: var(--teal); border-color: var(--teal); }
 .mk-save-status { color: var(--muted); font-size: 12px; font-weight: 700; white-space: nowrap; }
 .mk-save-status[data-state='dirty'] { color: var(--pink); }
 .mk-save-status[data-state='saving'] { color: var(--teal); }
@@ -998,7 +1010,9 @@ pre.mermaid svg {
 @media (max-width: 760px) {
   .mk-topbar { gap: 10px; padding: 10px 14px; }
   .mk-brand { width: auto; }
-  .mk-mobile-menu { display: inline-flex; position: absolute; top: 74px; left: 12px; z-index: 25; }
+  .mk-mobile-menu { display: inline-flex; flex: 0 0 auto; width: 36px; height: 36px; }
+  .mk-topbar-action span { display: none; }
+  .mk-topbar-action { width: 36px; height: 36px; padding: 0; }
   .mk-history-controls { display: none; }
   .mk-wordmark small, .mk-search-trigger span:not(.mk-kbd) { display: none; }
   .mk-search-trigger { max-width: none; padding: 9px 11px; }

@@ -90,7 +90,6 @@ async fn reconcile_store(
         .into_iter()
         .map(|page| (page.path.clone(), page))
         .collect::<HashMap<String, PageSummary>>();
-    let mentions_ready = reader.mentions_ready().await?;
     let existing_duration = existing_started.elapsed();
     let scanned_files = files.len();
     let mut seen = HashSet::with_capacity(files.len());
@@ -121,7 +120,7 @@ async fn reconcile_store(
         seen.insert(path.clone());
         if existing
             .get(&path)
-            .is_some_and(|indexed| indexed.mtime == mtime && mentions_ready)
+            .is_some_and(|indexed| indexed.mtime == mtime)
         {
             unchanged_pages += 1;
             continue;

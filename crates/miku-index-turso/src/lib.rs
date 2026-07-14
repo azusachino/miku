@@ -35,6 +35,7 @@ const CREATE_MENTIONS: &str = "CREATE TABLE IF NOT EXISTS miku_mention_index (
 const CREATE_MENTIONS_TARGET: &str =
     "CREATE INDEX IF NOT EXISTS miku_mention_target ON miku_mention_index (target_path)";
 const SEARCH_READY_KEY: &str = "fts_ready";
+const SEARCH_READY_VERSION: &str = "1";
 const MENTIONS_READY_KEY: &str = "mentions_ready";
 const MENTIONS_READY_VERSION: &str = "2";
 
@@ -89,7 +90,7 @@ impl TursoIndex {
                     .ok()
                     .and_then(|value| text_value(&value).ok())
             })
-            .is_some_and(|value| value == MENTIONS_READY_VERSION);
+            .is_some_and(|value| value == SEARCH_READY_VERSION);
         let mut mention_rows = connection
             .query(
                 "SELECT value FROM miku_index_meta WHERE key = ?1 LIMIT 1",

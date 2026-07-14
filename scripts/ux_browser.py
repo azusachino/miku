@@ -30,7 +30,7 @@ def check_shell(page: Page) -> None:
 
 def check_palette(page: Page) -> None:
     page.keyboard.press("Control+K")
-    assert_visible(page, ".mk-command-modal", "quick switcher")
+    page.locator(".mk-command-modal").wait_for(state="visible")
     palette = page.locator("input[x-ref='paletteInput']")
     palette.fill("Index")
     page.locator(".mk-command-item").first.wait_for()
@@ -40,6 +40,25 @@ def check_palette(page: Page) -> None:
     if page.locator(".mk-command-modal").is_visible():
         raise AssertionError("quick switcher did not close with Escape")
 
+    page.keyboard.press("Control+Shift+P")
+    page.locator(".mk-command-modal").wait_for(state="visible")
+    page.locator(".mk-command-tabs button").filter(has_text="Pages").click()
+    page.locator(".mk-command-item").first.wait_for()
+    if page.locator(".mk-command-item").filter(has_text="Toggle Zen mode").count():
+        raise AssertionError("command palette retained command items in Pages mode")
+    page.keyboard.press("Escape")
+
+
+def check_tags(page: Page) -> None:
+    page.get_by_role("tab", name="Tags").click()
+    tag_index = page.locator("#sidebar-tags .mk-sidebar-link")
+    tag_index.wait_for(state="visible")
+    tag_index.click()
+    page.wait_for_url("**/tags")
+    if "Tags" not in page.locator("h1").first.inner_text():
+        raise AssertionError("tag index did not render")
+    page.goto(f"{BASE_URL}{PAGE_PATH}", wait_until="domcontentloaded")
+
 
 def check_zen_mode(page: Page) -> None:
     page.keyboard.press("Control+Shift+P")
@@ -47,7 +66,7 @@ def check_zen_mode(page: Page) -> None:
     page.locator("input[x-ref='paletteInput']").fill("Toggle Zen mode")
     page.get_by_text("Toggle Zen mode", exact=True).click()
     page.locator("body.mk-zen").wait_for(state="attached")
-    assert_visible(page, ".mk-zen-exit-button", "Zen mode exit control")
+    page.locator(".mk-zen-exit-button").wait_for(state="visible")
     page.keyboard.press("Escape")
     page.wait_for_timeout(200)
     if page.locator("body.mk-zen").count():
@@ -87,6 +106,7 @@ def main() -> int:
         try:
             check_shell(page)
             check_palette(page)
+            check_tags(page)
             check_zen_mode(page)
             check_navigation(page)
             check_editor(page)

@@ -288,6 +288,9 @@
 <body x-data="mikuShell()" x-init="init()" :class="{ 'mk-zen': zenMode }" class="bg-bg-base text-text-base font-body antialiased selection:bg-teal/32 overflow-hidden h-full">
     <div class="mk-app relative flex flex-col h-screen overflow-hidden" hx-boost="true">
         <header class="mk-topbar relative z-10 flex items-center gap-5 px-5.5 py-3.25 border-b border-border bg-topbar backdrop-blur-[22px] flex-shrink-0">
+            <button type="button" class="mk-mobile-menu mk-icon-btn" @click="sidebarOpen = !sidebarOpen" :aria-expanded="sidebarOpen" aria-label="Toggle navigation">
+                <svg class="mk-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"></path></svg>
+            </button>
             <a class="mk-brand flex items-center gap-3 w-66 flex-shrink-0 no-underline" href="/p/Index" aria-label="Miku home">
                 <span class="mk-logo relative w-10.5 h-10.5 rounded-[14px] bg-grad flex items-center justify-center shadow-[0_8px_22px_var(--tealglow)]" aria-hidden="true">
                     <span class="mk-logo-mark">M</span>
@@ -317,19 +320,18 @@
                         <svg class="mk-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 14.5A8.5 8.5 0 0 1 9.5 3.5 7.5 7.5 0 1 0 20.5 14.5Z"></path></svg>
                     </button>
                 </div>
-                <button type="button" class="mk-icon-btn flex items-center justify-center w-10 h-10 rounded-xl border border-border bg-panel text-muted cursor-pointer transition-colors duration-180 hover:text-teal hover:border-teal" @click="openPalette('commands')" aria-label="Open command palette">
+                <button type="button" class="mk-topbar-action" @click="openPalette('commands')" aria-label="Open command palette">
                     <svg class="mk-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m4 17 6-10"></path><path d="m14 7 6 10"></path><path d="M7 13h10"></path></svg>
+                    <span>Commands</span>
                 </button>
-                <button type="button" class="mk-icon-btn flex items-center justify-center w-10 h-10 rounded-xl border border-border bg-panel text-muted cursor-pointer transition-colors duration-180 hover:text-teal hover:border-teal" @click="settingsOpen = true" aria-label="Open settings">
+                <button type="button" class="mk-topbar-action" @click="settingsOpen = true" aria-label="Open settings">
                     <svg class="mk-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6 1.7 1.7 0 0 0-.4 1.1V21a2 2 0 0 1-4 0v-.09A1.7 1.7 0 0 0 8.6 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-.6-1 1.7 1.7 0 0 0-1.1-.4H3a2 2 0 0 1 0-4h.09A1.7 1.7 0 0 0 4.6 8.6a1.7 1.7 0 0 0-.34-1.88l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-.6 1.7 1.7 0 0 0 .4-1.1V3a2 2 0 0 1 4 0v.09A1.7 1.7 0 0 0 15.4 4.6a1.7 1.7 0 0 0 1.88-.34l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.4 9c.22.35.6.6 1 .6h.6a2 2 0 0 1 0 4h-.09a1.7 1.7 0 0 0-1.51 1.4Z"></path></svg>
+                    <span>Settings</span>
                 </button>
             </div>
         </header>
 
         <div class="mk-body relative z-0 flex flex-1 min-h-0">
-            <button type="button" class="mk-mobile-menu mk-icon-btn" @click="sidebarOpen = !sidebarOpen" :aria-expanded="sidebarOpen" aria-label="Toggle navigation">
-                <svg class="mk-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"></path></svg>
-            </button>
             <aside class="mk-sidebar flex-shrink-0 flex flex-col border-r border-border bg-sidebar backdrop-blur-[18px]" :class="{ 'is-open': sidebarOpen }">
                 {% set sec = section | default('files') %}
                 <div class="flex flex-col flex-1 min-h-0" x-data="{ sidebarTab: '{{ sec }}' }">
@@ -428,8 +430,9 @@
                             {% endfor %}
                           </div>
                         {% else %}
-                          <div class="mk-sidebar-empty">Open Tags to load tag counts.</div>
+                          <div class="mk-sidebar-empty">No tags found in the current index.</div>
                         {% endif %}
+                        <a class="mk-sidebar-link" href="/tags">Open full tag index <span aria-hidden="true">→</span></a>
                       </section>
 
                       {# Trash view: lazy-loads GET /api/v1/trash on first open; Restore/Delete
@@ -781,8 +784,10 @@
                 setPaletteMode(mode) {
                     this.paletteMode = mode;
                     this.paletteQuery = '';
+                    this.paletteItems = [];
                     this.paletteError = '';
                     this.paletteIndex = 0;
+                    this.paletteLoading = mode !== 'commands';
                     this.refreshPalette();
                 },
                 queuePaletteRefresh() {
@@ -799,6 +804,7 @@
                         this.paletteAbortController = null;
                     }
                     if (this.paletteMode === 'commands') {
+                        if (requestId !== this.paletteRequestId) return;
                         const query = this.paletteQuery.trim().toLowerCase();
                         this.paletteItems = this.commandItems.filter(item => {
                             return !query || item.title.toLowerCase().includes(query) || item.subtitle.toLowerCase().includes(query);
@@ -830,7 +836,7 @@
                             id: row.path,
                             mark: 'P',
                             title: row.title,
-                            subtitle: row.path + '.md',
+                            subtitle: row.snippet ? row.path + '.md · ' + row.snippet : row.path + '.md',
                             shortcut: '',
                             run: () => { window.location.href = '/p/' + row.path.split('/').map(encodeURIComponent).join('/'); }
                         }));

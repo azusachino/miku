@@ -156,6 +156,7 @@ impl SearchScope {
 struct QuickSwitchResult {
     path: String,
     title: String,
+    snippet: String,
 }
 
 #[derive(serde::Serialize)]
@@ -968,6 +969,11 @@ async fn page_view(path: String, state: AppState) -> Result<Response, AppError> 
     let nav_started = Instant::now();
     let nav = nav_pages(&state.index, &path).await?;
     let nav_ms = timing_ms(nav_started);
+    let tags = state
+        .index
+        .tags()
+        .await
+        .map_err(|error| anyhow::anyhow!(error))?;
 
     if !file_path.exists() {
         let title = format!("Create Page: {path}");
@@ -989,6 +995,7 @@ async fn page_view(path: String, state: AppState) -> Result<Response, AppError> 
             breadcrumb_parent => breadcrumb_parent(&path),
             nav_pages => nav,
             breadcrumbs => breadcrumb_items(&path, &title),
+            tags => tags,
         })?;
         let total_ms = timing_ms(started);
         info!(path = %path, exists = false, nav_ms, total_ms, "page_view rendered");
@@ -1068,6 +1075,7 @@ async fn page_view(path: String, state: AppState) -> Result<Response, AppError> 
         breadcrumb_parent => breadcrumb_parent(&path),
         nav_pages => nav,
         breadcrumbs => breadcrumb_items(&path, &title),
+        tags => tags,
     })?;
 
     let total_ms = timing_ms(started);
@@ -1477,7 +1485,7 @@ async fn quickswitch(
 ) -> Result<Response, AppError> {
     let started = Instant::now();
     let query = params.q.as_deref().unwrap_or("").trim();
-    let rows: Vec<(String, String)> = if query.is_empty() {
+    let rows: Vec<(String, String, String)> = if query.is_empty() {
         state
             .index
             .list_pages()
@@ -1486,21 +1494,21 @@ async fn quickswitch(
             .context("Failed to load quickswitch pages")?
             .into_iter()
             .take(20)
-            .map(|page| (page.path, page.title))
+            .map(|page| (page.path, page.title, String::new()))
             .collect()
     } else {
         state
             .index
             .search(miku_domain::SearchRequest {
                 query: query.to_string(),
-                scope: miku_domain::SearchScope::Title,
+                scope: miku_domain::SearchScope::All,
                 limit: 20,
             })
             .await
             .map_err(|error| anyhow::anyhow!(error))
             .context("Failed to execute quickswitch search")?
             .into_iter()
-            .map(|hit| (hit.path, hit.title))
+            .map(|hit| (hit.path, hit.title, hit.snippet))
             .collect()
     };
 
@@ -1509,9 +1517,10 @@ async fn quickswitch(
     info!(query, result_count, total_ms, "quickswitch searched");
     let mut response = Json(
         rows.into_iter()
-            .map(|(path, title)| QuickSwitchResult {
+            .map(|(path, title, snippet)| QuickSwitchResult {
                 path: path.strip_suffix(".md").unwrap_or(&path).to_string(),
                 title,
+                snippet,
             })
             .collect::<Vec<_>>(),
     )

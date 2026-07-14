@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import time
 import urllib.error
@@ -73,6 +74,10 @@ def main() -> int:
     for query in ("", "Index", "Miku"):
         encoded_query = urllib.parse.urlencode({"q": query})
         expect(get(f"/api/v1/quickswitch?{encoded_query}")[0], {200}, "/api/v1/quickswitch")
+    status, _, body = get("/api/v1/quickswitch?q=jvm")
+    expect(status, {200}, "/api/v1/quickswitch?q=jvm")
+    if not json.loads(body):
+        raise AssertionError("quick switcher did not find the corpus query 'jvm'")
     expect(get("/api/v1/nav/children?dir=dedao-docs")[0], {200}, "/api/v1/nav/children")
     expect(get("/folders/dedao-docs")[0], {200}, "/folders/dedao-docs")
 
