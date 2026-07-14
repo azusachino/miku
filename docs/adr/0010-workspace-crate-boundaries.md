@@ -30,24 +30,17 @@ Miku becomes a Cargo workspace with focused packages:
 - `miku-cache-valkey` — optional Valkey cache/event integration;
 - `miku-app` — Axum binary, templates, startup, and composition root.
 
-The dependency direction is toward `miku-domain`. Backend crates never depend
-on the HTTP application crate. Library crates do not create a Tokio runtime;
-only `miku-app` owns `#[tokio::main]`.
+The dependency direction is toward `miku-domain`. Backend crates never depend on the HTTP application crate. Library crates do not create a Tokio runtime; only `miku-app` owns `#[tokio::main]`.
 
-Long-lived indexer tasks use explicit cancellation and shutdown ownership. Public
-library errors use `thiserror`; application orchestration may use `anyhow`.
+Long-lived indexer tasks use explicit cancellation and shutdown ownership. Public library errors use `thiserror`; application orchestration may use `anyhow`.
 
 ## Why
 
-Separate packages keep optional database drivers out of unrelated builds and
-make backend contract tests executable across implementations. The workspace
-also provides a natural boundary for learning idiomatic Tokio ownership,
-tracing, bounded channels, and graceful shutdown.
+Separate packages keep optional database drivers out of unrelated builds and make backend contract tests executable across implementations. The workspace also provides a natural boundary for learning
+idiomatic Tokio ownership, tracing, bounded channels, and graceful shutdown.
 
 ## Trade-offs / Rejected
 
 - Rejected one crate per module: it adds navigation cost without an API boundary.
-- Rejected a separate HTTP API crate for now: route DTOs are application-owned,
-  while the reusable contract is the `IndexStore` API.
-- Deferred splitting `miku-markdown` if the first extraction shows it is too
-  small to justify an independent package.
+- Rejected a separate HTTP API crate for now: route DTOs are application-owned, while the reusable contract is the `IndexStore` API.
+- Deferred splitting `miku-markdown` if the first extraction shows it is too small to justify an independent package.

@@ -8,7 +8,8 @@ Tried: Put broad `hx-boost="true"` on the app shell and let search result links 
 
 Why it failed: htmx default boosted navigation targets too much document surface, so search-result clicks can swap/repaint the full application chrome and look like a page flicker.
 
-Do instead: For search forms and search-result page links, explicitly set `hx-target=".mk-view"`, `hx-select=".mk-view"`, `hx-swap="outerHTML show:top"`, and `hx-push-url="true"` so only the main content pane updates.
+Do instead: For search forms and search-result page links, explicitly set `hx-target=".mk-view"`, `hx-select=".mk-view"`, `hx-swap="outerHTML show:top"`, and `hx-push-url="true"` so only the main
+content pane updates.
 
 ## 2026-07-01 — text-placeholders-are-not-icons
 
@@ -46,6 +47,8 @@ Status: active
 
 Tried: Implement tree operations as row-level `Move/Rename` inline forms, delete confirm forms, redirecting `/api/move` and `/api/trash` handlers, and folder-only drag/drop.
 
-Why it failed: The flow lacks the interaction model users expect from Trilium-style trees: drag hit modes before/after/into, context-menu cut/paste/move-to, undoable trash, collision preview, keyboard movement, and JSON tree transactions.
+Why it failed: The flow lacks the interaction model users expect from Trilium-style trees: drag hit modes before/after/into, context-menu cut/paste/move-to, undoable trash, collision preview, keyboard
+movement, and JSON tree transactions.
 
-Do instead: Build a dedicated filesystem tree controller inspired by Trilium: drag before/after/into, context menu actions, keyboard hierarchy movement, JSON APIs, safe trash/restore manifests, and clear handling for file-plus-sidecar-folder moves.
+Do instead: Build a dedicated filesystem tree controller inspired by Trilium: drag before/after/into, context menu actions, keyboard hierarchy movement, JSON APIs, safe trash/restore manifests, and
+clear handling for file-plus-sidecar-folder moves.

@@ -3,3 +3,4 @@ target/
 .pgdata/
 .claude/
 miku_docs/
+src/fixtures/indexer/nul_invalid.md

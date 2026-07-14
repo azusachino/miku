@@ -968,7 +968,10 @@ async fn unlinked_mentions(
     // whole vault from disk on every render.
     let rows = index
         .search(miku_domain::SearchRequest {
-            query: current_title.to_string(),
+            // Turso's Tantivy query parser treats title-case input such as
+            // `Miku` as a field expression in some paths. Search is
+            // case-insensitive, so normalize before handing it to a backend.
+            query: current_title.to_lowercase(),
             scope: miku_domain::SearchScope::Body,
             limit: 100,
         })

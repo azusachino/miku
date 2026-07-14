@@ -1,7 +1,6 @@
 # Plan
 
-Tracked durably in the asobi graph under epic `miku:mvp`. This file mirrors it
-for humans.
+Tracked durably in the asobi graph under epic `miku:mvp`. This file mirrors it for humans.
 
 ## Current phase
 
@@ -21,8 +20,7 @@ In:
 
 Roadmap (post-MVP): drag/drop image upload to `assets/`, CodeMirror 6 editor.
 
-Dropped: daily note, Obsidian import (Obsidian `[[ ]]` compatibility is covered
-by wiki-links).
+Dropped: daily note, Obsidian import (Obsidian `[[ ]]` compatibility is covered by wiki-links).
 
 ## Milestones
 
@@ -32,7 +30,5 @@ by wiki-links).
 
 ## Decisions
 
-- Postgres index — see `docs/architecture.md` and asobi
-  `miku:decision:postgres-index`.
-- v0 frontend = server-rendered + textarea — asobi
-  `miku:decision:frontend-v0-textarea`.
+- Postgres index — see `docs/architecture.md` and asobi `miku:decision:postgres-index`.
+- v0 frontend = server-rendered + textarea — asobi `miku:decision:frontend-v0-textarea`.

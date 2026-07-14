@@ -41,3 +41,4 @@ __pycache__/
 
 # Local SQLite/Turso-compatible index projection
 miku_docs/.miku-index.sqlite*
+miku_docs/.miku-index.turso*

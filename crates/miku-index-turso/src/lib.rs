@@ -6,6 +6,8 @@ use miku_domain::{
     SearchHit, SearchRequest, StoreError, StoreResult, TagCount, UnlinkedMention,
 };
 use miku_index_memory::MemoryIndex;
+use std::sync::Arc;
+use tokio::sync::Mutex;
 use turso::{transaction::Transaction, Builder, Connection, Value};
 
 const CREATE_PAGES: &str = "CREATE TABLE IF NOT EXISTS miku_page_index (
@@ -21,7 +23,7 @@ const CREATE_SEARCH: &str =
 /// A local durable index using the Rust-built Turso engine.
 #[derive(Clone)]
 pub struct TursoIndex {
-    connection: Connection,
+    connection: Arc<Mutex<Connection>>,
     memory: MemoryIndex,
 }
 
@@ -56,12 +58,15 @@ impl TursoIndex {
             memory.replace_page(page).await?;
         }
 
-        Ok(Self { connection, memory })
+        Ok(Self {
+            connection: Arc::new(Mutex::new(connection)),
+            memory,
+        })
     }
 
     async fn persist(&self, page: &PageIndex) -> StoreResult<()> {
-        let mut transaction = self
-            .connection
+        let connection = self.connection.lock().await;
+        let mut transaction = connection
             .unchecked_transaction()
             .await
             .map_err(driver_error)?;
@@ -135,12 +140,12 @@ impl IndexReader for TursoIndex {
             return self.memory.search(request).await;
         }
 
-        let mut rows = self
-            .connection
+        let connection = self.connection.lock().await;
+        let mut rows = connection
             .query(
                 "SELECT path, title FROM miku_page_index
                  WHERE fts_match(title, body, ?1) LIMIT ?2",
-                turso::params![request.query, request.limit as i64],
+                turso::params![request.query.trim().to_lowercase(), request.limit as i64],
             )
             .await
             .map_err(driver_error)?;
@@ -185,8 +190,8 @@ impl IndexWriter for TursoIndex {
         if pages.is_empty() {
             return Ok(Vec::new());
         }
-        let mut transaction = self
-            .connection
+        let connection = self.connection.lock().await;
+        let mut transaction = connection
             .unchecked_transaction()
             .await
             .map_err(driver_error)?;
@@ -208,8 +213,8 @@ impl IndexWriter for TursoIndex {
     }
 
     async fn delete_page(&self, path: &str) -> StoreResult<IndexEvent> {
-        let transaction = self
-            .connection
+        let connection = self.connection.lock().await;
+        let transaction = connection
             .unchecked_transaction()
             .await
             .map_err(driver_error)?;
@@ -264,6 +269,24 @@ mod tests {
             .await
             .expect("search local index");
         assert_eq!(hits.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn accepts_title_case_terms_and_serializes_concurrent_driver_access() {
+        let store = TursoIndex::open(":memory:")
+            .await
+            .expect("open local index");
+        let pages = vec![page("Miku.md", "A note about Miku")];
+        let (write, read) = tokio::join!(
+            store.replace_pages(pages),
+            store.search(SearchRequest {
+                query: "Miku".to_string(),
+                scope: miku_domain::SearchScope::Body,
+                limit: 10,
+            })
+        );
+        write.expect("concurrent write");
+        read.expect("concurrent read");
     }
 
     #[tokio::test]

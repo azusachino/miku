@@ -2,9 +2,7 @@
 
 ## Project Overview
 
-Miku (初音ミク / ミク) is a filesystem-owned personal Markdown wiki: a browser
-editor over plain `.md` files with server-side, background indexing for
-backlinks, tags, and full-text search.
+Miku (初音ミク / ミク) is a filesystem-owned personal Markdown wiki: a browser editor over plain `.md` files with server-side, background indexing for backlinks, tags, and full-text search.
 
 ## Tech Stack & Architecture
 
@@ -15,13 +13,11 @@ backlinks, tags, and full-text search.
 - **Filesystem watch:** notify (background indexer)
 - **Frontend (v0):** server-rendered HTML + plain `<textarea>` (no JS bundler)
 
-**Core invariant:** Markdown files + assets under `miku/` are the source of
-truth. Postgres holds only a disposable index (`pages`, `links`, `tags`, FTS)
-that is fully rebuildable from `miku/**/*.md`. See `docs/architecture.md`.
+**Core invariant:** Markdown files + assets under `miku/` are the source of truth. Postgres holds only a disposable index (`pages`, `links`, `tags`, FTS) that is fully rebuildable from `miku/**/*.md`.
+See `docs/architecture.md`.
 
-**Single-writer model:** HTTP handlers are read-only against Postgres; the
-background indexer is the sole writer. Saves are atomic (temp + rename) and the
-`notify` watcher is the *only* index trigger — no double-indexing, no races.
+**Single-writer model:** HTTP handlers are read-only against Postgres; the background indexer is the sole writer. Saves are atomic (temp + rename) and the `notify` watcher is the _only_ index trigger
+— no double-indexing, no races.
 
 ## Commands
 
@@ -34,11 +30,8 @@ make validate     # check + build (run before PR)
 make run          # run the server
 ```
 
-All daily operations go through `make <target>`. Tools come from the Nix
-devShell — enter with `nix develop`, or run one-off via
-`nix develop --command <cmd>` (the Makefile wraps commands automatically).
-Project scripting/automation is Python run via `uv run` (root `pyproject.toml`),
-not bash.
+All daily operations go through `make <target>`. Tools come from the Nix devShell — enter with `nix develop`, or run one-off via `nix develop --command <cmd>` (the Makefile wraps commands
+automatically). Project scripting/automation is Python run via `uv run` (root `pyproject.toml`), not bash.
 
 ## Coding Conventions
 
@@ -50,8 +43,7 @@ not bash.
 ## Quality Standards
 
 - `make check` must pass before commit; `make validate` before PR
-- Never recompute the whole graph on a keystroke; index changed pages in the
-  background; paginate/virtualize backlinks
+- Never recompute the whole graph on a keystroke; index changed pages in the background; paginate/virtualize backlinks
 
 ## Rules
 

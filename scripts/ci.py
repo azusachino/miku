@@ -34,7 +34,7 @@ def cargo(*args: str) -> None:
 
 def check() -> None:
     run(["cargo", "fmt", "--all", "--", "--check"])
-    run(["prettier", "--check", "**/*.{json,yaml,yml}"])
+    run(["prettier", "--check", "**/*.{md,json,yaml,yml}"])
     run(["ruff", "check", "scripts"])
     run(["ruff", "format", "--check", "scripts"])
     run(["pytest", "scripts"])

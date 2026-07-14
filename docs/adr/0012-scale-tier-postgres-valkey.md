@@ -25,23 +25,18 @@ The high-end deployment profile is `scale`:
 MemoryCache + optional Valkey L2/cache-events + Postgres IndexStore
 ```
 
-Postgres is the durable primary and retains its native FTS/trigram capabilities
-behind the backend-neutral contract. Valkey accelerates repeated reads and may
-carry invalidation/pub-sub events, but it is never authoritative.
+Postgres is the durable primary and retains its native FTS/trigram capabilities behind the backend-neutral contract. Valkey accelerates repeated reads and may carry invalidation/pub-sub events, but it
+is never authoritative.
 
-A Valkey outage degrades to the in-process cache and Postgres. There is no silent
-fallback from Postgres to Turso or memory.
+A Valkey outage degrades to the in-process cache and Postgres. There is no silent fallback from Postgres to Turso or memory.
 
 ## Why
 
-This keeps the high-end profile operationally strong without forcing Valkey and
-Postgres onto local users. The same application contract and fixture suite can
-prove semantic parity while allowing Postgres-specific ranking quality.
+This keeps the high-end profile operationally strong without forcing Valkey and Postgres onto local users. The same application contract and fixture suite can prove semantic parity while allowing
+Postgres-specific ranking quality.
 
 ## Trade-offs / Rejected
 
 - Rejected Valkey-primary indexing: cache loss must be safe.
-- Rejected distributed pub/sub as a local requirement: one process needs only an
-  in-process event bus.
-- Accepted different ranking scores across stores; result semantics must match,
-  but backend-specific ranking is allowed.
+- Rejected distributed pub/sub as a local requirement: one process needs only an in-process event bus.
+- Accepted different ranking scores across stores; result semantics must match, but backend-specific ranking is allowed.

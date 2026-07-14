@@ -1,6 +1,7 @@
 # Tools come from the nix devShell. Outside it, wrap each command in
 # `nix develop --command`; inside it (IN_NIX_SHELL set), run directly.
 NIX_RUN := $(if $(IN_NIX_SHELL),,nix develop --command )
+PRETTIER_FILES := "**/*.{md,json,yaml,yml}"
 
 # Container engine for the local stack. Defaults to `podman compose` (Linux
 # rootless). Override for other hosts, e.g. on macOS with Docker Desktop:
@@ -12,11 +13,11 @@ COMPOSE ?= podman compose
 
 fmt:
 	$(NIX_RUN)cargo fmt --all
-	$(NIX_RUN)prettier --write "**/*.{json,yaml,yml}"
+	$(NIX_RUN)prettier --write $(PRETTIER_FILES)
 
 fmt-check:
 	$(NIX_RUN)cargo fmt --all -- --check
-	$(NIX_RUN)prettier --check "**/*.{json,yaml,yml}"
+	$(NIX_RUN)prettier --check $(PRETTIER_FILES)
 
 lint:
 	$(NIX_RUN)cargo clippy --workspace --all-targets -- -D warnings

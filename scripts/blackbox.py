@@ -144,6 +144,12 @@ def main() -> int:
     expect(status, 200, f"/p/{page}")
     validate_page(body, page)
 
+    # Exercise the title-case FTS path used by page-view unlinked mentions.
+    # This must remain available while the background indexer is reconciling.
+    mention_query = urllib.parse.urlencode({"q": "Miku", "scope": "body"})
+    status, _, _ = get(f"/search?{mention_query}")
+    expect(status, 200, "/search?query=Miku&scope=body")
+
     status, _, body = get(f"/p/{encoded_page}/edit")
     expect(status, 200, f"/p/{page}/edit")
     if "textarea" not in body:
