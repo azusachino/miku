@@ -9,6 +9,7 @@ license = "GPL-3.0-or-later"
 repository = "https://github.com/azusachino/miku"
 keywords = ["markdown", "wiki", "notes", "backlinks", "fulltext"]
 categories = ["text-processing", "web-programming"]
+
 # Publish only the runnable crate; keep repo-internal docs/config/CI out of the
 # permanent public package.
 include = [
@@ -19,6 +20,21 @@ include = [
   "/README.md",
   "/LICENSE",
 ]
+
+[workspace]
+members = ["crates/miku-domain"]
+resolver = "2"
+
+[workspace.package]
+edition = "2021"
+license = "GPL-3.0-or-later"
+repository = "https://github.com/azusachino/miku"
+
+[workspace.dependencies]
+async-trait = "0.1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
 
 [dependencies]
 anyhow = "1"

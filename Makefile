@@ -11,18 +11,18 @@ COMPOSE ?= podman compose
 .PHONY: fmt fmt-check lint test check validate bench run clean daily stack-up stack-down stack-build stack-logs db-init db-up db-down db-reset db-psql dev dev-tmux
 
 fmt:
-	$(NIX_RUN)cargo fmt
+	$(NIX_RUN)cargo fmt --all
 	$(NIX_RUN)prettier --write "**/*.{json,yaml,yml}"
 
 fmt-check:
-	$(NIX_RUN)cargo fmt -- --check
+	$(NIX_RUN)cargo fmt --all -- --check
 	$(NIX_RUN)prettier --check "**/*.{json,yaml,yml}"
 
 lint:
-	$(NIX_RUN)cargo clippy --all-targets -- -D warnings
+	$(NIX_RUN)cargo clippy --workspace --all-targets -- -D warnings
 
 test:
-	$(NIX_RUN)cargo test
+	$(NIX_RUN)cargo test --workspace
 
 check: fmt-check lint test
 
