@@ -35,6 +35,17 @@ use tracing::{info, warn};
 
 const SERVER_TIMING: HeaderName = HeaderName::from_static("server-timing");
 
+struct LocalLogTimer;
+
+impl tracing_subscriber::fmt::time::FormatTime for LocalLogTimer {
+    fn format_time(
+        &self,
+        writer: &mut tracing_subscriber::fmt::format::Writer<'_>,
+    ) -> std::fmt::Result {
+        write!(writer, "{}", Local::now().format("%Y-%m-%d %H:%M:%S"))
+    }
+}
+
 struct HttpMetrics {
     started_at: Instant,
     requests_total: AtomicU64,
@@ -260,6 +271,7 @@ where
 async fn main() -> Result<()> {
     // 1. Initialize tracing with an env filter
     tracing_subscriber::fmt()
+        .with_timer(LocalLogTimer)
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| {
                 tracing_subscriber::EnvFilter::new("info,miku=debug,tower_http=debug")
