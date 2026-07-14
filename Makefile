@@ -36,8 +36,8 @@ integration:
 release:
 	$(NIX_RUN)uv run python scripts/ci.py release
 
-validate: check
-	$(NIX_RUN)cargo build --release
+validate:
+	$(NIX_RUN)uv run python scripts/ci.py validate
 
 bench:
 	$(NIX_RUN)uv run python scripts/ci.py scale

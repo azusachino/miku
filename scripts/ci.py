@@ -66,12 +66,18 @@ def scale() -> None:
     run([sys.executable, "scripts/index_scale_test.py"])
 
 
+def validate() -> None:
+    check()
+    cargo("build", "--release")
+
+
 COMMANDS = {
     "check": check,
     "featured": featured,
     "integration": integration,
     "release": release,
     "scale": scale,
+    "validate": validate,
 }
 
 

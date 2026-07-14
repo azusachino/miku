@@ -11,11 +11,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: cachix/install-nix-action@v25
-      - run: nix develop --command uv run python scripts/ci.py check
-      - run: nix develop --command uv run python scripts/ci.py featured
+      - run: make check
+      - run: make featured
       - name: Inspect publishable packages
-        run: |
-          nix develop --command uv run python scripts/ci.py release
+        run: make release
       - name: Verify private crates are not publishable
         run: |
           test "$(nix develop --command cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.name == "miku-app") | .publish')" = "false"

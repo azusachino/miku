@@ -12,5 +12,5 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: cachix/install-nix-action@v25
-      - run: nix develop --command uv run python scripts/ci.py check
-      - run: nix develop --command uv run python scripts/ci.py featured
+      - run: make check
+      - run: make featured

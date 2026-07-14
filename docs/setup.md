@@ -50,11 +50,15 @@ export DATABASE_URL=postgres://localhost/miku
 ```bash
 nix develop       # enter the devShell (provisions all tools)
 make run          # run the server (expects DATABASE_URL already set)
-uv run python scripts/ci.py check       # default fmt + lint + tests
-uv run python scripts/ci.py featured    # all Cargo features
-uv run python scripts/ci.py integration # optional service-backed probes
-uv run python scripts/ci.py release     # crates.io package dry-runs
-make validate                         # check + release build (compatibility alias)
+make check                             # default fmt + lint + tests
+make featured                          # all Cargo features
+make integration                       # optional service-backed probes
+make release                           # crates.io package dry-runs
+make validate                          # check + release build
+
+All quality targets are thin Make wrappers around `uv run python scripts/ci.py`,
+so local and GitHub CI use the same implementation. The Python commands can also
+be invoked directly when debugging a single matrix slice.
 ```
 
 Project automation/scripts are Python run via `uv run python scripts/<x>.py`
