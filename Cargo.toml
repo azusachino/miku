@@ -1,6 +1,6 @@
 [package]
 name = "miku"
-version = "0.0.1"
+version = "0.0.2"
 authors = ["azusachino <azusachino@duck.com>"]
 edition = "2021"
 description = "A filesystem-owned personal Markdown wiki with browser editing and background indexing for backlinks, tags, and full-text search."

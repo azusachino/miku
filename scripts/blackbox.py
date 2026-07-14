@@ -47,12 +47,12 @@ def expect(status: int, expected: int, path: str) -> None:
     print(f"ok: GET {path} -> {status}")
 
 
-def validate_health(content_type: str, body: str) -> dict[str, object]:
+def validate_ready(content_type: str, body: str) -> dict[str, object]:
     if "application/json" not in content_type:
-        raise AssertionError(f"/api/health: expected JSON, got {content_type}")
+        raise AssertionError(f"/readyz: expected JSON, got {content_type}")
     health = json.loads(body)
     if health.get("status") != "ok":
-        raise AssertionError(f"/api/health: unexpected payload {health}")
+        raise AssertionError(f"/readyz: unexpected payload {health}")
     return health
 
 
@@ -60,14 +60,14 @@ def wait_for_index() -> dict[str, object]:
     deadline = time.monotonic() + READY_TIMEOUT_SECONDS
     last_health: dict[str, object] = {}
     while time.monotonic() < deadline:
-        status, content_type, body = get("/api/health")
+        status, content_type, body = get("/readyz")
         if status == 200:
-            last_health = validate_health(content_type, body)
+            last_health = validate_ready(content_type, body)
             if last_health.get("index_ready") is True:
                 return last_health
         time.sleep(1)
     raise AssertionError(
-        f"/api/health: index did not become ready within {READY_TIMEOUT_SECONDS:g}s; "
+        f"/readyz: index did not become ready within {READY_TIMEOUT_SECONDS:g}s; "
         f"last payload={last_health}"
     )
 
@@ -76,7 +76,7 @@ def wait_for_http() -> None:
     deadline = time.monotonic() + READY_TIMEOUT_SECONDS
     while time.monotonic() < deadline:
         try:
-            status, _, _ = get("/api/health")
+            status, _, _ = get("/healthz")
             if status in {200, 503}:
                 return
         except SystemExit:
@@ -180,8 +180,8 @@ def main() -> int:
         raise AssertionError(f"/p/{page}/edit: missing editor textarea")
 
     query = urllib.parse.urlencode({"q": query_text})
-    status, _, _ = get(f"/api/quickswitch?{query}")
-    expect(status, 200, "/api/quickswitch")
+    status, _, _ = get(f"/api/v1/quickswitch?{query}")
+    expect(status, 200, "/api/v1/quickswitch")
 
     status, _, body = get(f"/search?{query}&scope=all")
     expect(status, 200, "/search")
@@ -199,8 +199,8 @@ def main() -> int:
         encoded_folder = urllib.parse.quote(app_folder, safe="/")
         status, _, _ = get(f"/folders/{encoded_folder}")
         expect(status, 200, f"/folders/{app_folder}")
-        status, _, _ = get(f"/api/nav/children?dir={encoded_folder}")
-        expect(status, 200, "/api/nav/children")
+        status, _, _ = get(f"/api/v1/nav/children?dir={encoded_folder}")
+        expect(status, 200, "/api/v1/nav/children")
     return 0
 
 

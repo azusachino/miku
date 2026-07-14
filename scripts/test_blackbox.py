@@ -1,17 +1,17 @@
-from blackbox import validate_health, validate_page
+from blackbox import validate_page, validate_ready
 
 
-def test_validate_health_accepts_capabilities_payload() -> None:
-    health = validate_health(
+def test_validate_ready_accepts_capabilities_payload() -> None:
+    health = validate_ready(
         "application/json",
         '{"status":"ok","capabilities":{"durable":true}}',
     )
     assert health["status"] == "ok"
 
 
-def test_validate_health_rejects_non_json() -> None:
+def test_validate_ready_rejects_non_json() -> None:
     try:
-        validate_health("text/html", "ok")
+        validate_ready("text/html", "ok")
     except AssertionError as error:
         assert "expected JSON" in str(error)
     else:

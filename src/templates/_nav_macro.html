@@ -1,5 +1,5 @@
 {# Sidebar nav tree node. Folders lazy-load their children via htmx on first
-   expand (GET /api/nav/children?dir=...), so a page render only emits the root
+   expand (GET /api/v1/nav/children?dir=...), so a page render only emits the root
    level plus the active page's ancestor chain — not the whole vault. `active`
    is the current page path (empty for non-page views); folders on its ancestor
    chain are pre-expanded and have their children rendered inline. #}
@@ -40,7 +40,7 @@
              this.loaded = true;
              const load = () => {
                if (window.htmx) {
-                 htmx.ajax('GET', '/api/nav/children?dir=' + encodeURIComponent(this.path), { target: this.$refs.children, swap: 'innerHTML' });
+                 htmx.ajax('GET', '/api/v1/nav/children?dir=' + encodeURIComponent(this.path), { target: this.$refs.children, swap: 'innerHTML' });
                } else {
                  window.setTimeout(load, 40);
                }

@@ -126,7 +126,7 @@ Miku - {{ path }}
                 <li class="mk-mention">
                     <a href="/p/{{ mention.path }}">{{ mention.title }}</a>
                     <p>{{ mention.snippet }}</p>
-                    <form method="post" action="/api/promote-mention">
+                    <form method="post" action="/api/v1/promote-mention">
                         <input type="hidden" name="source_path" value="{{ mention.path }}">
                         <input type="hidden" name="target_path" value="{{ path }}">
                         <input type="hidden" name="mention" value="{{ title }}">
@@ -237,7 +237,7 @@ Miku - {{ path }}
                 const wiki = before.match(/\[\[([^\]\n]*)$/);
                 if (wiki) {
                     const query = wiki[1].trim();
-                    const res = await fetch('/api/quickswitch?q=' + encodeURIComponent(query), {
+                    const res = await fetch('/api/v1/quickswitch?q=' + encodeURIComponent(query), {
                         headers: { 'Accept': 'application/json' }
                     });
                     const rows = res.ok ? await res.json() : [];

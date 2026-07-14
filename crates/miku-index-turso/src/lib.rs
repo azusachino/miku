@@ -8,7 +8,7 @@ use miku_domain::{
 use miku_index_memory::MemoryIndex;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, OnceCell};
 use turso::{transaction::Transaction, Builder, Connection, Value};
 
 const CREATE_PAGES: &str = "CREATE TABLE IF NOT EXISTS miku_page_index (
@@ -32,6 +32,7 @@ pub struct TursoIndex {
     connection: Arc<Mutex<Connection>>,
     memory: MemoryIndex,
     search_available: Arc<AtomicBool>,
+    hydrated: Arc<OnceCell<()>>,
 }
 
 impl TursoIndex {
@@ -68,39 +69,38 @@ impl TursoIndex {
                     .and_then(|value| text_value(&value).ok())
             })
             .is_some_and(|value| value == "1");
-        if !search_ready {
-            connection
-                .execute(CREATE_SEARCH, ())
-                .await
-                .map_err(driver_error)?;
-            connection
-                .execute(
-                    "INSERT INTO miku_index_meta (key, value) VALUES (?1, '1')
-                     ON CONFLICT(key) DO UPDATE SET value = excluded.value",
-                    [SEARCH_READY_KEY.to_string()],
-                )
-                .await
-                .map_err(driver_error)?;
-        }
-
-        let memory = MemoryIndex::new();
-        let mut rows = connection
-            .query("SELECT payload FROM miku_page_index ORDER BY path", ())
-            .await
-            .map_err(driver_error)?;
-        while let Some(row) = rows.next().await.map_err(driver_error)? {
-            let payload = text_value(&row.get_value(0).map_err(driver_error)?)?;
-            let page = serde_json::from_str::<PageIndex>(&payload).map_err(|error| {
-                StoreError::Operation(format!("decode local page projection: {error}"))
-            })?;
-            memory.replace_page(page).await?;
-        }
 
         Ok(Self {
             connection: Arc::new(Mutex::new(connection)),
-            memory,
-            search_available: Arc::new(AtomicBool::new(true)),
+            memory: MemoryIndex::new(),
+            search_available: Arc::new(AtomicBool::new(search_ready)),
+            hydrated: Arc::new(OnceCell::new()),
         })
+    }
+
+    async fn ensure_hydrated(&self) -> StoreResult<()> {
+        let connection = Arc::clone(&self.connection);
+        let memory = self.memory.clone();
+        self.hydrated
+            .get_or_try_init(|| async move {
+                let connection = connection.lock().await;
+                let mut rows = connection
+                    .query("SELECT payload FROM miku_page_index ORDER BY path", ())
+                    .await
+                    .map_err(driver_error)?;
+                let mut pages = Vec::new();
+                while let Some(row) = rows.next().await.map_err(driver_error)? {
+                    let payload = text_value(&row.get_value(0).map_err(driver_error)?)?;
+                    let page = serde_json::from_str::<PageIndex>(&payload).map_err(|error| {
+                        StoreError::Operation(format!("decode local page projection: {error}"))
+                    })?;
+                    pages.push(page);
+                }
+                memory.replace_pages(pages).await?;
+                Ok(())
+            })
+            .await
+            .map(|_| ())
     }
 
     async fn persist(&self, page: &PageIndex) -> StoreResult<()> {
@@ -164,10 +164,12 @@ impl IndexReader for TursoIndex {
     }
 
     async fn list_pages(&self) -> StoreResult<Vec<PageSummary>> {
+        self.ensure_hydrated().await?;
         self.memory.list_pages().await
     }
 
     async fn page(&self, path: &str) -> StoreResult<Option<PageSummary>> {
+        self.ensure_hydrated().await?;
         self.memory.page(path).await
     }
 
@@ -176,12 +178,21 @@ impl IndexReader for TursoIndex {
             return Ok(Vec::new());
         }
         if request.scope == miku_domain::SearchScope::Title {
+            self.ensure_hydrated().await?;
             return self.memory.search(request).await;
         }
 
         if !self.search_available.load(Ordering::Acquire) {
+            if self.connection.try_lock().is_err() {
+                return self.memory.search(request).await;
+            }
+            self.ensure_hydrated().await?;
             return self.memory.search(request).await;
         }
+        if self.connection.try_lock().is_err() {
+            return self.memory.search(request).await;
+        }
+        self.ensure_hydrated().await?;
         let Ok(connection) = self.connection.try_lock() else {
             // Reconciliation may hold the single Turso connection while
             // Tantivy commits. The HTTP read path must stay responsive; the
@@ -209,18 +220,22 @@ impl IndexReader for TursoIndex {
     }
 
     async fn backlinks(&self, path: &str) -> StoreResult<Vec<Backlink>> {
+        self.ensure_hydrated().await?;
         self.memory.backlinks(path).await
     }
 
     async fn unlinked_mentions(&self, path: &str) -> StoreResult<Vec<UnlinkedMention>> {
+        self.ensure_hydrated().await?;
         self.memory.unlinked_mentions(path).await
     }
 
     async fn tags(&self) -> StoreResult<Vec<TagCount>> {
+        self.ensure_hydrated().await?;
         self.memory.tags().await
     }
 
     async fn pages_with_tag(&self, tag: &str) -> StoreResult<Vec<PageSummary>> {
+        self.ensure_hydrated().await?;
         self.memory.pages_with_tag(tag).await
     }
 }
@@ -269,9 +284,7 @@ impl IndexWriter for TursoIndex {
                 path: page.summary.path.clone(),
             })
             .collect();
-        for page in pages {
-            self.memory.replace_page(page).await?;
-        }
+        self.memory.replace_pages(pages).await?;
         Ok(events)
     }
 

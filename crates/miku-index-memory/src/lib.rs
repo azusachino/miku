@@ -171,6 +171,23 @@ impl IndexWriter for MemoryIndex {
         Ok(IndexEvent::PageIndexed { path })
     }
 
+    async fn replace_pages(&self, pages: Vec<PageIndex>) -> StoreResult<Vec<IndexEvent>> {
+        if pages.is_empty() {
+            return Ok(Vec::new());
+        }
+        let events = pages
+            .iter()
+            .map(|page| IndexEvent::PageIndexed {
+                path: page.summary.path.clone(),
+            })
+            .collect();
+        let mut indexed = self.write_pages()?;
+        for page in pages {
+            indexed.insert(page.summary.path.clone(), page);
+        }
+        Ok(events)
+    }
+
     async fn delete_page(&self, path: &str) -> StoreResult<IndexEvent> {
         self.write_pages()?.remove(path);
         Ok(IndexEvent::PageDeleted {

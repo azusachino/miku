@@ -12,7 +12,7 @@ use std::sync::{
 };
 use std::time::{Duration, Instant};
 use tokio::sync::{broadcast, mpsc};
-use tokio::task::JoinHandle;
+use tokio::task::{JoinHandle, JoinSet};
 use tracing::{error, info};
 
 const RECONCILE_SENTINEL: &str = "__reconcile__";
@@ -23,6 +23,12 @@ const DEFAULT_RECONCILE_BATCH_SIZE: usize = 512;
 pub enum WatcherEvent {
     Modified(PathBuf),
     Deleted(PathBuf),
+}
+
+#[derive(Debug, Clone)]
+struct PendingSource {
+    relative: PathBuf,
+    mtime: i64,
 }
 
 pub struct IndexerQueue {
@@ -84,7 +90,8 @@ async fn reconcile_store(
     let scanned_files = files.len();
     let mut seen = HashSet::with_capacity(files.len());
     let batch_size = IndexerQueue::reconcile_batch_size();
-    let mut pages = Vec::with_capacity(batch_size);
+    let parse_concurrency = IndexerQueue::parse_concurrency();
+    let mut changed_files = Vec::new();
     let mut indexed_pages = 0usize;
     let mut unchanged_pages = 0usize;
     let mut batches = 0usize;
@@ -113,19 +120,15 @@ async fn reconcile_store(
             unchanged_pages += 1;
             continue;
         }
-        let parse_started = Instant::now();
-        let bytes = fs::read(&file)
-            .map_err(|error| miku_domain::StoreError::Operation(error.to_string()))?;
-        pages.push(build_page_index(&relative.to_string_lossy(), &bytes, mtime));
-        parse_duration += parse_started.elapsed();
-        if pages.len() == batch_size {
-            let batch = std::mem::take(&mut pages);
-            indexed_pages += batch.len();
-            batches += 1;
-            write_duration += flush_reconcile_batch(writer, events, batch, batches).await?;
-        }
+        changed_files.push(PendingSource {
+            relative: relative.to_path_buf(),
+            mtime,
+        });
     }
-    if !pages.is_empty() {
+    for source_batch in changed_files.chunks(batch_size) {
+        let parse_started = Instant::now();
+        let pages = build_page_batch(content_root, source_batch, parse_concurrency).await?;
+        parse_duration += parse_started.elapsed();
         indexed_pages += pages.len();
         batches += 1;
         write_duration += flush_reconcile_batch(writer, events, pages, batches).await?;
@@ -147,6 +150,7 @@ async fn reconcile_store(
         unchanged_pages,
         deleted_pages,
         batches,
+        parse_concurrency,
         walk_ms = walk_duration.as_secs_f64() * 1000.0,
         existing_ms = existing_duration.as_secs_f64() * 1000.0,
         metadata_ms = metadata_duration.as_secs_f64() * 1000.0,
@@ -156,6 +160,50 @@ async fn reconcile_store(
         "index reconcile finished"
     );
     Ok(())
+}
+
+async fn build_page_batch(
+    content_root: &Path,
+    sources: &[PendingSource],
+    concurrency: usize,
+) -> miku_domain::StoreResult<Vec<PageIndex>> {
+    let mut workers = JoinSet::new();
+    let mut pending = sources.iter().cloned();
+    for _ in 0..concurrency {
+        let Some(source) = pending.next() else {
+            break;
+        };
+        spawn_page_worker(&mut workers, content_root, source);
+    }
+
+    let mut pages = Vec::with_capacity(sources.len());
+    while let Some(result) = workers.join_next().await {
+        let page =
+            result.map_err(|error| miku_domain::StoreError::Operation(error.to_string()))??;
+        pages.push(page);
+        if let Some(source) = pending.next() {
+            spawn_page_worker(&mut workers, content_root, source);
+        }
+    }
+    pages.sort_by(|left, right| left.summary.path.cmp(&right.summary.path));
+    Ok(pages)
+}
+
+fn spawn_page_worker(
+    workers: &mut JoinSet<miku_domain::StoreResult<PageIndex>>,
+    content_root: &Path,
+    source: PendingSource,
+) {
+    let file = content_root.join(&source.relative);
+    workers.spawn_blocking(move || {
+        let bytes = fs::read(&file)
+            .map_err(|error| miku_domain::StoreError::Operation(error.to_string()))?;
+        Ok(build_page_index(
+            &source.relative.to_string_lossy(),
+            &bytes,
+            source.mtime,
+        ))
+    });
 }
 
 async fn flush_reconcile_batch(
@@ -339,6 +387,17 @@ impl IndexerQueue {
             .unwrap_or(DEFAULT_RECONCILE_BATCH_SIZE)
     }
 
+    fn parse_concurrency() -> usize {
+        env::var("MIKU_PARSE_CONCURRENCY")
+            .ok()
+            .and_then(|value| value.parse::<usize>().ok())
+            .filter(|concurrency| *concurrency > 0)
+            .unwrap_or_else(|| {
+                std::thread::available_parallelism()
+                    .map_or(1, |parallelism| parallelism.get().min(8))
+            })
+    }
+
     fn try_queue_reconcile(
         sender: &mpsc::Sender<WatcherEvent>,
         reconcile_queued: &AtomicBool,
@@ -376,5 +435,10 @@ mod tests {
         env::set_var("MIKU_RECONCILE_BATCH_SIZE", "1000");
         assert_eq!(IndexerQueue::reconcile_batch_size(), 1000);
         env::remove_var("MIKU_RECONCILE_BATCH_SIZE");
+        env::remove_var("MIKU_PARSE_CONCURRENCY");
+        assert!(IndexerQueue::parse_concurrency() > 0);
+        env::set_var("MIKU_PARSE_CONCURRENCY", "3");
+        assert_eq!(IndexerQueue::parse_concurrency(), 3);
+        env::remove_var("MIKU_PARSE_CONCURRENCY");
     }
 }

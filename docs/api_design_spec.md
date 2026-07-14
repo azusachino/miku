@@ -1,5 +1,10 @@
 # Miku HTTP API Design Specification
 
+Operational endpoints are intentionally outside the application API version:
+`GET /healthz` is the liveness probe, `GET /readyz` is the readiness probe, and
+`GET /metrics` is the Prometheus endpoint. Application JSON endpoints use the
+versioned `/api/v1/` prefix.
+
 This document details a robust, structured API design for the Miku personal wiki. It separates standard HTML multi-page application (MPA) routes from JSON REST endpoints to support interactive UI
 features (like the `Ctrl-K` palette and `[[wikilink]]` autocomplete).
 

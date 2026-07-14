@@ -44,7 +44,7 @@ The single highest-leverage win. Build a real overlay (Alpine, no bundler):
 - **Quick-switcher** (`Cmd-K`): fuzzy-jump to any page by title/path.
 - **Command palette** (`Cmd-/` or `Cmd-Shift-P`): new page, toggle theme, toggle reading/edit, go to tags, etc. — one surface, type-to-filter.
 - Replace the fake search chip; keep `/search` as the full-text results page.
-- Needs a lightweight `/api/quickswitch?q=` (titles+paths) endpoint — read-only, already trivially indexable from `tb_pages`.
+- Needs a lightweight `/api/v1/quickswitch?q=` (titles+paths) endpoint — read-only, already trivially indexable from `tb_pages`.
 
 ### Epic 2 — Live preview editing (kill the mode switch) · _L_
 

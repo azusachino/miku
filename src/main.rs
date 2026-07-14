@@ -333,15 +333,16 @@ fn app(state: AppState) -> Router {
         .route("/preview", post(preview))
         .route("/p/{*path}", get(page_handler).post(page_save))
         .route("/events", get(events))
-        .route("/api/health", get(health))
+        .route("/healthz", get(healthz))
+        .route("/readyz", get(readyz))
         .route("/metrics", get(metrics))
-        .route("/api/move", post(page_move))
-        .route("/api/trash", post(page_trash).get(trash_list))
-        .route("/api/trash/restore", post(trash_restore))
-        .route("/api/trash/purge", post(trash_purge))
-        .route("/api/promote-mention", post(promote_mention))
-        .route("/api/nav/children", get(nav_children_handler))
-        .route("/api/quickswitch", get(quickswitch))
+        .route("/api/v1/move", post(page_move))
+        .route("/api/v1/trash", post(page_trash).get(trash_list))
+        .route("/api/v1/trash/restore", post(trash_restore))
+        .route("/api/v1/trash/purge", post(trash_purge))
+        .route("/api/v1/promote-mention", post(promote_mention))
+        .route("/api/v1/nav/children", get(nav_children_handler))
+        .route("/api/v1/quickswitch", get(quickswitch))
         .nest_service("/static", ServeDir::new("static"))
         .nest_service("/assets", ServeDir::new("miku_docs/assets"))
         .layer(TraceLayer::new_for_http().on_response(observe_http_response))
@@ -355,17 +356,30 @@ struct HealthResponse {
     index_ready: bool,
 }
 
-async fn health(State(state): State<AppState>) -> Result<Json<HealthResponse>, StatusCode> {
+async fn healthz() -> Json<serde_json::Value> {
+    Json(serde_json::json!({"status": "ok"}))
+}
+
+async fn readyz(State(state): State<AppState>) -> Response {
     let capabilities = state
         .index
         .capabilities()
         .await
-        .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?;
-    Ok(Json(HealthResponse {
+        .map_err(|_| StatusCode::SERVICE_UNAVAILABLE);
+    let Ok(capabilities) = capabilities else {
+        return StatusCode::SERVICE_UNAVAILABLE.into_response();
+    };
+    let ready = state.index_ready.load(std::sync::atomic::Ordering::Acquire);
+    let response = Json(HealthResponse {
         status: "ok",
         capabilities,
-        index_ready: state.index_ready.load(std::sync::atomic::Ordering::Acquire),
-    }))
+        index_ready: ready,
+    });
+    if ready {
+        (StatusCode::OK, response).into_response()
+    } else {
+        (StatusCode::SERVICE_UNAVAILABLE, response).into_response()
+    }
 }
 
 async fn metrics(State(state): State<AppState>) -> impl IntoResponse {
@@ -659,7 +673,7 @@ fn build_nav_tree(rows: Vec<(String, String)>) -> Vec<NavNode> {
 
 // Prune a built tree for lazy rendering: keep folder children only along the
 // active page's ancestor chain; every other folder is emptied so the template
-// emits a collapsed stub that lazy-loads via /api/nav/children on first expand.
+// emits a collapsed stub that lazy-loads via /api/v1/nav/children on first expand.
 // This keeps the page payload to root level + the open page's path, not O(N).
 fn prune_nav_tree(nodes: &mut [NavNode], active: &str, prefix: &str) {
     for node in nodes.iter_mut() {
@@ -724,7 +738,7 @@ async fn nav_pages(index: &IndexApi, active: &str) -> Result<Vec<NavNode>, AppEr
     Ok(tree)
 }
 
-// GET /api/nav/children?dir=<folder> — htmx partial: the direct children of one
+// GET /api/v1/nav/children?dir=<folder> — htmx partial: the direct children of one
 // folder, each subfolder itself collapsed/lazy. Lets the sidebar expand folders
 // on demand instead of rendering the entire tree up front.
 #[derive(serde::Deserialize)]
@@ -1014,8 +1028,14 @@ async fn page_view(path: String, state: AppState) -> Result<Response, AppError> 
     let backlink_count = backlinks.len();
     let linked_paths: std::collections::HashSet<String> =
         backlinks.iter().map(|link| link.path.clone()).collect();
-    let unlinked_mentions = unlinked_mentions(&state.index, &path, &title, &linked_paths).await?;
     let backlinks_ms = timing_ms(backlinks_started);
+    let unlinked_started = Instant::now();
+    let unlinked_mentions = if state.index_ready.load(Ordering::Acquire) {
+        unlinked_mentions(&state.index, &path, &title, &linked_paths).await?
+    } else {
+        Vec::new()
+    };
+    let unlinked_ms = timing_ms(unlinked_started);
     let unlinked_mention_count = unlinked_mentions.len();
     let frontmatter =
         frontmatter.unwrap_or_else(|| serde_json::Value::Object(serde_json::Map::new()));
@@ -1050,6 +1070,7 @@ async fn page_view(path: String, state: AppState) -> Result<Response, AppError> 
         file_ms,
         markdown_ms,
         backlinks_ms,
+        unlinked_ms,
         total_ms,
         "page_view rendered"
     );
@@ -1736,7 +1757,7 @@ mod tests {
         assert!(rendered.contains("data-inline-editor"));
         assert!(rendered.contains("data-inline-body"));
         assert!(rendered.contains("@codemirror/autocomplete"));
-        assert!(rendered.contains("/api/quickswitch?q="));
+        assert!(rendered.contains("/api/v1/quickswitch?q="));
         assert!(rendered.contains("class=\"mk-breadcrumb-link\""));
         assert!(rendered.contains("href=\"/folders/Notes\""));
         assert!(rendered.contains("href=\"/p/Notes&#x2f;Daily\""));

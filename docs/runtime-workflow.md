@@ -67,11 +67,11 @@ The Rust tests cover backend contracts and driver-level concurrency. The uv suit
 
 ```bash
 make run                         # starts Turso + background indexer
-make check-blackbox              # waits for /api/health index_ready=true
+make check-blackbox              # waits for /readyz index_ready=true
 MIKU_BLACKBOX_URL=... make check-blackbox
 ```
 
-The live blackbox sequence must exercise `/api/health`, `/`, `/p/{path}`, `/p/{path}/edit`, `/search`, `/tags`, and folder routes when the fixture has them. It also sends a title-case `Miku` body
+The live blackbox sequence must exercise `/healthz`, `/readyz`, `/metrics`, `/`, `/p/{path}`, `/p/{path}/edit`, `/search`, `/tags`, and folder routes when the fixture has them. It also sends a title-case `Miku` body
 search because this is the same class of query used by page-view unlinked mentions. The blackbox must be run against a real process and corpus; helper-only tests are not sufficient proof of this
 workflow.
 

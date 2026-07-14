@@ -420,7 +420,7 @@
                         {% endif %}
                       </section>
 
-                      {# Trash view: lazy-loads GET /api/trash on first open; Restore/Delete
+                      {# Trash view: lazy-loads GET /api/v1/trash on first open; Restore/Delete
                          wire to $store.tree. Trashed files live under miku_docs/.trash and are
                          excluded from the index. #}
                       <section id="sidebar-trash" class="mk-sidebar-panel mk-sidebar-tools" role="tabpanel"
@@ -787,7 +787,7 @@
                     this.paletteAbortController = controller;
                     this.paletteLoading = true;
                     try {
-                        const res = await Promise.race([fetch('/api/quickswitch?q=' + encodeURIComponent(query), {
+                        const res = await Promise.race([fetch('/api/v1/quickswitch?q=' + encodeURIComponent(query), {
                             headers: { 'Accept': 'application/json' },
                             signal: controller.signal
                         }), timeout]);

@@ -250,11 +250,11 @@
      (children render alphabetically), so before/after reordering is out.
 
      JSON contract (see src/main.rs):
-       POST /api/move          { from, to }  -> 200 {ok,path} | 409 {error:"exists"} | 404
-       POST /api/trash         { path }      -> 200 {ok,id,original_path} | 404
-       GET  /api/trash                       -> [{ id, original_path, title, trashed_at }]
-       POST /api/trash/restore { id }        -> 200 {ok,path} | 409 | 404
-       POST /api/trash/purge   { id }        -> 200 {ok}                                  */
+       POST /api/v1/move          { from, to }  -> 200 {ok,path} | 409 {error:"exists"} | 404
+       POST /api/v1/trash         { path }      -> 200 {ok,id,original_path} | 404
+       GET  /api/v1/trash                       -> [{ id, original_path, title, trashed_at }]
+       POST /api/v1/trash/restore { id }        -> 200 {ok,path} | 409 | 404
+       POST /api/v1/trash/purge   { id }        -> 200 {ok}                                  */
   function postJSON(url, payload) {
     return fetch(url, {
       method: 'POST',
@@ -297,7 +297,7 @@
         if (!u || !u.from || !u.to) return;
         this.showToast('Moved to “' + u.from + '”.', function () {
           // Reverse move runs directly (not via move()) so it doesn't re-stash.
-          postJSON('/api/move', { from: u.from, to: u.to }).then(function () { window.location.reload(); });
+          postJSON('/api/v1/move', { from: u.from, to: u.to }).then(function () { window.location.reload(); });
         });
       },
 
@@ -325,7 +325,7 @@
       move: function (from, to) {
         if (!to || from === to) return;
         var self = this;
-        postJSON('/api/move', { from: from, to: to })
+      postJSON('/api/v1/move', { from: from, to: to })
           .then(function (r) {
             if (r.status === 409) {
               self.showToast('A page already exists at “' + to + '”.', null);
@@ -362,7 +362,7 @@
       trash: function (path) {
         this.closeMenu();
         var self = this;
-        postJSON('/api/trash', { path: path })
+      postJSON('/api/v1/trash', { path: path })
           .then(function (r) { return r.ok ? r.json() : null; })
           .then(function (data) {
             if (!data || !data.ok) { window.location.reload(); return; }
@@ -371,7 +371,7 @@
             self.trashLoaded = false; // force the Trash view to refetch next open
             var id = data.id;
             self.showToast('Moved “' + path + '” to Trash.', function () {
-              postJSON('/api/trash/restore', { id: id }).then(function () { window.location.reload(); });
+              postJSON('/api/v1/trash/restore', { id: id }).then(function () { window.location.reload(); });
             });
           })
           .catch(function () { window.location.reload(); });
@@ -382,7 +382,7 @@
         if (this.trashLoaded || this.trashLoading) return;
         this.trashLoading = true;
         var self = this;
-        fetch('/api/trash')
+      fetch('/api/v1/trash')
           .then(function (r) { return r.ok ? r.json() : []; })
           .then(function (items) { self.trashItems = items || []; self.trashLoaded = true; })
           .catch(function () { self.trashItems = []; })
@@ -390,7 +390,7 @@
       },
       restore: function (id) {
         var self = this;
-        postJSON('/api/trash/restore', { id: id })
+      postJSON('/api/v1/trash/restore', { id: id })
           .then(function (r) {
             if (r.status === 409) { self.showToast('A page already exists at that path.', null); return; }
             window.location.reload();
@@ -399,7 +399,7 @@
       purge: function (id) {
         if (!window.confirm('Delete this page forever? This cannot be undone.')) return;
         var self = this;
-        postJSON('/api/trash/purge', { id: id }).then(function () {
+      postJSON('/api/v1/trash/purge', { id: id }).then(function () {
           self.trashItems = self.trashItems.filter(function (it) { return it.id !== id; });
         });
       },

@@ -19,7 +19,7 @@ Captured 2026-07-14 from the real `miku_docs` corpus and local Turso 0.7 runtime
 
 ## Current behavior after the read-path fix
 
-- While `/api/health` reported `index_ready=false`, `GET /p/Index` returned HTML in about 0.22 seconds.
+- While `/readyz` reported `index_ready=false`, `GET /p/Index` returned HTML in about 0.22 seconds.
 - Busy Turso search falls back to the in-process projection; the page may show temporarily stale index metadata, but it remains readable.
 - Same-directory restart reuses committed projections and skips unchanged files by mtime.
 
@@ -75,6 +75,9 @@ hyperfine --warmup 2 --runs 10 'curl -fsS http://127.0.0.1:3000/p/Index'
 MIKU_BENCH_REQUESTS=1000 MIKU_BENCH_CONCURRENCY=32 make benchmark
 xh get http://127.0.0.1:3000/metrics
 ```
+
+Changed Markdown projection is bounded across blocking workers with `MIKU_PARSE_CONCURRENCY` (default `8`); Turso writes remain serialized. Compare `MIKU_PARSE_CONCURRENCY=1`, `4`, and `8` using the
+same fresh index path and record `parse_ms` separately from `write_ms` before increasing concurrency.
 
 `/metrics` is deliberately implemented in the application using the Prometheus text exposition format, without adding a metrics exporter to the Rust dependency graph. It exposes process uptime, index
 readiness, request count, cumulative response duration, and response-duration buckets in microseconds. Scrape it during a cold rebuild and while running `oha` to separate startup/indexing cost from
