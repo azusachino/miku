@@ -476,7 +476,7 @@ fn format_modified_time(file_path: &StdPath) -> String {
         .ok()
         .map(|modified| {
             let local: DateTime<Local> = modified.into();
-            local.format("%Y-%m-%d %H:%M:%S %:z").to_string()
+            local.format("%Y-%m-%d %H:%M:%S").to_string()
         })
         .unwrap_or_else(|| "Unknown".to_string())
 }
