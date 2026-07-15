@@ -6,7 +6,7 @@ target/
 .pgdata/
 
 # Content dir is the source of truth, bind-mounted at runtime — not built in.
-miku/
+miku_docs/
 
 # VCS / editor
 .git/
