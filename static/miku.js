@@ -1004,7 +1004,7 @@
           function () {
             self.toast.show = false;
           },
-          undo ? 10000 : 10000
+          10000
         );
       },
       runUndo: function () {
