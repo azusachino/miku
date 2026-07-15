@@ -97,6 +97,72 @@
     window.htmx.config.refreshOnHistoryMiss = true;
   }
 
+  /* ---- Persistent reader navigation ------------------------------------
+     The shell stays mounted while Rust supplies a server-rendered reader
+     fragment. Direct /p/{path} requests remain the canonical SSR route. */
+  var readerNavigation = (function () {
+    var navigating = false;
+
+    function setActive(path) {
+      document.querySelectorAll('.tree-link').forEach(function (link) {
+        var active = link.getAttribute('href') === '/p/' + path;
+        link.classList.toggle('is-active', active);
+        link.classList.toggle('active', active);
+      });
+    }
+
+    function load(url, push) {
+      if (navigating) return Promise.resolve();
+      navigating = true;
+      document.documentElement.setAttribute('data-nav-loading', 'true');
+      return fetch('/api/v1/pages/' + url.slice('/p/'.length), {
+        headers: { 'Accept': 'application/json' }
+      })
+        .then(function (response) {
+          if (!response.ok) throw new Error('Reader page request failed');
+          return response.json();
+        })
+        .then(function (payload) {
+          if (!payload || typeof payload.html !== 'string' || !payload.html) {
+            throw new Error('Reader page response has no HTML fragment');
+          }
+          var view = document.querySelector('.mk-view');
+          if (!view) throw new Error('Reader view is missing');
+          view.innerHTML = payload.html;
+          if (push) history.pushState({}, '', url);
+          document.title = 'Miku - ' + (payload.path || '');
+          setActive(payload.path || '');
+          window.scrollTo(0, 0);
+          if (window.Alpine && window.Alpine.initTree) window.Alpine.initTree(view);
+          if (window.Prism) window.Prism.highlightAllUnder(view);
+          injectCopyButtons(view);
+        })
+        .catch(function () {
+          window.location.href = url;
+        })
+        .finally(function () {
+          navigating = false;
+          document.documentElement.removeAttribute('data-nav-loading');
+        });
+    }
+
+    document.addEventListener('click', function (event) {
+      if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      var link = event.target.closest('[data-reader-nav]');
+      if (!link || link.target === '_blank') return;
+      var href = link.getAttribute('href');
+      if (!href || href.indexOf('/p/') !== 0 || href.indexOf('/edit') !== -1) return;
+      event.preventDefault();
+      load(href, true);
+    });
+
+    window.addEventListener('popstate', function () {
+      if (location.pathname.indexOf('/p/') === 0 && location.pathname.indexOf('/edit') === -1) {
+        load(location.pathname, false);
+      }
+    });
+  }());
+
   /* ---- Keyboard: Cmd/Ctrl-N → new page --------------------------------
      Cmd/Ctrl-K (palette), Cmd-/ and Cmd-E are owned by the Alpine shell in
      base.html; only Cmd-N lives here to avoid a double-bound handler.        */

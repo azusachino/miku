@@ -9,7 +9,7 @@
          @dragstart="$store.tree.startDrag('{{ node.path }}', $event)"
          @dragend="$store.tree.endDrag()"
          @contextmenu="$store.tree.openMenu($event, '{{ node.path }}')">
-      <a href="/p/{{ node.path }}" draggable="false" hx-boost="false" class="mk-tree-item tree-link {% if active == node.path %}is-active active{% endif %}"
+      <a href="/p/{{ node.path }}" draggable="false" data-reader-nav="true" hx-boost="false" class="mk-tree-item tree-link {% if active == node.path %}is-active active{% endif %}"
          {% if active == node.path %}aria-current="page"{% endif %}
          @click="$dispatch('miku-close-sidebar')">
         <span class="mk-dot" aria-hidden="true"></span>

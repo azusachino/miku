@@ -183,6 +183,7 @@ struct ReaderPagePayload {
     path: String,
     title: String,
     exists: bool,
+    html: String,
     content_html: String,
     toc: Vec<Heading>,
     backlinks: Vec<Backlink>,
@@ -192,6 +193,27 @@ struct ReaderPagePayload {
     updated: String,
     frontmatter: serde_json::Value,
     breadcrumbs: Vec<BreadcrumbItem>,
+}
+
+fn render_reader_fragment(
+    state: &AppState,
+    payload: &ReaderPagePayload,
+) -> Result<String, AppError> {
+    let template = state.templates.get_template("reader_fragment.html")?;
+    Ok(template.render(context! {
+        path => &payload.path,
+        title => &payload.title,
+        exists => payload.exists,
+        content_html => &payload.content_html,
+        toc => &payload.toc,
+        backlinks => &payload.backlinks,
+        unlinked_mentions => &payload.unlinked_mentions,
+        word_count => payload.word_count,
+        backlink_count => payload.backlink_count,
+        updated => &payload.updated,
+        frontmatter => &payload.frontmatter,
+        breadcrumbs => &payload.breadcrumbs,
+    })?)
 }
 
 fn search_snippet(body: &str, query: &str) -> String {
@@ -980,10 +1002,11 @@ async fn reader_page_payload(path: &str, state: &AppState) -> Result<ReaderPageP
     let file_path = safe_file_path(path)?;
     if !file_path.exists() {
         let title = format!("Create Page: {path}");
-        return Ok(ReaderPagePayload {
+        let mut payload = ReaderPagePayload {
             path: path.to_string(),
             title: title.clone(),
             exists: false,
+            html: String::new(),
             content_html: String::new(),
             toc: Vec::new(),
             backlinks: Vec::new(),
@@ -993,7 +1016,9 @@ async fn reader_page_payload(path: &str, state: &AppState) -> Result<ReaderPageP
             updated: "Missing".to_string(),
             frontmatter: serde_json::Value::Object(serde_json::Map::new()),
             breadcrumbs: breadcrumb_items(path, &title),
-        });
+        };
+        payload.html = render_reader_fragment(state, &payload)?;
+        return Ok(payload);
     }
 
     let raw_content = fs::read_to_string(&file_path)
@@ -1035,10 +1060,11 @@ async fn reader_page_payload(path: &str, state: &AppState) -> Result<ReaderPageP
     let frontmatter =
         frontmatter.unwrap_or_else(|| serde_json::Value::Object(serde_json::Map::new()));
 
-    Ok(ReaderPagePayload {
+    let mut payload = ReaderPagePayload {
         path: path.to_string(),
         title: title.clone(),
         exists: true,
+        html: String::new(),
         content_html,
         toc,
         backlink_count: backlinks.len(),
@@ -1048,7 +1074,9 @@ async fn reader_page_payload(path: &str, state: &AppState) -> Result<ReaderPageP
         updated,
         frontmatter,
         breadcrumbs: breadcrumb_items(path, &title),
-    })
+    };
+    payload.html = render_reader_fragment(state, &payload)?;
+    Ok(payload)
 }
 
 async fn reader_page_api(
