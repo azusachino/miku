@@ -5,7 +5,7 @@ Miku - {{ path }}
 {% endblock %}
 
 {% block content %}
-<main class="mk-read" x-data="{ editing: false }" @miku-toggle-edit.window="if ({{ 'true' if exists else 'false' }}) { editing = !editing; $nextTick(() => window.mikuInlineEditorFocus && window.mikuInlineEditorFocus()); }" :class="{ 'is-editing': editing }">
+<main class="mk-read" x-data="{ editing: false }" @miku-toggle-edit.window="if ({{ 'true' if exists else 'false' }}) { editing = !editing; $nextTick(() => window.mikuInlineEditorStart && window.mikuInlineEditorStart()); }" :class="{ 'is-editing': editing }">
     <article class="mk-article" data-page-path="{{ path }}">
         <nav class="mk-breadcrumb flex items-center gap-1.5 text-xs text-muted mb-5" aria-label="Breadcrumb">
             <a href="/p/Index" class="mk-breadcrumb-link">miku</a>
@@ -31,7 +31,7 @@ Miku - {{ path }}
             </h1>
             {% if exists %}
             <div class="mk-title-actions shrink-0">
-                <button type="button" class="mk-btn mk-btn-primary" @click="editing = !editing; $nextTick(() => window.mikuInlineEditorFocus && window.mikuInlineEditorFocus())" x-text="editing ? 'Reading' : 'Edit'">Edit</button>
+                <button type="button" class="mk-btn mk-btn-primary" @click="editing = !editing; $nextTick(() => window.mikuInlineEditorStart && window.mikuInlineEditorStart())" x-text="editing ? 'Reading' : 'Edit'">Edit</button>
                 <a href="/p/{{ path }}/edit" class="mk-btn mk-btn-ghost mk-js-fallback">Full Editor</a>
             </div>
             {% endif %}
@@ -190,10 +190,17 @@ Miku - {{ path }}
 <script>
     (function() {
         const editor = document.querySelector('[data-inline-editor]');
-        if (!editor || editor.dataset.ready === 'true') return;
-        editor.dataset.ready = 'true';
+        if (!editor) return;
+        let startPromise = null;
 
-        Promise.all([
+        window.mikuInlineEditorStart = function() {
+            if (editor.dataset.ready === 'true') {
+                if (window.mikuInlineEditorFocus) window.mikuInlineEditorFocus();
+                return Promise.resolve();
+            }
+            if (startPromise) return startPromise;
+            editor.dataset.ready = 'loading';
+            startPromise = Promise.all([
             import("https://esm.sh/@codemirror/state"),
             import("https://esm.sh/codemirror"),
             import("https://esm.sh/@codemirror/lang-markdown"),
@@ -354,7 +361,11 @@ Miku - {{ path }}
                 window.clearTimeout(timer);
                 timer = window.setTimeout(renderPreview, delay);
             }
+            editor.dataset.ready = 'true';
+            if (window.mikuInlineEditorFocus) window.mikuInlineEditorFocus();
         });
+            return startPromise;
+        };
     })();
 </script>
 {% endif %}

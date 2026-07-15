@@ -139,6 +139,22 @@ def check_navigation(page: Page) -> None:
     page.wait_for_url(f"**{PAGE_PATH}")
 
 
+def check_inline_editor_is_lazy(page: Page) -> None:
+    page.goto(f"{BASE_URL}{PAGE_PATH}", wait_until="domcontentloaded")
+    imports: list[str] = []
+
+    def record_editor_import(request) -> None:
+        if "esm.sh/" in request.url and request.resource_type == "script":
+            imports.append(request.url)
+
+    page.on("request", record_editor_import)
+    page.locator(".mk-title-actions button", has_text="Edit").click()
+    page.locator("[data-inline-editor] .cm-editor").wait_for(state="attached", timeout=10_000)
+    page.remove_listener("request", record_editor_import)
+    if not imports:
+        raise AssertionError("Edit did not load the CodeMirror editor modules")
+
+
 def check_editor(page: Page) -> None:
     page.goto(f"{BASE_URL}{PAGE_PATH}", wait_until="domcontentloaded")
     page.goto(f"{BASE_URL}/p/Index/edit", wait_until="domcontentloaded")
@@ -176,6 +192,7 @@ def main() -> int:
             check_tags(page)
             check_zen_mode(page)
             check_navigation(page)
+            check_inline_editor_is_lazy(page)
             check_editor(page)
             page.set_viewport_size({"width": 390, "height": 844})
             page.reload(wait_until="domcontentloaded")
