@@ -68,8 +68,11 @@ fn database_error(error: sqlx::Error) -> StoreError {
 }
 
 fn page_path(path: &str) -> String {
-    path.strip_suffix(".md")
-        .map_or_else(|| format!("{path}.md"), str::to_string)
+    if path.ends_with(".md") {
+        path.to_string()
+    } else {
+        format!("{path}.md")
+    }
 }
 
 fn sanitize_fts5_query(query: &str) -> String {
@@ -180,7 +183,8 @@ impl IndexReader for SqliteIndex {
                      WHERE title LIKE ? ESCAPE '\\' OR path LIKE ? ESCAPE '\\'
                      ORDER BY title, path LIMIT ?",
                 )
-                .bind(like)
+                .bind(&like)
+                .bind(&like)
                 .bind(request.limit as i64)
                 .fetch_all(self.pool())
                 .await
@@ -192,7 +196,8 @@ impl IndexReader for SqliteIndex {
                          WHERE title LIKE ? ESCAPE '\\' OR path LIKE ? ESCAPE '\\'
                          ORDER BY title, path LIMIT ?",
                     )
-                    .bind(like)
+                    .bind(&like)
+                    .bind(&like)
                     .bind(request.limit as i64)
                     .fetch_all(self.pool())
                     .await
@@ -456,7 +461,7 @@ async fn replace_page_conn(
 impl IndexWriter for SqliteIndex {
     async fn replace_page(&self, page: PageIndex) -> StoreResult<IndexEvent> {
         let mut tx = self.pool.begin().await.map_err(database_error)?;
-        let event = replace_page_conn(&mut *tx, page).await?;
+        let event = replace_page_conn(&mut tx, page).await?;
         tx.commit().await.map_err(database_error)?;
         Ok(event)
     }
@@ -465,7 +470,7 @@ impl IndexWriter for SqliteIndex {
         let mut tx = self.pool.begin().await.map_err(database_error)?;
         let mut events = Vec::with_capacity(pages.len());
         for page in pages {
-            events.push(replace_page_conn(&mut *tx, page).await?);
+            events.push(replace_page_conn(&mut tx, page).await?);
         }
         tx.commit().await.map_err(database_error)?;
         Ok(events)
@@ -720,7 +725,7 @@ mod tests {
         assert_eq!(summaries[1].title, "Second");
 
         // Get single page
-        let page_opt = store.page("First.md").await.expect("get page");
+        let page_opt = store.page("First").await.expect("get page");
         assert!(page_opt.is_some());
         let page = page_opt.unwrap();
         assert_eq!(page.title, "First");
@@ -774,7 +779,7 @@ mod tests {
         assert!(punctuation_hits.is_empty());
 
         // Backlinks
-        let links = store.backlinks("Second.md").await.expect("backlinks");
+        let links = store.backlinks("Second").await.expect("backlinks");
         assert_eq!(links.len(), 1);
         assert_eq!(links[0].path, "First");
 
@@ -797,7 +802,7 @@ mod tests {
             snippet: "mentioning Second here".to_string(),
         };
         store
-            .replace_mentions_for_source("First.md", vec![mention])
+            .replace_mentions_for_source("First", vec![mention])
             .await
             .expect("replace mentions");
 
@@ -812,20 +817,20 @@ mod tests {
         assert!(has_ready);
 
         let mentions = store
-            .mentions_for_target("Second.md")
+            .mentions_for_target("Second")
             .await
             .expect("mentions for target");
         assert_eq!(mentions.len(), 1);
         assert_eq!(mentions[0].source_path, "First.md");
 
         // Delete page
-        store.delete_page("Second.md").await.expect("delete page");
+        store.delete_page("Second").await.expect("delete page");
         let summaries = store.list_pages().await.expect("list pages post delete");
         assert_eq!(summaries.len(), 1);
 
         // Mentions should be cleaned up post delete
         let mentions = store
-            .mentions_for_target("Second.md")
+            .mentions_for_target("Second")
             .await
             .expect("mentions post delete");
         assert!(mentions.is_empty());

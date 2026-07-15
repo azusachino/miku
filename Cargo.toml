@@ -29,7 +29,6 @@ members = [
   "crates/miku-app",
   "crates/miku-index-postgres",
   "crates/miku-index-sqlite",
-  "crates/miku-index-turso",
   "crates/miku-cache-valkey",
 ]
 resolver = "2"
@@ -105,9 +104,9 @@ tracing-subscriber = { version = "0.3", default-features = false, features = [
 ] }
 
 [features]
-default = ["memory", "turso"]
+default = ["memory", "sqlite"]
 memory = ["miku-app/memory"]
-turso = ["miku-app/turso"]
+sqlite = ["miku-app/sqlite"]
 postgres = ["miku-app/postgres"]
 valkey = ["miku-app/valkey"]
 postgres-valkey = ["postgres", "valkey"]
