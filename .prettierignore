@@ -1,13 +1,6 @@
-node_modules/
-dist/
-build/
-coverage/
+.venv/
 target/
-.agents/
+.pgdata/
 .claude/
-.cursor/
-.aider/
-*.min.js
-*.min.css
-miku/
-**/__MACOSX/
+miku_docs/
+src/fixtures/indexer/nul_invalid.md

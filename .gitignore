@@ -25,10 +25,24 @@ __MACOSX
 
 # Agent session logs (ephemeral)
 .agents/sessions/
+.artifacts/
 
 # Runtime soft-delete trash in the content vault
-miku/.trash/
+miku_docs/.trash/
 
 # Local scale-test corpus (cloned, not source)
-miku/geektime-docs/
+miku_docs/geektime-docs/
 
+# Native dev Postgres cluster (disposable; `make db-up`)
+.pgdata/
+
+# Python automation caches
+__pycache__/
+*.py[cod]
+
+# Frontend dependency cache
+node_modules/
+
+# Local SQLite/Turso-compatible index projection
+miku_docs/.miku-index.sqlite*
+miku_docs/.miku-index.turso*

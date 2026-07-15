@@ -1,0 +1,15 @@
+[package]
+name = "miku-indexer"
+version = "0.0.2"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Filesystem-to-index projection builder for Miku"
+
+[dependencies]
+aho-corasick.workspace = true
+miku-domain = { path = "../miku-domain" }
+miku-markdown = { path = "../miku-markdown" }
+regex.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true

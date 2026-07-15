@@ -1,55 +1,65 @@
 {# Sidebar nav tree node. Folders lazy-load their children via htmx on first
-   expand (GET /api/nav/children?dir=...), so a page render only emits the root
+   expand (GET /api/v1/nav/children?dir=...), so a page render only emits the root
    level plus the active page's ancestor chain — not the whole vault. `active`
    is the current page path (empty for non-page views); folders on its ancestor
    chain are pre-expanded and have their children rendered inline. #}
 {% macro nav_node(node, prefix, active) %}
   {% if node.path %}
-    <div class="tree-row tree-page" draggable="true"
-         @dragstart="$event.dataTransfer.effectAllowed = 'move'; $event.dataTransfer.setData('text/plain', '{{ node.path }}')"
-         x-data="{ menu: false, rename: false }">
-      <a href="/p/{{ node.path }}" draggable="false" class="mk-tree-item tree-link {% if active == node.path %}is-active active{% endif %}">
+    <div class="tree-row tree-page" draggable="true" data-tree-path="{{ node.path }}"
+         @dragstart="$store.tree.startDrag('{{ node.path }}', $event)"
+         @dragend="$store.tree.endDrag()"
+         @contextmenu="$store.tree.openMenu($event, '{{ node.path }}')">
+      <a href="/p/{{ node.path }}" draggable="false" data-reader-nav="true" hx-boost="false" class="mk-tree-item tree-link {% if active == node.path %}is-active active{% endif %}"
+         {% if active == node.path %}aria-current="page"{% endif %}
+         @click="$dispatch('miku-close-sidebar')">
         <span class="mk-dot" aria-hidden="true"></span>
-        <span class="name" title="{{ node.name }}">{{ node.name }}</span>
+        <span class="mk-tree-label">
+          <span class="name" title="{{ node.name }}">{{ node.name }}</span>
+          {% if node.stem and node.stem != node.name %}
+          <span class="stem" title="{{ node.path }}">{{ node.stem }}.md</span>
+          {% endif %}
+        </span>
       </a>
-      <button type="button" class="mk-icon-btn tree-menu-btn" @click="menu = !menu" aria-label="Actions">...</button>
-      <div class="mk-card tree-menu" x-show="menu" @click.outside="menu = false" x-cloak>
-        <button type="button" class="mk-chip" @click="rename = true; menu = false">Move/Rename</button>
-        <form method="post" action="/api/trash"
-              onsubmit="return confirm('Move this page to trash?')">
-          <input type="hidden" name="path" value="{{ node.path }}">
-          <button type="submit" class="mk-chip tree-menu-danger">Delete</button>
-        </form>
-      </div>
-      <form class="tree-rename mk-card" method="post" action="/api/move" x-show="rename" x-cloak>
-        <input type="hidden" name="from" value="{{ node.path }}">
-        <input class="mk-create-title" type="text" name="to" value="{{ node.path }}" aria-label="New path">
-        <div class="mk-choice">
-            <button type="submit" class="mk-chip">Save</button>
-            <button type="button" class="mk-chip" @click="rename = false">Cancel</button>
-        </div>
-      </form>
+      <button type="button" class="mk-icon-btn tree-menu-btn"
+              @click.stop="$store.tree.openMenu($event, '{{ node.path }}')" aria-label="Actions">⋯</button>
     </div>
   {% else %}
     {% set folder_path = (prefix ~ '/' ~ node.name) if prefix else node.name %}
     {% set is_parent = (active is startingwith(folder_path ~ '/')) or (active == folder_path) %}
-    <div class="tree-folder" x-data="{ open: (localStorage.getItem('folder:' + '{{ folder_path }}') === 'true') || {{ 'true' if is_parent else 'false' }}, dragOver: false, loaded: {{ 'true' if node.children else 'false' }} }">
-      <div class="mk-tree-folder tree-row tree-folder-row cursor-pointer select-none" :class="{ 'drag-over': dragOver }"
-           @dragover.prevent="dragOver = true"
-           @dragleave="dragOver = false"
-           @drop.prevent.stop="
-             dragOver = false;
-             const from = $event.dataTransfer.getData('text/plain');
-             if(!from) return;
-             const base = from.split('/').pop();
-             const to = '{{ folder_path }}' + '/' + base;
-             if (from === to) return;
-             const fd = new FormData(); fd.append('from', from); fd.append('to', to);
-             fetch('/api/move', {method:'POST', body:new URLSearchParams(fd)})
-               .then(r => { if(r.redirected) window.location.href = r.url; else window.location.reload(); });
-           "
-           @click="open = !open; localStorage.setItem('folder:' + '{{ folder_path }}', open);
-             if (open && !loaded) { loaded = true; htmx.ajax('GET', '/api/nav/children?dir=' + encodeURIComponent('{{ folder_path }}'), { target: $refs.children, swap: 'innerHTML' }); }">
+    <div class="tree-folder"
+         data-folder-path="{{ folder_path }}"
+         x-data="{
+           path: '',
+           open: {{ 'true' if is_parent else 'false' }},
+           activeBranch: {{ 'true' if is_parent else 'false' }},
+           loaded: {{ 'true' if node.children else 'false' }},
+           init() {
+             this.path = this.$el.dataset.folderPath || '';
+             const remembered = window.mikuStorage && window.mikuStorage.get('folders', []).includes(this.path);
+             this.open = this.activeBranch || (remembered && this.loaded);
+             if (this.activeBranch) this.loadChildren();
+           },
+           loadChildren() {
+             if (!this.open || this.loaded) return;
+             this.loaded = true;
+             const load = () => {
+               if (window.htmx) {
+                 htmx.ajax('GET', '/api/v1/nav/children?dir=' + encodeURIComponent(this.path), { target: this.$refs.children, swap: 'innerHTML' });
+               } else {
+                 window.setTimeout(load, 40);
+               }
+             };
+             load();
+           }
+           }"
+         x-init="init()"
+         :aria-expanded="open">
+      <div class="mk-tree-folder tree-row tree-folder-row cursor-pointer select-none"
+           :class="{ 'drag-over': $store.tree.dropTarget === path }"
+           @dragover.prevent="$store.tree.dropTarget = path"
+           @dragleave="if ($store.tree.dropTarget === path) $store.tree.dropTarget = null"
+           @drop.prevent.stop="$store.tree.dropInto(path, $event)"
+           @click="open = !open; window.mikuStorage && window.mikuStorage.toggleFolder(path, open); loadChildren()">
         <span class="tree-chevron mr-1 text-[9px] text-muted/70 transition-transform duration-100 inline-block w-2.5" x-text="open ? '▼' : '▶'"></span>
         <span class="tree-folder-name" title="{{ node.name }}">{{ node.name }}</span>
       </div>

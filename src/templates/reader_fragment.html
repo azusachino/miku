@@ -1,0 +1,128 @@
+<main class="mk-read" data-reader-fragment>
+    <article class="mk-article" data-page-path="{{ path }}" data-page-updated="{{ updated }}">
+        <nav class="mk-breadcrumb flex items-center gap-1.5 text-xs text-muted mb-5" aria-label="Breadcrumb">
+                {% for crumb in breadcrumbs %}
+                    {% if not loop.first %}<span class="opacity-45">›</span>{% endif %}
+                {% if crumb.current %}
+                    <a href="/p/{{ crumb.path }}" class="mk-breadcrumb-link here" aria-current="page">{{ crumb.label }}</a>
+                {% else %}
+                    <a href="/folders/{{ crumb.path }}" class="mk-breadcrumb-link">{{ crumb.label }}</a>
+                {% endif %}
+            {% endfor %}
+        </nav>
+
+        <div class="mk-title-row flex items-start justify-between gap-5 mb-2">
+            <h1 class="flex items-center gap-3 min-w-0">
+                <span class="mk-h1">{{ title }}</span>
+            </h1>
+            {% if exists %}
+            <div class="mk-title-actions shrink-0">
+                <a href="/p/{{ path }}/edit" class="mk-btn mk-btn-primary">Edit</a>
+            </div>
+            {% endif %}
+        </div>
+
+        {% if exists %}
+        <ul class="list-disc pl-5 space-y-1 text-xs text-muted/70 mb-6 border-b border-border/10 pb-4">
+            <li><span>{{ word_count }}</span> words</li>
+            <li>Updated {{ updated }}</li>
+            {% if frontmatter.tags is defined and frontmatter.tags %}
+                {% if frontmatter.tags is string %}
+                    <li>Tags: <a href="/tags/{{ frontmatter.tags }}" class="mk-inline-tag">#{{ frontmatter.tags }}</a></li>
+                {% elif frontmatter.tags is sequence %}
+                    <li>
+                        Tags:
+                        <span class="flex flex-wrap gap-1.5 inline-flex ml-1">
+                            {% for tag in frontmatter.tags %}
+                                <a href="/tags/{{ tag }}" class="mk-inline-tag">#{{ tag }}</a>
+                            {% endfor %}
+                        </span>
+                    </li>
+                {% endif %}
+            {% endif %}
+            {% if frontmatter %}
+                {% for key, val in frontmatter | items %}
+                    {% if key != 'title' and key != 'description' and key != 'tags' %}
+                        <li><span class="opacity-60 font-semibold">{{ key }}:</span> <span class="text-text-base font-semibold">{{ val }}</span></li>
+                    {% endif %}
+                {% endfor %}
+            {% endif %}
+        </ul>
+        {% endif %}
+
+        {% if exists and frontmatter.description is defined and frontmatter.description %}
+        <p class="mk-lede">{{ frontmatter.description }}</p>
+        {% endif %}
+
+        {% if exists %}
+        <section class="mk-reading-surface">
+            <div class="mk-prose" data-live-preview>{{ content_html | safe }}</div>
+        </section>
+
+        {% if backlinks %}
+        <aside class="backlinks mk-card" data-reading-section="backlinks">
+            <div class="mk-card-label">LINKED FROM</div>
+            <ul class="backlinks-list">
+                {% for bl in backlinks %}
+                <li><a href="/p/{{ bl.path }}">{{ bl.title }}</a></li>
+                {% endfor %}
+            </ul>
+        </aside>
+        {% endif %}
+        {% if unlinked_mentions %}
+        <aside class="backlinks mk-card" data-reading-section="backlinks">
+            <div class="mk-card-label">UNLINKED MENTIONS</div>
+            <ul class="backlinks-list">
+                {% for mention in unlinked_mentions %}
+                <li class="mk-mention">
+                    <a href="/p/{{ mention.path }}">{{ mention.title }}</a>
+                    <p>{{ mention.snippet }}</p>
+                    <form method="post" action="/api/v1/promote-mention">
+                        <input type="hidden" name="source_path" value="{{ mention.path }}">
+                        <input type="hidden" name="target_path" value="{{ path }}">
+                        <input type="hidden" name="mention" value="{{ title }}">
+                        <input type="hidden" name="return_to" value="{{ path }}">
+                        <button type="submit" class="mk-chip">Promote to link</button>
+                    </form>
+                </li>
+                {% endfor %}
+            </ul>
+        </aside>
+        {% endif %}
+        {% else %}
+        <section class="mk-card">
+            <div class="mk-card-label">MISSING PAGE</div>
+            <p class="mk-lede">This page doesn't exist yet.</p>
+            <a href="/p/{{ path }}/edit" class="mk-btn mk-btn-primary">Create Page</a>
+        </section>
+        {% endif %}
+    </article>
+
+    <button type="button" class="mk-pane-resizer mk-rail-resizer" aria-label="Resize page rail"></button>
+
+    <aside class="mk-rail">
+        <section class="mk-card">
+            <div class="mk-card-label">PAGE INFO</div>
+            <div>
+                <div class="mk-kv"><span class="k">Format</span><span class="v">Markdown</span></div>
+                <div class="mk-kv"><span class="k">Path</span><span class="v path" title="{{ path }}.md">{{ path }}</span></div>
+                <div class="mk-kv"><span class="k">Words</span><span class="v">{{ word_count }}</span></div>
+                <div class="mk-kv"><span class="k">Backlinks</span><span class="v teal">{{ backlink_count }}</span></div>
+                <div class="mk-kv"><span class="k">Updated</span><span class="v">{{ updated }}</span></div>
+            </div>
+        </section>
+
+        {% if exists and toc %}
+        <section class="mk-card">
+            <div class="mk-card-label">ON THIS PAGE</div>
+            <div>
+                <nav class="mk-toc" aria-label="On this page">
+                    {% for heading in toc %}
+                    <a href="#{{ heading.id }}" class="level-{{ heading.level }}">{{ heading.text }}</a>
+                    {% endfor %}
+                </nav>
+            </div>
+        </section>
+        {% endif %}
+    </aside>
+</main>

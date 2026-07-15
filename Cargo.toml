@@ -1,6 +1,6 @@
 [package]
 name = "miku"
-version = "0.0.1"
+version = "0.0.2"
 authors = ["azusachino <azusachino@duck.com>"]
 edition = "2021"
 description = "A filesystem-owned personal Markdown wiki with browser editing and background indexing for backlinks, tags, and full-text search."
@@ -9,24 +9,68 @@ license = "GPL-3.0-or-later"
 repository = "https://github.com/azusachino/miku"
 keywords = ["markdown", "wiki", "notes", "backlinks", "fulltext"]
 categories = ["text-processing", "web-programming"]
+
 # Publish only the runnable crate; keep repo-internal docs/config/CI out of the
 # permanent public package.
 include = [
   "src/**/*",
   "static/**/*",
-  "migrations/**/*",
   "/Cargo.toml",
   "/README.md",
   "/LICENSE",
 ]
 
+[workspace]
+members = [
+  "crates/miku-domain",
+  "crates/miku-markdown",
+  "crates/miku-indexer",
+  "crates/miku-index-memory",
+  "crates/miku-app",
+  "crates/miku-index-postgres",
+  "crates/miku-index-turso",
+  "crates/miku-cache-valkey",
+]
+resolver = "2"
+
+[workspace.package]
+edition = "2021"
+license = "GPL-3.0-or-later"
+repository = "https://github.com/azusachino/miku"
+
+[workspace.dependencies]
+async-trait = "0.1"
+aho-corasick = "1"
+comrak = { version = "0.52", default-features = false }
+lazy_static = "1"
+regex = "1"
+grep = "0.4"
+ignore = "0.4"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_yaml = "0.9"
+tokio = { version = "1", default-features = false, features = ["macros", "rt", "sync"] }
+thiserror = "2"
+
 [dependencies]
 anyhow = "1"
+miku-domain = { path = "crates/miku-domain" }
+miku-app = { path = "crates/miku-app", default-features = false }
+miku-markdown = { path = "crates/miku-markdown" }
+miku-indexer = { path = "crates/miku-indexer" }
 thiserror = "2"
 
 # async runtime
-tokio = { version = "1", features = ["full"] }
+tokio = { version = "1", default-features = false, features = [
+  "macros",
+  "rt-multi-thread",
+  "sync",
+  "time",
+  "net",
+] }
 tokio-stream = { version = "0.1", features = ["sync"] }
+grep.workspace = true
+ignore.workspace = true
 
 # web
 axum = "0.8"
@@ -34,37 +78,34 @@ tower = "0.5"
 tower-http = { version = "0.6", features = ["fs", "trace"] }
 minijinja = { version = "2", features = ["loader"] }
 
-# postgres index cache (disposable; source of truth is miku/**/*.md)
-sqlx = { version = "0.8", features = [
-  "postgres",
-  "runtime-tokio-rustls",
-  "chrono",
-  "macros",
-  "migrate",
-] }
-
-# markdown rendering (comrak: native wikilinks + GitHub alerts + GFM)
-comrak = "0.52"
-
 # filesystem watcher (background indexer)
 notify = "7"
-
-# regex + lazy_static
-regex = "1"
-lazy_static = "1"
 
 # serialization + time
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-serde_yaml = "0.9"
-chrono = { version = "0.4", features = ["serde"] }
+chrono = { version = "0.4", default-features = false, features = ["serde", "clock"] }
 
 # hashing
 sha2 = "0.10"
 
 # logging
 tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing-subscriber = { version = "0.3", default-features = false, features = [
+  "env-filter",
+  "fmt",
+] }
+
+[features]
+default = ["memory", "turso"]
+memory = ["miku-app/memory"]
+turso = ["miku-app/turso"]
+postgres = ["miku-app/postgres"]
+valkey = ["miku-app/valkey"]
+postgres-valkey = ["postgres", "valkey"]
+
+[dev-dependencies]
+tempfile = "3"
 
 [lints.clippy]
 pedantic = { level = "warn", priority = -1 }

@@ -18,20 +18,14 @@ tags: [search, postgres, index]
 
 ## Decision
 
-Use Postgres' built-in **`english`** FTS config:
-`to_tsvector('english', title ‖ body)` with **title weighted A, body B**, ranked
-by `ts_rank`, snippets via `ts_headline('english', …)`.
+Use Postgres' built-in **`english`** FTS config: `to_tsvector('english', title ‖ body)` with **title weighted A, body B**, ranked by `ts_rank`, snippets via `ts_headline('english', …)`.
 
 ## Why
 
-No extension, no Rust tokenizer, no spike. Postgres stays **vanilla**, so the
-index is disposable/portable and identical across compose and k8s. Content and
-titles are English in practice; the app name (ミク) is branding, not a
-content-language requirement. This was the only ADR that needed a spike — it is
-eliminated.
+No extension, no Rust tokenizer, no spike. Postgres stays **vanilla**, so the index is disposable/portable and identical across compose and k8s. Content and titles are English in practice; the app
+name (ミク) is branding, not a content-language requirement. This was the only ADR that needed a spike — it is eliminated.
 
 ## Trade-offs / Rejected
 
-Deferred, not rejected: if meaningful CJK content ever shows up, revisit with
-app-side `lindera` tokenization or `pgroonga`. Switching is just a reindex —
-cheap, because the index is fully rebuildable from files.
+Deferred, not rejected: if meaningful CJK content ever shows up, revisit with app-side `lindera` tokenization or `pgroonga`. Switching is just a reindex — cheap, because the index is fully rebuildable
+from files.

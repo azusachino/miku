@@ -1,0 +1,15 @@
+[package]
+name = "miku-index-postgres"
+version = "0.0.2"
+publish = false
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Postgres IndexStore implementation for Miku"
+
+[dependencies]
+async-trait.workspace = true
+miku-domain = { path = "../miku-domain" }
+miku-indexer = { path = "../miku-indexer" }
+serde_json.workspace = true
+sqlx = { version = "0.8.6", features = ["postgres", "runtime-tokio-rustls"] }

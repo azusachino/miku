@@ -1,0 +1,13 @@
+[package]
+name = "miku-domain"
+version = "0.0.2"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Backend-neutral domain contract for the Miku Markdown wiki"
+
+[dependencies]
+async-trait.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true

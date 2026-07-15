@@ -1,16 +1,16 @@
 {% extends "base.html" %}
 
 {% block title %}
-Miku - Tags
+Miku Note - Tags
 {% endblock %}
 
 {% block content %}
-<main class="max-w-[760px] mx-auto px-6 py-10 md:py-16">
+<main class="mk-tag-index max-w-[760px] mx-auto px-6 py-10 md:py-16">
     <h1 class="font-display font-bold text-3xl tracking-tight mb-2">Tags</h1>
-    <p class="text-sm text-muted/80 mb-8 font-medium">Explore all <strong class="text-teal font-extrabold">{{ tags | length }}</strong> unique tags across your wiki.</p>
+    <p class="text-sm text-muted/80 mb-8 font-medium">Explore <strong class="text-teal font-extrabold">{{ total_tags }}</strong> unique tags across your wiki.</p>
 
     {% if tags %}
-    <div class="flex flex-wrap gap-3.5">
+    <div class="flex flex-wrap gap-3.5" data-tag-cloud>
         {% for t in tags %}
         {% set scale = 'text-sm px-3.5 py-2' %}
         {% if t.count >= 10 %}
@@ -26,6 +26,11 @@ Miku - Tags
         </a>
         {% endfor %}
     </div>
+    {% if has_more %}
+    <div class="mk-infinite-sentinel mt-8" data-tag-sentinel data-offset="{{ next_offset }}" data-limit="{{ tag_page_size }}" role="status" aria-live="polite">
+        Loading more tags…
+    </div>
+    {% endif %}
     {% else %}
         <div class="p-10 text-center border border-dashed border-border/20 rounded-2xl bg-panel/5">
             <span class="text-muted/40 text-3xl block mb-2">🏷️</span>

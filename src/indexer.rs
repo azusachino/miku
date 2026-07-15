@@ -1,284 +1,23 @@
-use crate::markdown::{
-    comrak_options, extract_title, is_asset_path, normalize_target, parse_frontmatter, EMBED_REGEX,
-};
 use anyhow::Result;
-use comrak::nodes::NodeValue;
+use miku_domain::{DocumentSignals, IndexReader, IndexWriter, PageIndex, PageSummary};
+use miku_indexer::{build_page_index, MentionMatcher};
 use notify::Watcher;
-use regex::Regex;
-use sqlx::PgPool;
 use std::collections::{HashMap, HashSet};
 use std::env;
 use std::fs;
-use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc,
 };
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tokio::sync::{broadcast, mpsc};
-use tokio::time::sleep;
-use tracing::{error, info, warn};
+use tokio::task::{JoinHandle, JoinSet};
+use tracing::{error, info};
 
-pub const BULK_SSE_EVENT: &str = "__miku_bulk_index_refresh__";
-const DEFAULT_BULK_SSE_THRESHOLD: usize = 256;
-
-// Skip dot-dirs/files (.trash soft-delete archive, .git, etc.) anywhere in the
-// relative path so trashed pages and VCS metadata never enter the index.
-fn is_hidden_rel(rel_path: &Path) -> bool {
-    rel_path
-        .components()
-        .any(|c| c.as_os_str().to_string_lossy().starts_with('.'))
-}
-
-fn extract_tags_from_frontmatter(fm: &serde_json::Value) -> HashSet<String> {
-    let mut tags = HashSet::new();
-    if let Some(tags_val) = fm.get("tags") {
-        if let Some(arr) = tags_val.as_array() {
-            for v in arr {
-                if let Some(s) = v.as_str() {
-                    tags.insert(s.trim().to_string());
-                }
-            }
-        } else if let Some(s) = tags_val.as_str() {
-            for t in s.split(',') {
-                let trimmed = t.trim();
-                if !trimmed.is_empty() {
-                    tags.insert(trimmed.to_string());
-                }
-            }
-        }
-    }
-    tags
-}
-
-fn extract_aliases(fm: &serde_json::Value) -> HashSet<String> {
-    let mut aliases = HashSet::new();
-    if let Some(val) = fm.get("aliases") {
-        if let Some(arr) = val.as_array() {
-            for v in arr {
-                if let Some(s) = v.as_str() {
-                    aliases.insert(s.trim().to_string());
-                }
-            }
-        } else if let Some(s) = val.as_str() {
-            for a in s.split(',') {
-                let trimmed = a.trim();
-                if !trimmed.is_empty() {
-                    aliases.insert(trimmed.to_string());
-                }
-            }
-        }
-    }
-    aliases
-}
-
-struct ExtractedLink {
-    kind: String,
-    is_embed: bool,
-    target: String,
-    target_norm: String,
-    alias: Option<String>,
-}
-
-struct PageMetadata {
-    title: String,
-    has_mermaid: bool,
-    tags: HashSet<String>,
-    links: Vec<ExtractedLink>,
-    aliases: HashSet<String>,
-}
-
-struct PageIndexData {
-    frontmatter_json: serde_json::Value,
-    metadata: PageMetadata,
-    body: String,
-}
-
-fn push_without_nuls(out: &mut String, value: &str) {
-    out.extend(value.chars().filter(|c| *c != '\0'));
-}
-
-fn sanitize_text_for_postgres(value: &str) -> String {
-    let mut sanitized = String::with_capacity(value.len());
-    push_without_nuls(&mut sanitized, value);
-    sanitized
-}
-
-fn sanitize_json_strings(value: &mut serde_json::Value) {
-    match value {
-        serde_json::Value::String(s) => {
-            *s = sanitize_text_for_postgres(s);
-        }
-        serde_json::Value::Array(values) => {
-            for value in values {
-                sanitize_json_strings(value);
-            }
-        }
-        serde_json::Value::Object(values) => {
-            for value in values.values_mut() {
-                sanitize_json_strings(value);
-            }
-        }
-        serde_json::Value::Null | serde_json::Value::Bool(_) | serde_json::Value::Number(_) => {}
-    }
-}
-
-fn decode_indexable_markdown(bytes: &[u8]) -> String {
-    let mut content = String::with_capacity(bytes.len());
-    let mut remaining = bytes;
-
-    while !remaining.is_empty() {
-        match std::str::from_utf8(remaining) {
-            Ok(valid) => {
-                push_without_nuls(&mut content, valid);
-                break;
-            }
-            Err(err) => {
-                let valid_up_to = err.valid_up_to();
-                let valid = std::str::from_utf8(&remaining[..valid_up_to])
-                    .expect("valid_up_to must split at a UTF-8 boundary");
-                push_without_nuls(&mut content, valid);
-
-                let invalid_len = err.error_len().unwrap_or(1);
-                remaining = &remaining[valid_up_to + invalid_len..];
-            }
-        }
-    }
-
-    content
-}
-
-fn extract_metadata(
-    path: &str,
-    frontmatter: Option<&serde_json::Value>,
-    body: &str,
-) -> PageMetadata {
-    let arena = comrak::Arena::new();
-    let options = comrak_options();
-    let root = comrak::parse_document(&arena, body, &options);
-
-    let mut tags = frontmatter
-        .map(extract_tags_from_frontmatter)
-        .unwrap_or_default();
-    let aliases = frontmatter.map(extract_aliases).unwrap_or_default();
-    let mut links = Vec::new();
-
-    let has_mermaid = body.contains("```mermaid");
-
-    lazy_static::lazy_static! {
-        static ref TAG_REGEX: Regex = Regex::new(r"(?:\s|^|['`\(])#([\p{L}\p{N}][\p{L}\p{N}_\-/]*)").unwrap();
-    }
-
-    // Skip `#tags` inside code (literal) and links (URL fragments), but allow
-    // them inside headings (Obsidian-style) — kept in sync with the renderer's
-    // tag_skipped so the indexed tag set matches the rendered tag links.
-    let is_skipped = |node: &comrak::nodes::AstNode| -> bool {
-        let mut current = node.parent();
-        while let Some(parent) = current {
-            let val = &parent.data.borrow().value;
-            match val {
-                NodeValue::CodeBlock(_) | NodeValue::Link(_) => return true,
-                _ => {}
-            }
-            current = parent.parent();
-        }
-        false
-    };
-
-    for node in root.descendants() {
-        if is_skipped(node) {
-            continue;
-        }
-
-        match &node.data.borrow().value {
-            // Comrak tokenizes `[[Target]]` page links (but never `![[...]]`
-            // embeds — those stay as text and are handled below).
-            NodeValue::WikiLink(w) => {
-                let target = w.url.clone();
-                let target_norm = normalize_target(&target, false);
-
-                let mut alias_text = String::new();
-                for child in node.children() {
-                    for desc in child.descendants() {
-                        if let NodeValue::Text(t) = &desc.data.borrow().value {
-                            alias_text.push_str(t);
-                        }
-                    }
-                }
-
-                let alias = if alias_text.is_empty() || alias_text == target {
-                    None
-                } else {
-                    Some(alias_text)
-                };
-
-                links.push(ExtractedLink {
-                    kind: "page".to_string(),
-                    is_embed: false,
-                    target,
-                    target_norm,
-                    alias,
-                });
-            }
-            // Text nodes carry both inline `#tags` and `![[embed]]` runs, which
-            // comrak does not parse into dedicated nodes.
-            NodeValue::Text(t) => {
-                for cap in TAG_REGEX.captures_iter(t) {
-                    if let Some(m) = cap.get(1) {
-                        tags.insert(m.as_str().to_string());
-                    }
-                }
-
-                for cap in EMBED_REGEX.captures_iter(t) {
-                    if let Some(target_match) = cap.get(1) {
-                        let target = target_match.as_str().trim().to_string();
-                        let alias = cap.get(2).map(|m| m.as_str().trim().to_string());
-
-                        let is_asset = is_asset_path(&target);
-                        let kind = if is_asset { "asset" } else { "page" }.to_string();
-                        let target_norm = normalize_target(&target, is_asset);
-
-                        links.push(ExtractedLink {
-                            kind,
-                            is_embed: true,
-                            target,
-                            target_norm,
-                            alias,
-                        });
-                    }
-                }
-            }
-            _ => {}
-        }
-    }
-
-    let title = extract_title(path, frontmatter, body);
-
-    PageMetadata {
-        title,
-        has_mermaid,
-        tags,
-        links,
-        aliases,
-    }
-}
-
-fn prepare_page_index_data(path: &str, raw_content: &str) -> PageIndexData {
-    let (frontmatter, body) = parse_frontmatter(raw_content);
-    let mut frontmatter_json =
-        frontmatter.unwrap_or(serde_json::Value::Object(serde_json::Map::new()));
-    sanitize_json_strings(&mut frontmatter_json);
-
-    let mut metadata = extract_metadata(path, Some(&frontmatter_json), body);
-    metadata.title = sanitize_text_for_postgres(&metadata.title);
-
-    PageIndexData {
-        frontmatter_json,
-        metadata,
-        body: body.to_string(),
-    }
-}
+const RECONCILE_SENTINEL: &str = "__reconcile__";
+const BULK_INDEX_REFRESH: &str = "__miku_bulk_index_refresh__";
+const DEFAULT_RECONCILE_BATCH_SIZE: usize = 512;
 
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
 pub enum WatcherEvent {
@@ -286,160 +25,530 @@ pub enum WatcherEvent {
     Deleted(PathBuf),
 }
 
+#[derive(Debug, Clone)]
+struct PendingSource {
+    relative: PathBuf,
+    mtime: i64,
+}
+
 pub struct IndexerQueue {
     sender: mpsc::Sender<WatcherEvent>,
     reconcile_queued: Arc<AtomicBool>,
+    ready: Arc<AtomicBool>,
     _watcher: notify::RecommendedWatcher,
+    tasks: Vec<JoinHandle<()>>,
+}
+
+async fn index_store_file(
+    reader: &Arc<dyn IndexReader>,
+    writer: &Arc<dyn IndexWriter>,
+    content_root: &Path,
+    events: &broadcast::Sender<String>,
+    relative: &Path,
+) -> miku_domain::StoreResult<()> {
+    let path = relative.to_string_lossy().to_string();
+    let file = content_root.join(relative);
+    if !file.exists() {
+        writer.delete_page(&path).await?;
+        let _ = writer.delete_mentions_for_source(&path).await;
+        let _ = writer.delete_mentions_for_target(&path).await;
+        let _ = events.send(path.strip_suffix(".md").unwrap_or(&path).to_string());
+        return Ok(());
+    }
+
+    let bytes =
+        fs::read(&file).map_err(|error| miku_domain::StoreError::Operation(error.to_string()))?;
+    let mtime = fs::metadata(&file)
+        .ok()
+        .and_then(|metadata| metadata.modified().ok())
+        .and_then(|time| time.duration_since(std::time::UNIX_EPOCH).ok())
+        .map_or(0, |duration| duration.as_secs() as i64);
+    let page = build_page_index(&path, &bytes, mtime);
+    writer.replace_page(page.clone()).await?;
+    refresh_mentions_for_source(reader, writer, page).await?;
+    let _ = events.send(path.strip_suffix(".md").unwrap_or(&path).to_string());
+    Ok(())
+}
+
+async fn reconcile_store(
+    reader: &Arc<dyn IndexReader>,
+    writer: &Arc<dyn IndexWriter>,
+    content_root: &Path,
+    events: &broadcast::Sender<String>,
+    ready: &AtomicBool,
+) -> miku_domain::StoreResult<()> {
+    let reconcile_started = Instant::now();
+    let walk_started = Instant::now();
+    let mut files = Vec::new();
+    walk_store_tree(content_root, &mut files)
+        .map_err(|error| miku_domain::StoreError::Operation(error.to_string()))?;
+    let walk_duration = walk_started.elapsed();
+    let existing_started = Instant::now();
+    let existing = reader
+        .list_pages()
+        .await?
+        .into_iter()
+        .map(|page| (page.path.clone(), page))
+        .collect::<HashMap<String, PageSummary>>();
+    let existing_duration = existing_started.elapsed();
+    let scanned_files = files.len();
+    let mut seen = HashSet::with_capacity(files.len());
+    let batch_size = IndexerQueue::reconcile_batch_size();
+    let parse_concurrency = IndexerQueue::parse_concurrency();
+    let mut changed_files = Vec::new();
+    let mut indexed_pages = 0usize;
+    let mut unchanged_pages = 0usize;
+    let mut batches = 0usize;
+    let mut parse_duration = Duration::ZERO;
+    let mut write_duration = Duration::ZERO;
+    let mut metadata_duration = Duration::ZERO;
+    let mut changed_pages = Vec::new();
+    for file in files {
+        let relative = file
+            .strip_prefix(content_root)
+            .map_err(|error| miku_domain::StoreError::Operation(error.to_string()))?;
+        let metadata_started = Instant::now();
+        let metadata = fs::metadata(&file)
+            .map_err(|error| miku_domain::StoreError::Operation(error.to_string()))?;
+        let mtime = metadata
+            .modified()
+            .ok()
+            .and_then(|time| time.duration_since(std::time::UNIX_EPOCH).ok())
+            .map_or(0, |duration| duration.as_secs() as i64);
+        metadata_duration += metadata_started.elapsed();
+        let path = relative.to_string_lossy().into_owned();
+        seen.insert(path.clone());
+        if existing
+            .get(&path)
+            .is_some_and(|indexed| indexed.mtime == mtime)
+        {
+            unchanged_pages += 1;
+            continue;
+        }
+        changed_files.push(PendingSource {
+            relative: relative.to_path_buf(),
+            mtime,
+        });
+    }
+    for source_batch in changed_files.chunks(batch_size) {
+        let parse_started = Instant::now();
+        let pages = build_page_batch(content_root, source_batch, parse_concurrency).await?;
+        parse_duration += parse_started.elapsed();
+        indexed_pages += pages.len();
+        changed_pages.extend(pages.iter().cloned());
+        batches += 1;
+        write_duration += flush_reconcile_batch(writer, events, pages, batches).await?;
+    }
+    let mut deleted = false;
+    let mut deleted_pages = 0usize;
+    for path in existing.keys().filter(|path| !seen.contains(*path)) {
+        writer.delete_page(path).await?;
+        let _ = writer.delete_mentions_for_source(path).await;
+        let _ = writer.delete_mentions_for_target(path).await;
+        deleted = true;
+        deleted_pages += 1;
+    }
+    let mention_started = Instant::now();
+    let mentions_updated =
+        refresh_mentions_for_sources(reader, writer, &existing, changed_pages).await?;
+    let mention_ms = mention_started.elapsed().as_secs_f64() * 1000.0;
+    writer
+        .mark_mentions_ready()
+        .await
+        .or_else(ignore_unsupported)?;
+    if deleted {
+        let _ = events.send(BULK_INDEX_REFRESH.to_string());
+    }
+    let search_rebuilt = indexed_pages > 0 || deleted_pages > 0;
+    if search_rebuilt {
+        writer.rebuild_search_index().await?;
+    }
+    // Page projections and full-text search are the serving contract. Derived
+    // mentions may continue in the background and must not block page traffic.
+    ready.store(true, Ordering::Release);
+    info!(
+        scanned_files,
+        indexed_pages,
+        unchanged_pages,
+        deleted_pages,
+        batches,
+        search_rebuilt,
+        parse_concurrency,
+        walk_ms = walk_duration.as_secs_f64() * 1000.0,
+        existing_ms = existing_duration.as_secs_f64() * 1000.0,
+        metadata_ms = metadata_duration.as_secs_f64() * 1000.0,
+        parse_ms = parse_duration.as_secs_f64() * 1000.0,
+        write_ms = write_duration.as_secs_f64() * 1000.0,
+        mentions_updated,
+        mention_ms,
+        total_ms = reconcile_started.elapsed().as_secs_f64() * 1000.0,
+        "index reconcile finished"
+    );
+    Ok(())
+}
+
+async fn refresh_mentions_for_sources(
+    reader: &Arc<dyn IndexReader>,
+    writer: &Arc<dyn IndexWriter>,
+    existing: &HashMap<String, PageSummary>,
+    changed_pages: Vec<PageIndex>,
+) -> miku_domain::StoreResult<usize> {
+    if changed_pages.is_empty() {
+        return Ok(0);
+    }
+    let mut candidates = existing
+        .values()
+        .cloned()
+        .map(summary_projection)
+        .collect::<Vec<_>>();
+    for page in &changed_pages {
+        candidates.retain(|candidate| candidate.summary.path != page.summary.path);
+        candidates.push(page.clone());
+    }
+    let matcher = MentionMatcher::new(&candidates);
+    let target_paths = changed_pages
+        .iter()
+        .map(|page| page.summary.path.clone())
+        .collect::<Vec<_>>();
+    writer
+        .delete_mentions_for_targets(target_paths)
+        .await
+        .or_else(ignore_unsupported)?;
+    let entries = changed_pages
+        .into_iter()
+        .map(|page| {
+            let source_path = page.summary.path.clone();
+            let mentions = matcher.extract(&page);
+            (source_path, mentions)
+        })
+        .collect::<Vec<_>>();
+    let updated = entries.len();
+    writer
+        .replace_mentions_for_sources(entries)
+        .await
+        .or_else(ignore_unsupported)?;
+    let _ = reader;
+    Ok(updated)
+}
+
+async fn refresh_mentions_for_source(
+    reader: &Arc<dyn IndexReader>,
+    writer: &Arc<dyn IndexWriter>,
+    page: PageIndex,
+) -> miku_domain::StoreResult<()> {
+    let candidates = reader
+        .list_pages()
+        .await?
+        .into_iter()
+        .map(summary_projection)
+        .chain(std::iter::once(page.clone()))
+        .collect::<Vec<_>>();
+    let matcher = MentionMatcher::new(&candidates);
+    refresh_mentions_for_source_with_matcher(writer, &matcher, page).await
+}
+
+async fn refresh_mentions_for_source_with_matcher(
+    writer: &Arc<dyn IndexWriter>,
+    matcher: &MentionMatcher,
+    page: PageIndex,
+) -> miku_domain::StoreResult<()> {
+    writer
+        .delete_mentions_for_target(&page.summary.path)
+        .await
+        .or_else(ignore_unsupported)?;
+    writer
+        .replace_mentions_for_source(&page.summary.path, matcher.extract(&page))
+        .await
+        .or_else(ignore_unsupported)
+}
+
+fn ignore_unsupported(error: miku_domain::StoreError) -> miku_domain::StoreResult<()> {
+    match error {
+        miku_domain::StoreError::Unsupported(_) => Ok(()),
+        other => Err(other),
+    }
+}
+
+fn summary_projection(summary: PageSummary) -> PageIndex {
+    let aliases = summary
+        .frontmatter
+        .get("aliases")
+        .map(|value| match value {
+            serde_json::Value::String(alias) => vec![alias.clone()],
+            serde_json::Value::Array(aliases) => aliases
+                .iter()
+                .filter_map(|alias| alias.as_str().map(str::to_string))
+                .collect(),
+            _ => Vec::new(),
+        })
+        .unwrap_or_default();
+    PageIndex {
+        summary,
+        body: String::new(),
+        links: Vec::new(),
+        tags: Vec::new(),
+        aliases,
+        has_mermaid: false,
+        signals: DocumentSignals::default(),
+    }
+}
+
+async fn build_page_batch(
+    content_root: &Path,
+    sources: &[PendingSource],
+    concurrency: usize,
+) -> miku_domain::StoreResult<Vec<PageIndex>> {
+    let mut workers = JoinSet::new();
+    let mut pending = sources.iter().cloned();
+    for _ in 0..concurrency {
+        let Some(source) = pending.next() else {
+            break;
+        };
+        spawn_page_worker(&mut workers, content_root, source);
+    }
+
+    let mut pages = Vec::with_capacity(sources.len());
+    while let Some(result) = workers.join_next().await {
+        let page =
+            result.map_err(|error| miku_domain::StoreError::Operation(error.to_string()))??;
+        pages.push(page);
+        if let Some(source) = pending.next() {
+            spawn_page_worker(&mut workers, content_root, source);
+        }
+    }
+    pages.sort_by(|left, right| left.summary.path.cmp(&right.summary.path));
+    Ok(pages)
+}
+
+fn spawn_page_worker(
+    workers: &mut JoinSet<miku_domain::StoreResult<PageIndex>>,
+    content_root: &Path,
+    source: PendingSource,
+) {
+    let file = content_root.join(&source.relative);
+    workers.spawn_blocking(move || {
+        let bytes = fs::read(&file)
+            .map_err(|error| miku_domain::StoreError::Operation(error.to_string()))?;
+        Ok(build_page_index(
+            &source.relative.to_string_lossy(),
+            &bytes,
+            source.mtime,
+        ))
+    });
+}
+
+async fn flush_reconcile_batch(
+    writer: &Arc<dyn IndexWriter>,
+    events: &broadcast::Sender<String>,
+    pages: Vec<PageIndex>,
+    batch_number: usize,
+) -> miku_domain::StoreResult<Duration> {
+    let page_count = pages.len();
+    let started = Instant::now();
+    writer.replace_pages(pages).await?;
+    let _ = events.send(BULK_INDEX_REFRESH.to_string());
+    let elapsed = started.elapsed();
+    info!(
+        batch_number,
+        page_count,
+        write_ms = elapsed.as_secs_f64() * 1000.0,
+        "index reconcile batch committed"
+    );
+    Ok(elapsed)
+}
+
+fn walk_store_tree(root: &Path, files: &mut Vec<PathBuf>) -> std::io::Result<()> {
+    for entry in fs::read_dir(root)? {
+        let path = entry?.path();
+        if path
+            .file_name()
+            .is_some_and(|name| name.to_string_lossy().starts_with('.'))
+        {
+            continue;
+        }
+        if path.is_dir() {
+            walk_store_tree(&path, files)?;
+        } else if path.extension().is_some_and(|extension| extension == "md") {
+            files.push(path);
+        }
+    }
+    files.sort();
+    Ok(())
 }
 
 impl IndexerQueue {
-    pub fn new(
-        db_pool: PgPool,
+    /// Start the backend-neutral filesystem indexer.
+    pub fn new_with_writer(
+        reader: Arc<dyn IndexReader>,
+        writer: Arc<dyn IndexWriter>,
         content_root: PathBuf,
         events: broadcast::Sender<String>,
     ) -> Result<Self> {
-        let (sender, receiver) = mpsc::channel(1024);
+        if !content_root.exists() {
+            fs::create_dir_all(&content_root)?;
+        }
+
+        let (sender, mut receiver) = mpsc::channel(1024);
         let reconcile_queued = Arc::new(AtomicBool::new(false));
-
-        // 1. Run startup reconcile sweep in the background
-        let db_clone = db_pool.clone();
-        let content_root_clone = content_root.clone();
-        let events_clone = events.clone();
-        let reconcile_queued_for_consumer = Arc::clone(&reconcile_queued);
-        tokio::spawn(async move {
-            let mut index_failures = HashMap::new();
-            info!("Starting startup reconcile sweep...");
-            if let Err(e) = Self::reconcile_all(
-                &db_clone,
-                &content_root_clone,
-                &events_clone,
-                &mut index_failures,
-            )
-            .await
-            {
-                error!("Startup reconcile sweep failed: {:?}", e);
-            } else {
-                info!("Startup reconcile sweep completed successfully.");
-            }
-
-            // Start consumer loop
-            Self::run_consumer(
-                receiver,
-                db_clone,
-                content_root_clone,
-                events_clone,
-                reconcile_queued_for_consumer,
-                index_failures,
+        let ready = Arc::new(AtomicBool::new(false));
+        let writer_task = Arc::clone(&writer);
+        let reader_task = Arc::clone(&reader);
+        let root_task = content_root.clone();
+        let events_task = events.clone();
+        let reconcile_flag = Arc::clone(&reconcile_queued);
+        let ready_flag = Arc::clone(&ready);
+        let consumer_task = tokio::spawn(async move {
+            let startup_started = Instant::now();
+            let startup_result = reconcile_store(
+                &reader_task,
+                &writer_task,
+                &root_task,
+                &events_task,
+                &ready_flag,
             )
             .await;
+            if let Err(error) = startup_result {
+                error!(
+                    ?error,
+                    elapsed_ms = startup_started.elapsed().as_secs_f64() * 1000.0,
+                    "startup index reconcile failed"
+                );
+            } else {
+                ready_flag.store(true, Ordering::Release);
+                info!(
+                    elapsed_ms = startup_started.elapsed().as_secs_f64() * 1000.0,
+                    "startup index reconcile ready"
+                );
+            }
+            while let Some(event) = receiver.recv().await {
+                if event == WatcherEvent::Modified(PathBuf::from(RECONCILE_SENTINEL)) {
+                    if let Err(error) = reconcile_store(
+                        &reader_task,
+                        &writer_task,
+                        &root_task,
+                        &events_task,
+                        &ready_flag,
+                    )
+                    .await
+                    {
+                        error!(?error, "periodic index reconcile failed");
+                    }
+                    reconcile_flag.store(false, Ordering::Release);
+                    continue;
+                }
+
+                let result = match event {
+                    WatcherEvent::Modified(path) | WatcherEvent::Deleted(path) => {
+                        index_store_file(
+                            &reader_task,
+                            &writer_task,
+                            &root_task,
+                            &events_task,
+                            &path,
+                        )
+                        .await
+                    }
+                };
+                if let Err(error) = result {
+                    error!(?error, "index update failed");
+                }
+            }
         });
 
-        // 2. Set up notify watcher
         let sender_for_watcher = sender.clone();
-        let content_root_for_watcher = content_root.clone();
+        let root_for_watcher = content_root.clone();
         let mut watcher = notify::RecommendedWatcher::new(
-            move |res: Result<notify::Event, notify::Error>| match res {
+            move |result: Result<notify::Event, notify::Error>| match result {
                 Ok(event) => {
                     for path in event.paths {
-                        // Check if file is markdown
-                        if path.extension().map_or(false, |ext| ext == "md") {
-                            // Also exclude temporary files
-                            if path.to_string_lossy().ends_with(".tmp") {
+                        if path.extension().is_some_and(|extension| extension == "md")
+                            && !path.to_string_lossy().ends_with(".tmp")
+                        {
+                            let Some(relative) = path.strip_prefix(&root_for_watcher).ok() else {
                                 continue;
-                            }
-                            if let Ok(rel_path) = path.strip_prefix(&content_root_for_watcher) {
-                                // Skip dot-dirs (.trash soft-delete archive, .git, etc.)
-                                if is_hidden_rel(rel_path) {
-                                    continue;
-                                }
-                                let w_event = if path.exists() {
-                                    WatcherEvent::Modified(rel_path.to_path_buf())
-                                } else {
-                                    WatcherEvent::Deleted(rel_path.to_path_buf())
-                                };
-                                if let Err(e) = sender_for_watcher.try_send(w_event) {
-                                    warn!("Failed to send watcher event to channel (might be full/closed): {:?}", e);
-                                }
-                            }
+                            };
+                            let _ = sender_for_watcher.try_send(if path.exists() {
+                                WatcherEvent::Modified(relative.to_path_buf())
+                            } else {
+                                WatcherEvent::Deleted(relative.to_path_buf())
+                            });
                         }
                     }
                 }
-                Err(e) => {
-                    error!("Watcher error: {:?}", e);
-                }
+                Err(error) => error!(?error, "filesystem watcher failed"),
             },
             notify::Config::default(),
         )?;
+        watcher.watch(&content_root, notify::RecursiveMode::Recursive)?;
 
-        // Exclude .git and .trash if they exist in content_root (they shouldn't be under miku/ but let's be safe)
-        if content_root.exists() {
-            watcher.watch(&content_root, notify::RecursiveMode::Recursive)?;
-            info!(
-                "Directory watcher successfully initialized on {:?}",
-                content_root
-            );
-        } else {
-            // Auto-create content root if not present
-            fs::create_dir_all(&content_root)?;
-            watcher.watch(&content_root, notify::RecursiveMode::Recursive)?;
-            info!("Created and watched content root {:?}", content_root);
-        }
-
-        // 3. Periodic reconcile fallback. inotify events do not propagate across
-        // some container bind mounts (e.g. podman), so the notify watcher alone
-        // can miss every change after startup. Poll-reconcile on an interval as a
-        // safety net: reconcile_all is idempotent (mtime-based upserts +
-        // delete-missing) and runs on the same single-writer consumer via the
-        // __reconcile__ sentinel, so this never races the watcher or the handlers.
-        let reconcile_sender = sender.clone();
-        let reconcile_queued_for_ticker = Arc::clone(&reconcile_queued);
-        let reconcile_interval = Self::reconcile_interval();
-        tokio::spawn(async move {
-            let mut ticker = tokio::time::interval(reconcile_interval);
-            ticker.tick().await; // consume the immediate first tick (startup sweep covers it)
-            loop {
+        let mut tasks = vec![consumer_task];
+        if let Some(interval) = Self::reconcile_interval() {
+            let reconcile_sender = sender.clone();
+            let reconcile_flag = Arc::clone(&reconcile_queued);
+            tasks.push(tokio::spawn(async move {
+                let mut ticker = tokio::time::interval(interval);
                 ticker.tick().await;
-                Self::try_queue_reconcile(&reconcile_sender, &reconcile_queued_for_ticker);
-            }
-        });
+                loop {
+                    ticker.tick().await;
+                    Self::try_queue_reconcile(&reconcile_sender, &reconcile_flag);
+                }
+            }));
+        }
 
         Ok(Self {
             sender,
             reconcile_queued,
+            ready,
             _watcher: watcher,
+            tasks,
         })
     }
 
+    /// Stop background indexing and await task termination.
+    pub async fn shutdown(self) {
+        let IndexerQueue { tasks, .. } = self;
+        for task in &tasks {
+            task.abort();
+        }
+        for task in tasks {
+            let _ = task.await;
+        }
+    }
+
     pub fn trigger_reconcile(&self) {
-        // If channel fills or other safety guards trigger
         Self::try_queue_reconcile(&self.sender, &self.reconcile_queued);
     }
 
-    fn reconcile_interval() -> Duration {
+    #[must_use]
+    pub fn ready_handle(&self) -> Arc<AtomicBool> {
+        Arc::clone(&self.ready)
+    }
+
+    fn reconcile_interval() -> Option<Duration> {
         env::var("MIKU_RECONCILE_INTERVAL_SECS")
             .ok()
             .and_then(|value| value.parse::<u64>().ok())
             .filter(|seconds| *seconds > 0)
-            .map_or_else(|| Duration::from_secs(30), Duration::from_secs)
+            .map(Duration::from_secs)
     }
 
-    fn bulk_sse_threshold() -> usize {
-        env::var("MIKU_BULK_SSE_THRESHOLD")
+    fn reconcile_batch_size() -> usize {
+        env::var("MIKU_RECONCILE_BATCH_SIZE")
             .ok()
             .and_then(|value| value.parse::<usize>().ok())
-            .filter(|threshold| *threshold > 0)
-            .unwrap_or(DEFAULT_BULK_SSE_THRESHOLD)
+            .filter(|size| *size > 0)
+            .unwrap_or(DEFAULT_RECONCILE_BATCH_SIZE)
     }
 
-    fn broadcast_affected(events: &broadcast::Sender<String>, affected: Vec<String>) {
-        if affected.len() > Self::bulk_sse_threshold() {
-            let _ = events.send(BULK_SSE_EVENT.to_string());
-            return;
-        }
-
-        for path in affected {
-            let _ = events.send(path);
-        }
+    fn parse_concurrency() -> usize {
+        env::var("MIKU_PARSE_CONCURRENCY")
+            .ok()
+            .and_then(|value| value.parse::<usize>().ok())
+            .filter(|concurrency| *concurrency > 0)
+            .unwrap_or_else(|| {
+                std::thread::available_parallelism()
+                    .map_or(1, |parallelism| parallelism.get().min(8))
+            })
     }
 
     fn try_queue_reconcile(
@@ -452,424 +561,14 @@ impl IndexerQueue {
         {
             return false;
         }
-
-        match sender.try_send(WatcherEvent::Modified(PathBuf::from("__reconcile__"))) {
-            Ok(()) => true,
-            Err(e) => {
-                reconcile_queued.store(false, Ordering::Release);
-                warn!("Failed to queue reconcile event: {:?}", e);
-                false
-            }
+        if sender
+            .try_send(WatcherEvent::Modified(PathBuf::from(RECONCILE_SENTINEL)))
+            .is_err()
+        {
+            reconcile_queued.store(false, Ordering::Release);
+            return false;
         }
-    }
-
-    async fn run_consumer(
-        mut receiver: mpsc::Receiver<WatcherEvent>,
-        db_pool: PgPool,
-        content_root: PathBuf,
-        events: broadcast::Sender<String>,
-        reconcile_queued: Arc<AtomicBool>,
-        mut index_failures: HashMap<PathBuf, i64>,
-    ) {
-        let mut debounce_buffer = HashSet::new();
-        let debounce_duration = Duration::from_millis(300);
-
-        while let Some(event) = receiver.recv().await {
-            if event == WatcherEvent::Modified(PathBuf::from("__reconcile__")) {
-                info!("Manual reconcile event triggered, running reconciliation...");
-                if let Err(e) =
-                    Self::reconcile_all(&db_pool, &content_root, &events, &mut index_failures).await
-                {
-                    error!("Reconciliation sweep failed: {:?}", e);
-                }
-                reconcile_queued.store(false, Ordering::Release);
-                continue;
-            }
-
-            debounce_buffer.insert(event);
-
-            // Drain any pending events immediately available
-            while let Ok(evt) = receiver.try_recv() {
-                if evt == WatcherEvent::Modified(PathBuf::from("__reconcile__")) {
-                    debounce_buffer.clear();
-                    let _ =
-                        Self::reconcile_all(&db_pool, &content_root, &events, &mut index_failures)
-                            .await;
-                    reconcile_queued.store(false, Ordering::Release);
-                    break;
-                }
-                debounce_buffer.insert(evt);
-            }
-
-            if debounce_buffer.is_empty() {
-                continue;
-            }
-
-            // Sleep to let more changes accumulate (debounce window)
-            sleep(debounce_duration).await;
-
-            // Drain again to capture anything that arrived during sleep
-            while let Ok(evt) = receiver.try_recv() {
-                if evt == WatcherEvent::Modified(PathBuf::from("__reconcile__")) {
-                    debounce_buffer.clear();
-                    let _ =
-                        Self::reconcile_all(&db_pool, &content_root, &events, &mut index_failures)
-                            .await;
-                    reconcile_queued.store(false, Ordering::Release);
-                    break;
-                }
-                debounce_buffer.insert(evt);
-            }
-
-            // Process the accumulated batch
-            if !debounce_buffer.is_empty() {
-                let batch: Vec<WatcherEvent> = debounce_buffer.drain().collect();
-                info!("Processing batch of {} filesystem events...", batch.len());
-                match Self::process_batch(batch, &db_pool, &content_root, &mut index_failures).await
-                {
-                    // Stream changed page paths to connected browsers AFTER the
-                    // index commit succeeds. This is a read-only broadcast: it
-                    // does not touch the Postgres index (single-writer invariant
-                    // is preserved). `send` errors only when there are no
-                    // subscribers, which is fine to ignore.
-                    Ok(affected) => Self::broadcast_affected(&events, affected),
-                    Err(e) => error!("Failed to index batch: {:?}", e),
-                }
-            }
-        }
-    }
-
-    /// Index a batch of filesystem events. Returns the affected page paths
-    /// (relative, `.md` stripped) for downstream SSE broadcast. Sole writer of
-    /// the Postgres index.
-    async fn process_batch(
-        batch: Vec<WatcherEvent>,
-        db_pool: &PgPool,
-        content_root: &PathBuf,
-        index_failures: &mut HashMap<PathBuf, i64>,
-    ) -> Result<Vec<String>> {
-        let mut to_upsert = Vec::new();
-        let mut to_delete = Vec::new();
-
-        for event in batch {
-            match event {
-                WatcherEvent::Modified(p) => to_upsert.push(p),
-                WatcherEvent::Deleted(p) => to_delete.push(p),
-            }
-        }
-
-        // Collect affected page paths (relative, `.md` stripped) so the consumer
-        // can broadcast them to connected browsers after the index commit. This
-        // is purely for the SSE read-side; it never writes the index.
-        let mut affected: Vec<String> = Vec::new();
-        let push_affected = |affected: &mut Vec<String>, path_str: &str| {
-            let stripped = path_str.strip_suffix(".md").unwrap_or(path_str);
-            affected.push(stripped.to_string());
-        };
-
-        // 1. Process deletions
-        for path in to_delete {
-            let path_str = path.to_string_lossy().to_string();
-            info!("Indexing: removing page={}", path_str);
-
-            let result = async {
-                let mut tx = db_pool.begin().await?;
-                sqlx::query("DELETE FROM tb_pages WHERE path = $1")
-                    .bind(&path_str)
-                    .execute(&mut *tx)
-                    .await?;
-                tx.commit().await?;
-                Result::<()>::Ok(())
-            }
-            .await;
-
-            match result {
-                Ok(()) => {
-                    index_failures.remove(&path);
-                    push_affected(&mut affected, &path_str);
-                }
-                Err(e) => error!("Failed to remove indexed page {}: {:?}", path_str, e),
-            }
-        }
-
-        // 2. Process upserts
-        for path in to_upsert {
-            let file_path = content_root.join(&path);
-            let path_str = path.to_string_lossy().to_string();
-
-            if !file_path.exists() {
-                // If it was modified but deleted before we read it
-                let result = async {
-                    let mut tx = db_pool.begin().await?;
-                    sqlx::query("DELETE FROM tb_pages WHERE path = $1")
-                        .bind(&path_str)
-                        .execute(&mut *tx)
-                        .await?;
-                    tx.commit().await?;
-                    Result::<()>::Ok(())
-                }
-                .await;
-
-                match result {
-                    Ok(()) => {
-                        index_failures.remove(&path);
-                        push_affected(&mut affected, &path_str);
-                    }
-                    Err(e) => error!("Failed to remove vanished page {}: {:?}", path_str, e),
-                }
-                continue;
-            }
-
-            let mtime = match fs::metadata(&file_path) {
-                Ok(meta) => meta.modified().map_or(0, |time| {
-                    time.duration_since(std::time::UNIX_EPOCH)
-                        .map(|d| d.as_secs() as i64)
-                        .unwrap_or(0)
-                }),
-                Err(_) => 0,
-            };
-
-            if index_failures
-                .get(&path)
-                .is_some_and(|failed_mtime| *failed_mtime == mtime)
-            {
-                warn!("Indexing: skipping quarantined unchanged page={}", path_str);
-                continue;
-            }
-
-            info!("Indexing: parsing/saving page={}", path_str);
-            let raw_content = match fs::read(&file_path) {
-                Ok(bytes) => decode_indexable_markdown(&bytes),
-                Err(e) => {
-                    error!("Failed to read file {:?}: {:?}", file_path, e);
-                    index_failures.insert(path, mtime);
-                    continue;
-                }
-            };
-
-            let page_data = prepare_page_index_data(&path_str, &raw_content);
-            let slug = Path::new(&path_str)
-                .file_stem()
-                .and_then(|s| s.to_str())
-                .map(|s| s.to_lowercase())
-                .unwrap_or_else(|| path_str.clone());
-
-            let result = async {
-                let mut tx = db_pool.begin().await?;
-
-                // Upsert tb_pages
-                let row: (i64,) = sqlx::query_as(
-                    "INSERT INTO tb_pages (path, slug, title, frontmatter, has_mermaid, mtime, body_tsv) \
-                     VALUES ($1, $2, $3, $4, $5, $6, setweight(to_tsvector('english', COALESCE($3, '')), 'A') || setweight(to_tsvector('english', COALESCE($7, '')), 'B')) \
-                     ON CONFLICT (path) \
-                     DO UPDATE SET slug = EXCLUDED.slug, title = EXCLUDED.title, frontmatter = EXCLUDED.frontmatter, \
-                                   has_mermaid = EXCLUDED.has_mermaid, mtime = EXCLUDED.mtime, body_tsv = EXCLUDED.body_tsv \
-                     RETURNING id"
-                )
-                .bind(&path_str)
-                .bind(&slug)
-                .bind(&page_data.metadata.title)
-                .bind(&page_data.frontmatter_json)
-                .bind(page_data.metadata.has_mermaid)
-                .bind(mtime)
-                .bind(&page_data.body)
-                .fetch_one(&mut *tx)
-                .await?;
-                let page_id = row.0;
-
-                // Clear old links, tags, aliases
-                sqlx::query("DELETE FROM tb_links WHERE src_id = $1")
-                    .bind(page_id)
-                    .execute(&mut *tx)
-                    .await?;
-
-                sqlx::query("DELETE FROM tb_tags WHERE page_id = $1")
-                    .bind(page_id)
-                    .execute(&mut *tx)
-                    .await?;
-
-                sqlx::query("DELETE FROM tb_page_aliases WHERE page_id = $1")
-                    .bind(page_id)
-                    .execute(&mut *tx)
-                    .await?;
-
-                // Insert tags
-                for tag in &page_data.metadata.tags {
-                    sqlx::query("INSERT INTO tb_tags (page_id, tag) VALUES ($1, $2) ON CONFLICT (page_id, tag) DO NOTHING")
-                        .bind(page_id)
-                        .bind(tag)
-                        .execute(&mut *tx)
-                        .await?;
-                }
-
-                // Insert aliases
-                for alias in &page_data.metadata.aliases {
-                    sqlx::query("INSERT INTO tb_page_aliases (page_id, alias) VALUES ($1, $2) ON CONFLICT (page_id, alias) DO NOTHING")
-                        .bind(page_id)
-                        .bind(alias)
-                        .execute(&mut *tx)
-                        .await?;
-                }
-
-                // Insert links (we'll resolve target_ids after all pages are saved/indexed)
-                for link in &page_data.metadata.links {
-                    let alias_opt = link.alias.as_deref();
-                    sqlx::query(
-                        "INSERT INTO tb_links (src_id, kind, is_embed, target, target_norm, target_id, alias) \
-                         VALUES ($1, $2, $3, $4, $5, NULL, $6) \
-                         ON CONFLICT (src_id, kind, target_norm, is_embed) DO NOTHING"
-                    )
-                    .bind(page_id)
-                    .bind(&link.kind)
-                    .bind(link.is_embed)
-                    .bind(&link.target)
-                    .bind(&link.target_norm)
-                    .bind(alias_opt)
-                    .execute(&mut *tx)
-                    .await?;
-                }
-
-                // Resolve this page's outgoing links against pages that already
-                // exist, then resolve older dangling links pointing here.
-                sqlx::query(
-                    "UPDATE tb_links l \
-                     SET target_id = p.id \
-                     FROM tb_pages p \
-                     WHERE l.src_id = $1 AND l.kind = 'page' AND l.target_id IS NULL AND l.target_norm = p.slug",
-                )
-                .bind(page_id)
-                .execute(&mut *tx)
-                .await?;
-
-                sqlx::query(
-                    "UPDATE tb_links SET target_id = $1 WHERE kind = 'page' AND target_norm = $2 AND target_id IS NULL"
-                )
-                .bind(page_id)
-                .bind(&slug)
-                .execute(&mut *tx)
-                .await?;
-
-                tx.commit().await?;
-                Result::<()>::Ok(())
-            }
-            .await;
-
-            match result {
-                Ok(()) => {
-                    index_failures.remove(&path);
-                    push_affected(&mut affected, &path_str);
-                }
-                Err(e) => {
-                    error!("Failed to index page {}: {:?}", path_str, e);
-                    index_failures.insert(path, mtime);
-                }
-            }
-        }
-        Ok(affected)
-    }
-
-    async fn reconcile_all(
-        db_pool: &PgPool,
-        content_root: &Path,
-        events: &broadcast::Sender<String>,
-        index_failures: &mut HashMap<PathBuf, i64>,
-    ) -> Result<()> {
-        info!(
-            "Walking content root {:?} to reconcile page database index...",
-            content_root
-        );
-        let mut local_files = HashSet::new();
-
-        // 1. Gather all local files
-        if content_root.exists() {
-            fn walk_dir(dir: &Path, files: &mut HashSet<PathBuf>) -> io::Result<()> {
-                if dir.is_dir() {
-                    for entry in fs::read_dir(dir)? {
-                        let entry = entry?;
-                        let path = entry.path();
-                        // Skip dot-dirs (.trash soft-delete archive, .git, etc.).
-                        let is_dot = path
-                            .file_name()
-                            .map_or(false, |n| n.to_string_lossy().starts_with('.'));
-                        if is_dot {
-                            continue;
-                        }
-                        if path.is_dir() {
-                            walk_dir(&path, files)?;
-                        } else if path.extension().map_or(false, |ext| ext == "md") {
-                            // Exclude temp files
-                            if !path.to_string_lossy().ends_with(".tmp") {
-                                files.insert(path);
-                            }
-                        }
-                    }
-                }
-                Ok(())
-            }
-            let _ = walk_dir(content_root, &mut local_files);
-        }
-
-        // 2. Query all database pages
-        let db_pages: Vec<(String, i64)> = sqlx::query_as("SELECT path, mtime FROM tb_pages")
-            .fetch_all(db_pool)
-            .await?;
-
-        let mut to_upsert = Vec::new();
-        let mut to_delete = Vec::new();
-
-        let mut db_paths_set = HashSet::new();
-        for (path, mtime) in db_pages {
-            let full_path = content_root.join(&path);
-            db_paths_set.insert(path.clone());
-
-            if !full_path.exists() {
-                to_delete.push(WatcherEvent::Deleted(PathBuf::from(&path)));
-            } else {
-                let local_mtime = fs::metadata(&full_path).map_or(0, |meta| {
-                    meta.modified().map_or(0, |time| {
-                        time.duration_since(std::time::UNIX_EPOCH)
-                            .map(|d| d.as_secs() as i64)
-                            .unwrap_or(0)
-                    })
-                });
-
-                if local_mtime > mtime {
-                    to_upsert.push(WatcherEvent::Modified(PathBuf::from(&path)));
-                }
-            }
-        }
-
-        // Check for new files not in database
-        for file in local_files {
-            if let Ok(rel_path) = file.strip_prefix(content_root) {
-                let rel_path_str = rel_path.to_string_lossy().to_string();
-                if !db_paths_set.contains(&rel_path_str) {
-                    to_upsert.push(WatcherEvent::Modified(rel_path.to_path_buf()));
-                }
-            }
-        }
-
-        if !to_upsert.is_empty() || !to_delete.is_empty() {
-            info!(
-                "Reconcile details: {} updates, {} deletions",
-                to_upsert.len(),
-                to_delete.len()
-            );
-            let mut batch = to_upsert;
-            batch.extend(to_delete);
-            // The reconcile batch contains only genuinely-changed pages
-            // (mtime-newer upserts, missing deletions, new files), so broadcast
-            // them too. This is the sole SSE trigger under podman bind mounts,
-            // where inotify events do not propagate to the watcher.
-            let affected =
-                Self::process_batch(batch, db_pool, &content_root.to_path_buf(), index_failures)
-                    .await?;
-            Self::broadcast_affected(events, affected);
-        } else {
-            info!("Database index is fully in sync with filesystem.");
-        }
-
-        Ok(())
+        true
     }
 }
 
@@ -878,55 +577,24 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_prepare_page_index_data_sanitizes_nul_and_invalid_utf8() {
-        let raw_content =
-            decode_indexable_markdown(include_bytes!("fixtures/indexer/nul_invalid.md"));
-        let page_data = prepare_page_index_data("nul_invalid.md", &raw_content);
-        let frontmatter =
-            serde_json::to_string(&page_data.frontmatter_json).expect("frontmatter is JSON");
-
-        assert_eq!(page_data.metadata.title, "NUL Title");
-        assert!(page_data
-            .body
-            .contains("Body with NUL byte and invalid utf8."));
-        assert!(page_data.metadata.tags.contains("nul-tag"));
-        assert!(!frontmatter.contains('\0'));
-        assert!(!page_data.metadata.title.contains('\0'));
-        assert!(!page_data.body.contains('\0'));
-        assert!(!page_data.body.contains('\u{fffd}'));
-    }
-
-    #[test]
     fn test_reconcile_interval_defaults_and_reads_env() {
         env::remove_var("MIKU_RECONCILE_INTERVAL_SECS");
-        assert_eq!(IndexerQueue::reconcile_interval(), Duration::from_secs(30));
-
+        assert_eq!(IndexerQueue::reconcile_interval(), None);
         env::set_var("MIKU_RECONCILE_INTERVAL_SECS", "45");
-        assert_eq!(IndexerQueue::reconcile_interval(), Duration::from_secs(45));
-
-        env::set_var("MIKU_RECONCILE_INTERVAL_SECS", "0");
-        assert_eq!(IndexerQueue::reconcile_interval(), Duration::from_secs(30));
-
+        assert_eq!(
+            IndexerQueue::reconcile_interval(),
+            Some(Duration::from_secs(45))
+        );
         env::remove_var("MIKU_RECONCILE_INTERVAL_SECS");
-    }
-
-    #[test]
-    fn test_bulk_sse_threshold_defaults_and_reads_env() {
-        env::remove_var("MIKU_BULK_SSE_THRESHOLD");
-        assert_eq!(
-            IndexerQueue::bulk_sse_threshold(),
-            DEFAULT_BULK_SSE_THRESHOLD
-        );
-
-        env::set_var("MIKU_BULK_SSE_THRESHOLD", "42");
-        assert_eq!(IndexerQueue::bulk_sse_threshold(), 42);
-
-        env::set_var("MIKU_BULK_SSE_THRESHOLD", "0");
-        assert_eq!(
-            IndexerQueue::bulk_sse_threshold(),
-            DEFAULT_BULK_SSE_THRESHOLD
-        );
-
-        env::remove_var("MIKU_BULK_SSE_THRESHOLD");
+        env::remove_var("MIKU_RECONCILE_BATCH_SIZE");
+        assert_eq!(IndexerQueue::reconcile_batch_size(), 512);
+        env::set_var("MIKU_RECONCILE_BATCH_SIZE", "1000");
+        assert_eq!(IndexerQueue::reconcile_batch_size(), 1000);
+        env::remove_var("MIKU_RECONCILE_BATCH_SIZE");
+        env::remove_var("MIKU_PARSE_CONCURRENCY");
+        assert!(IndexerQueue::parse_concurrency() > 0);
+        env::set_var("MIKU_PARSE_CONCURRENCY", "3");
+        assert_eq!(IndexerQueue::parse_concurrency(), 3);
+        env::remove_var("MIKU_PARSE_CONCURRENCY");
     }
 }

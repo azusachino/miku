@@ -1,38 +1,35 @@
 {% extends "base.html" %}
 
 {% block title %}
-Miku - {{ path }}
+Miku Note - {{ path }}
 {% endblock %}
 
 {% block content %}
-<main class="mk-read">
-    <article class="mk-article" data-page-path="{{ path }}">
+<main class="mk-read" x-data="{ editing: false }" @miku-toggle-edit.window="if ({{ 'true' if exists else 'false' }}) { editing = !editing; $nextTick(() => window.mikuInlineEditorStart && window.mikuInlineEditorStart()); }" :class="{ 'is-editing': editing }">
+    <article class="mk-article" data-page-path="{{ path }}" data-page-updated="{{ updated }}">
         <nav class="mk-breadcrumb flex items-center gap-1.5 text-xs text-muted mb-5" aria-label="Breadcrumb">
-            <span class="opacity-60">miku</span>
-            {% if path_segments is defined and path_segments %}
-                {% for part in path_segments %}
-                    <span class="opacity-45">/</span>
-                    {% if loop.last %}
-                        <span class="here text-teal font-semibold">{{ title }}</span>
+            {% if breadcrumbs is defined and breadcrumbs %}
+                {% for crumb in breadcrumbs %}
+                    {% if not loop.first %}<span class="opacity-45">›</span>{% endif %}
+                    {% if crumb.current %}
+                        <a href="/p/{{ crumb.path }}" class="mk-breadcrumb-link here" aria-current="page">{{ crumb.label }}</a>
                     {% else %}
-                        <span class="opacity-60">{{ part }}</span>
+                        <a href="/folders/{{ crumb.path }}" class="mk-breadcrumb-link">{{ crumb.label }}</a>
                     {% endif %}
                 {% endfor %}
             {% else %}
-                <span class="opacity-45">/</span>
-                <span class="here text-teal font-semibold">{{ title }}</span>
+                <a href="/p/{{ path }}" class="mk-breadcrumb-link here" aria-current="page">{{ title }}</a>
             {% endif %}
-            <span class="mk-synced ml-2" data-sync-indicator hidden><i aria-hidden="true"></i><span>synced</span></span>
         </nav>
 
         <div class="mk-title-row flex items-start justify-between gap-5 mb-2">
             <h1 class="flex items-center gap-3 min-w-0">
-                <span class="text-teal/80 text-[22px] leading-none shrink-0 select-none" aria-hidden="true">📄</span>
                 <span class="mk-h1">{{ title }}</span>
             </h1>
             {% if exists %}
             <div class="mk-title-actions shrink-0">
-                <a href="/p/{{ path }}/edit" class="mk-btn mk-btn-primary">Edit</a>
+                <button type="button" class="mk-btn mk-btn-primary" @click="editing = !editing; $nextTick(() => window.mikuInlineEditorStart && window.mikuInlineEditorStart())" x-text="editing ? 'Reading' : 'Edit'">Edit</button>
+                <a href="/p/{{ path }}/edit" class="mk-btn mk-btn-ghost mk-js-fallback">Full Editor</a>
             </div>
             {% endif %}
         </div>
@@ -51,7 +48,7 @@ Miku - {{ path }}
                 {% if frontmatter.tags is string %}
                     <li>
                         Tags: 
-                        <a href="/tags/{{ frontmatter.tags }}" class="bg-tealsoft hover:bg-tealsoft/80 text-teal px-1.5 py-0.5 rounded font-bold text-[10px] uppercase tracking-wider border border-teal/20 transition-all">
+                        <a href="/tags/{{ frontmatter.tags }}" class="mk-inline-tag">
                             #{{ frontmatter.tags }}
                         </a>
                     </li>
@@ -60,7 +57,7 @@ Miku - {{ path }}
                         Tags: 
                         <span class="flex flex-wrap gap-1.5 inline-flex ml-1">
                             {% for tag in frontmatter.tags %}
-                                <a href="/tags/{{ tag }}" class="bg-tealsoft hover:bg-tealsoft/80 text-teal px-1.5 py-0.5 rounded font-bold text-[10px] uppercase tracking-wider border border-teal/20 transition-all">
+                                <a href="/tags/{{ tag }}" class="mk-inline-tag">
                                     #{{ tag }}
                                 </a>
                             {% endfor %}
@@ -88,9 +85,26 @@ Miku - {{ path }}
         {% endif %}
 
         {% if exists %}
-        <div class="mk-prose">
-            {{ content_html | safe }}
-        </div>
+        <section class="mk-reading-surface" x-show="!editing" x-transition.opacity>
+            <div class="mk-prose" data-live-preview>
+                {{ content_html | safe }}
+            </div>
+        </section>
+
+        <form action="/p/{{ path }}" method="POST" class="mk-inline-editor" data-inline-editor hx-boost="false" hx-history="false" x-show="editing" x-transition.opacity>
+            <input type="hidden" name="loaded_hash" value="{{ loaded_hash }}">
+            <textarea class="hidden" name="body" data-inline-body>{{ body }}</textarea>
+            <div class="mk-inline-editor-bar">
+                <span class="mk-editing"><i></i> Live editing</span>
+                <span class="mk-save-status" data-inline-save-status role="status" aria-live="polite">Saved</span>
+                <span class="mk-pathchip">{{ path }}.md</span>
+                <div class="mk-inline-editor-actions">
+                    <button type="button" class="mk-btn mk-btn-ghost" @click="editing = false">Reading</button>
+                    <button type="submit" class="mk-btn mk-btn-primary">Save</button>
+                </div>
+            </div>
+            <div class="mk-inline-codemirror" data-inline-editor-container></div>
+        </form>
 
         {% if backlinks %}
         <aside class="backlinks mk-card" data-reading-section="backlinks" x-show="showBacklinks">
@@ -98,6 +112,26 @@ Miku - {{ path }}
             <ul class="backlinks-list">
                 {% for bl in backlinks %}
                 <li><a href="/p/{{ bl.path }}">{{ bl.title }}</a></li>
+                {% endfor %}
+            </ul>
+        </aside>
+        {% endif %}
+        {% if unlinked_mentions %}
+        <aside class="backlinks mk-card" data-reading-section="backlinks" x-show="showBacklinks">
+            <div class="mk-card-label">UNLINKED MENTIONS</div>
+            <ul class="backlinks-list">
+                {% for mention in unlinked_mentions %}
+                <li class="mk-mention">
+                    <a href="/p/{{ mention.path }}">{{ mention.title }}</a>
+                    <p>{{ mention.snippet }}</p>
+                    <form method="post" action="/api/v1/promote-mention">
+                        <input type="hidden" name="source_path" value="{{ mention.path }}">
+                        <input type="hidden" name="target_path" value="{{ path }}">
+                        <input type="hidden" name="mention" value="{{ title }}">
+                        <input type="hidden" name="return_to" value="{{ path }}">
+                        <button type="submit" class="mk-chip">Promote to link</button>
+                    </form>
+                </li>
                 {% endfor %}
             </ul>
         </aside>
@@ -111,6 +145,10 @@ Miku - {{ path }}
         {% endif %}
     </article>
 
+    <button type="button" class="mk-pane-resizer mk-rail-resizer"
+            @pointerdown="startPaneResize($event, 'rail')"
+            aria-label="Resize page rail"></button>
+
     <aside class="mk-rail">
 
         <section class="mk-card" x-data="{ collapsed: false }" :class="{ 'is-collapsed': collapsed }">
@@ -120,6 +158,7 @@ Miku - {{ path }}
             </div>
             <div x-show="!collapsed" x-transition>
                 <div class="mk-kv"><span class="k">Format</span><span class="v">Markdown</span></div>
+                <div class="mk-kv"><span class="k">Path</span><span class="v path" title="{{ path }}.md">{{ path }}</span></div>
                 <div class="mk-kv"><span class="k">Words</span><span class="v">{{ word_count }}</span></div>
                 <div class="mk-kv"><span class="k">Backlinks</span><span class="v teal">{{ backlink_count }}</span></div>
                 <div class="mk-kv"><span class="k">Updated</span><span class="v">{{ updated }}</span></div>
@@ -143,4 +182,184 @@ Miku - {{ path }}
         {% endif %}
     </aside>
 </main>
+
+{% if exists %}
+<script>
+    (function() {
+        const editor = document.querySelector('[data-inline-editor]');
+        if (!editor) return;
+        let startPromise = null;
+
+        window.mikuInlineEditorStart = function() {
+            if (editor.dataset.ready === 'true') {
+                if (window.mikuInlineEditorFocus) window.mikuInlineEditorFocus();
+                return Promise.resolve();
+            }
+            if (startPromise) return startPromise;
+            editor.dataset.ready = 'loading';
+            startPromise = Promise.all([
+            import("https://esm.sh/@codemirror/state"),
+            import("https://esm.sh/codemirror"),
+            import("https://esm.sh/@codemirror/lang-markdown"),
+            import("https://esm.sh/@codemirror/autocomplete")
+        ]).then(([{ EditorState }, { EditorView, basicSetup }, { markdown }, { autocompletion }]) => {
+            const textarea = editor.querySelector('[data-inline-body]');
+            const livePreview = document.querySelector('[data-live-preview]');
+            let timer = null;
+            let requestId = 0;
+            let dirty = false;
+            const status = editor.querySelector('[data-inline-save-status]');
+            const setStatus = (label, state) => {
+                if (!status) return;
+                status.textContent = label;
+                status.dataset.state = state;
+            };
+            editor.addEventListener('submit', () => { dirty = false; setStatus('Saving…', 'saving'); });
+            window.addEventListener('beforeunload', event => {
+                if (!dirty) return;
+                event.preventDefault();
+                event.returnValue = '';
+            });
+
+            const inlineTheme = EditorView.theme({
+                "&": {
+                    height: "100%",
+                    fontSize: "14.5px",
+                    fontFamily: "var(--font-mono, monospace)",
+                    backgroundColor: "transparent",
+                    color: "var(--text)"
+                },
+                ".cm-scroller": { overflow: "auto" },
+                ".cm-content": { padding: "22px 0", minHeight: "52vh" },
+                ".cm-gutters": {
+                    backgroundColor: "transparent",
+                    color: "var(--muted)",
+                    borderRight: "0"
+                },
+                ".cm-activeLine": { backgroundColor: "var(--panel)" },
+                ".cm-activeLineGutter": { backgroundColor: "transparent" },
+                ".cm-line": { padding: "0 2px" }
+            });
+
+            const slashCommands = [
+                { label: 'heading', detail: 'Heading section', apply: '# ' },
+                { label: 'table', detail: 'Markdown table', apply: '| Column | Value |\n| --- | --- |\n|  |  |' },
+                { label: 'callout', detail: 'Note callout', apply: '> [!NOTE]\n> ' },
+                { label: 'code', detail: 'Code block', apply: '```\n\n```' },
+                { label: 'today', detail: 'Current date', apply: new Date().toISOString().slice(0, 10) }
+            ];
+
+            async function mikuCompletions(context) {
+                const line = context.state.doc.lineAt(context.pos);
+                const before = line.text.slice(0, context.pos - line.from);
+                const wiki = before.match(/\[\[([^\]\n]*)$/);
+                if (wiki) {
+                    const query = wiki[1].trim();
+                    const res = await fetch('/api/v1/quickswitch?q=' + encodeURIComponent(query), {
+                        headers: { 'Accept': 'application/json' }
+                    });
+                    const rows = res.ok ? await res.json() : [];
+                    const options = rows.map(row => ({
+                        label: row.title,
+                        detail: row.path,
+                        type: 'text',
+                        apply: row.path === row.title ? row.path + ']]' : row.path + '|' + row.title + ']]'
+                    }));
+                    if (query && !rows.some(row => row.title.toLowerCase() === query.toLowerCase() || row.path.toLowerCase() === query.toLowerCase())) {
+                        options.push({
+                            label: 'Create "' + query + '"',
+                            detail: 'missing page link',
+                            type: 'keyword',
+                            apply: query + ']]'
+                        });
+                    }
+                    return { from: context.pos - wiki[1].length, options };
+                }
+
+                const slash = before.match(/(?:^|\s)\/([\w-]*)$/);
+                if (slash) {
+                    const query = slash[1].toLowerCase();
+                    return {
+                        from: context.pos - slash[1].length - 1,
+                        options: slashCommands
+                            .filter(item => !query || item.label.startsWith(query))
+                            .map(item => ({
+                                label: item.label,
+                                detail: item.detail,
+                                type: 'keyword',
+                                apply: item.apply
+                            }))
+                    };
+                }
+
+                return null;
+            }
+
+            const view = new EditorView({
+                state: EditorState.create({
+                    doc: textarea.value,
+                    extensions: [
+                        basicSetup,
+                        markdown(),
+                        autocompletion({ override: [mikuCompletions] }),
+                        inlineTheme,
+                        EditorView.updateListener.of((update) => {
+                            if (!update.docChanged) return;
+                            textarea.value = update.state.doc.toString();
+                            dirty = true;
+                            setStatus('Unsaved changes', 'dirty');
+                            queuePreview(220);
+                        })
+                    ]
+                }),
+                parent: editor.querySelector('[data-inline-editor-container]')
+            });
+
+            window.mikuInlineEditorFocus = function() {
+                window.requestAnimationFrame(() => {
+                    view.focus();
+                    if (view.requestMeasure) view.requestMeasure();
+                });
+            };
+
+            function renderPreview() {
+                const current = ++requestId;
+                const body = new URLSearchParams();
+                body.set('body', textarea.value);
+                if (livePreview) livePreview.dataset.state = 'loading';
+
+                fetch('/preview', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
+                    body
+                })
+                    .then(response => {
+                        if (!response.ok) throw new Error('Preview failed');
+                        return response.text();
+                    })
+                    .then(html => {
+                        if (current !== requestId) return;
+                        if (!livePreview) return;
+                        livePreview.innerHTML = html || '<p><em>Blank page.</em></p>';
+                        livePreview.dataset.state = 'ready';
+                        if (window.mikuEnhanceReaderContent) window.mikuEnhanceReaderContent(livePreview);
+                    })
+                    .catch(() => {
+                        if (current !== requestId) return;
+                        if (livePreview) livePreview.dataset.state = 'error';
+                    });
+            }
+
+            function queuePreview(delay) {
+                window.clearTimeout(timer);
+                timer = window.setTimeout(renderPreview, delay);
+            }
+            editor.dataset.ready = 'true';
+            if (window.mikuInlineEditorFocus) window.mikuInlineEditorFocus();
+        });
+            return startPromise;
+        };
+    })();
+</script>
+{% endif %}
 {% endblock %}

@@ -1,11 +1,11 @@
 {% extends "base.html" %}
 
 {% block title %}
-Miku - Edit {{ path }}
+Miku Note - Edit {{ path }}
 {% endblock %}
 
 {% block content %}
-<form action="/p/{{ path }}" method="POST" class="mk-edit flex flex-col h-full overflow-hidden" data-editor
+<form action="/p/{{ path }}" method="POST" class="mk-edit flex flex-col h-full overflow-hidden" data-editor hx-boost="false" hx-history="false"
       x-data="{ 
           viewMode: 'split',
           wrapSelection(marker, fallback) { window.editorWrapSelection(marker, fallback) },
@@ -17,7 +17,7 @@ Miku - Edit {{ path }}
         <div class="mk-editing flex items-center gap-2 text-xs font-bold text-pink select-none">
             <span class="animate-pulse">●</span> Editing
         </div>
-        <span class="mk-pathchip hidden md:inline font-mono text-[11px] bg-panel border border-border px-2 py-0.75 rounded-md text-muted truncate max-w-[200px]">miku/{{ path }}.md</span>
+        <span class="mk-pathchip hidden md:inline font-mono text-[11px] bg-panel border border-border px-2 py-0.75 rounded-md text-muted truncate max-w-[200px]">{{ path }}.md</span>
 
         <!-- View Mode Switcher -->
         <div class="flex items-center bg-panel/30 border border-border/25 rounded-lg p-0.5 text-xs font-semibold gap-0.5">
@@ -34,13 +34,13 @@ Miku - Edit {{ path }}
         </div>
 
         <div class="mk-edit-actions flex items-center gap-2.5">
+            <span class="mk-save-status" data-save-status role="status" aria-live="polite">Saved</span>
             <a href="/p/{{ path }}" class="mk-btn mk-btn-ghost">Cancel</a>
             <button type="submit" class="mk-btn mk-btn-primary">Save</button>
         </div>
     </header>
 
     <div class="mk-edit-title-container px-6 py-4 border-b border-border/15 bg-panel/10 flex items-center gap-3">
-        <span class="text-teal/80 text-2xl select-none" aria-hidden="true">📄</span>
         <input
             type="text"
             id="edit-title-input"
@@ -58,7 +58,7 @@ Miku - Edit {{ path }}
             <!-- Hidden textarea for form submit -->
             <textarea
                 id="body-textarea"
-                class="hidden"
+                class="mk-editor-fallback"
                 name="body"
             >{{ body }}</textarea>
         </section>
@@ -87,6 +87,29 @@ Miku - Edit {{ path }}
             const titleInput = editor.querySelector('#edit-title-input');
             let timer = null;
             let requestId = 0;
+            let dirty = false;
+
+            function setSaveStatus(label, state) {
+                const status = editor.querySelector('[data-save-status]');
+                if (!status) return;
+                status.textContent = label;
+                status.dataset.state = state;
+            }
+
+            function markDirty() {
+                dirty = true;
+                setSaveStatus('Unsaved changes', 'dirty');
+            }
+
+            editor.addEventListener('submit', function() {
+                dirty = false;
+                setSaveStatus('Saving…', 'saving');
+            });
+            window.addEventListener('beforeunload', function(event) {
+                if (!dirty) return;
+                event.preventDefault();
+                event.returnValue = '';
+            });
 
             const frontmatterRegex = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/;
 
@@ -166,6 +189,7 @@ Miku - Edit {{ path }}
                             textarea.value = newDoc;
                             syncTitleFromEditor(newDoc);
                             queuePreview(250);
+                            markDirty();
                         }
                     })
                 ]
@@ -175,6 +199,7 @@ Miku - Edit {{ path }}
                 state,
                 parent: editor.querySelector('#editor-container')
             });
+            textarea.classList.add('is-hidden');
 
             function syncTitleFromEditor(val) {
                 const fmInfo = getTitleAndBody(val);
@@ -251,11 +276,14 @@ Miku - Edit {{ path }}
                         preview.innerHTML = html || '<p><em>Blank page.</em></p>';
                         preview.dataset.state = 'ready';
                         if (window.Prism) window.Prism.highlightAllUnder(preview);
+                        if (window.mikuInjectCopyButtons) window.mikuInjectCopyButtons(preview);
                     })
                     .catch(function() {
                         if (current !== requestId) return;
-                        preview.innerHTML = '<p><em>Preview unavailable.</em></p>';
+                        preview.innerHTML = '<p><em>Preview unavailable.</em> <button type="button" class="mk-preview-retry">Retry</button></p>';
                         preview.dataset.state = 'error';
+                        const retry = preview.querySelector('.mk-preview-retry');
+                        if (retry) retry.addEventListener('click', function() { renderPreview(); });
                     });
             }
 

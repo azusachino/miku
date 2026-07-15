@@ -1,0 +1,11 @@
+{
+  "name": "miku-note-frontend",
+  "private": true,
+  "scripts": {
+    "css": "tailwindcss -i ./static/tailwind.input.css -o ./static/tailwind.generated.css --minify"
+  },
+  "devDependencies": {
+    "@tailwindcss/cli": "4.1.11",
+    "tailwindcss": "4.1.11"
+  }
+}
