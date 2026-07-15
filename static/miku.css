@@ -182,14 +182,6 @@ a { color: var(--teal); }
   stroke-linecap: round;
   stroke-linejoin: round;
 }
-.mk-symbol-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 17px;
-  line-height: 1;
-  stroke: none;
-}
 .mk-icon-btn {
   display: flex; align-items: center; justify-content: center; width: 40px; height: 40px;
   border-radius: 12px; border: 1px solid var(--border); background: var(--panel); color: var(--muted); cursor: pointer; transition: .18s;

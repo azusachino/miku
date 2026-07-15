@@ -3,6 +3,7 @@
    level plus the active page's ancestor chain — not the whole vault. `active`
    is the current page path (empty for non-page views); folders on its ancestor
    chain are pre-expanded and have their children rendered inline. #}
+{% from "_icons.html" import icon %}
 {% macro nav_node(node, prefix, active) %}
   {% if node.path %}
     <div class="tree-row tree-page" draggable="true" data-tree-path="{{ node.path }}"
@@ -21,7 +22,7 @@
         </span>
       </a>
       <button type="button" class="mk-icon-btn tree-menu-btn"
-              @click.stop="$store.tree.openMenu($event, '{{ node.path }}')" aria-label="Actions">⋯</button>
+              @click.stop="$store.tree.openMenu($event, '{{ node.path }}')" aria-label="Actions">{{ icon("ellipsis") }}</button>
     </div>
   {% else %}
     {% set folder_path = (prefix ~ '/' ~ node.name) if prefix else node.name %}

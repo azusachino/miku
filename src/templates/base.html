@@ -1,3 +1,4 @@
+{% from "_icons.html" import icon %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -327,14 +328,14 @@
             <div class="mk-topbar-right flex items-center gap-2.5 ml-auto">
                 <div class="mk-seg flex p-[3px] rounded-xl bg-panel border border-border" aria-label="Theme">
                     <button type="button" data-set-theme="light" aria-label="Use light theme">
-                        <span class="mk-icon mk-symbol-icon" aria-hidden="true">☼</span>
+                        {{ icon("sun") }}
                     </button>
                     <button type="button" data-set-theme="dark" aria-label="Use dark theme">
-                        <span class="mk-icon mk-symbol-icon" aria-hidden="true">☾</span>
+                        {{ icon("moon") }}
                     </button>
                 </div>
                 <button type="button" class="mk-topbar-action" @click="settingsOpen = true" aria-label="Open settings" title="Settings">
-                    <span class="mk-icon mk-symbol-icon" aria-hidden="true">⚙</span>
+                    {{ icon("settings") }}
                     <span>Settings</span>
                 </button>
             </div>
