@@ -113,6 +113,7 @@ fn test_shell_has_resizable_panes_without_repeated_page_marks() {
     assert!(base.contains("fetch(target, { headers: { Accept: 'text/html' } })"));
     assert!(base.contains("document.open();"));
     assert!(base.contains("document.write(html);"));
+    assert!(base.contains("data:image/svg+xml"));
     assert!(!page.contains("mk-page-mark"));
 }
 
