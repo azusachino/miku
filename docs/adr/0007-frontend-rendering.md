@@ -22,8 +22,8 @@ tags: [frontend, alpine, prism, mermaid, no-bundler, mvp]
 
 Server-rendered HTML, **no JS bundler**, with a deliberate client-JS budget of vendored, locally-served (`/static/js/vendor/`, offline-capable) scripts:
 
-- **Alpine.js — interactive widgets only.** The `Ctrl-K` command palette, `[[ ]]` / page autocomplete, modals and dropdowns. Alpine holds local DOM state and calls the JSON API
-  (`/api/v1/quickswitch`, search). It is **not** a general SPA layer — server rendering still owns pages, the read view, the index, and the nav explorer (ADR-5).
+- **Alpine.js — interactive widgets only.** The `Ctrl-K` command palette, `[[ ]]` / page autocomplete, modals and dropdowns. Alpine holds local DOM state and calls the JSON API (`/api/v1/quickswitch`,
+  search). It is **not** a general SPA layer — server rendering still owns pages, the read view, the index, and the nav explorer (ADR-5).
 - **Mermaid.js — lazy, index-flagged.** Injected **only** when the indexer set `tb_pages.has_mermaid = true`; every other page stays Mermaid-free. Diagram **theme comes from the Themes config**, not
   hardcoded.
 - **Code highlighting — client-side Prism.js, for the MVP.** Prism runs in the browser (`Prism.highlightAll()`, triggered via Alpine `x-init` so it re-runs after dynamic swaps). Themes are Prism theme

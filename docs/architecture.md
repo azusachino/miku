@@ -4,10 +4,8 @@ Miku is a filesystem-owned personal Markdown wiki: a browser editor over plain `
 
 ## Core invariant
 
-Markdown files and assets under `miku_docs/` are the **source of truth**. The
-selected index backend (SQLite by default, Postgres optionally) holds only a
-**disposable index** that is fully rebuildable from `miku_docs/**/*.md`.
-Deleting the database loses nothing but rebuild time.
+Markdown files and assets under `miku_docs/` are the **source of truth**. The selected index backend (SQLite by default, Postgres optionally) holds only a **disposable index** that is fully
+rebuildable from `miku_docs/**/*.md`. Deleting the database loses nothing but rebuild time.
 
 ```
 repo/

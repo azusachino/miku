@@ -4,9 +4,8 @@ All diagrams are Mermaid. See `docs/architecture.md` for the prose design and sc
 
 ## 1. System overview
 
-Files are the source of truth; SQLite is the default disposable index, with
-Postgres available as an explicit profile. HTTP handlers only **read** the
-index; the background indexer is the **only** writer.
+Files are the source of truth; SQLite is the default disposable index, with Postgres available as an explicit profile. HTTP handlers only **read** the index; the background indexer is the **only**
+writer.
 
 ```mermaid
 flowchart LR

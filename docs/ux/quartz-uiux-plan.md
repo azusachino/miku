@@ -18,8 +18,7 @@ This document keeps the Quartz reference close to the implementation. It is a de
 ## Product boundary
 
 Miku is a local Markdown file browser/editor with a persistent index. Quartz is a Markdown publishing system. Miku should adopt Quartz's information hierarchy and content-first visual language, while
-retaining Miku's local editing, watcher, and SQLite index. Files remain managed by
-the user's filesystem; v0.0.2 exposes content editing and page creation only.
+retaining Miku's local editing, watcher, and SQLite index. Files remain managed by the user's filesystem; v0.0.2 exposes content editing and page creation only.
 
 Do not copy Quartz's static build pipeline, generated-site assumptions, or graph-first navigation as mandatory application chrome.
 

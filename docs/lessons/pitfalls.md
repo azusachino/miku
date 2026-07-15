@@ -50,6 +50,5 @@ Tried: Implement tree operations as row-level `Move/Rename` inline forms, delete
 Why it failed: The flow lacks the interaction model users expect from Trilium-style trees: drag hit modes before/after/into, context-menu cut/paste/move-to, undoable trash, collision preview, keyboard
 movement, and JSON tree transactions.
 
-Do instead: Keep the explorer read-only in v0.0.2. Provide reliable Markdown
-content editing, and leave path changes or file removal to the filesystem and
-git. Revisit file-management UX only as a separate, fully specified milestone.
+Do instead: Keep the explorer read-only in v0.0.2. Provide reliable Markdown content editing, and leave path changes or file removal to the filesystem and git. Revisit file-management UX only as a
+separate, fully specified milestone.

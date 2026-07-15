@@ -62,10 +62,8 @@ Building accounts/RBAC is explicitly rejected — it reinvents Notion and breaks
 
 ## ADR-4 — Rename/delete & assets
 
-**Status: superseded for v0.0.2.** Miku does not expose rename, move, delete,
-Trash, restore, or purge operations. The file tree is read-only; users manage
-paths and file removal with their filesystem, editor, scripts, or git. The
-watcher reconciles those external changes into the disposable index.
+**Status: superseded for v0.0.2.** Miku does not expose rename, move, delete, Trash, restore, or purge operations. The file tree is read-only; users manage paths and file removal with their
+filesystem, editor, scripts, or git. The watcher reconciles those external changes into the disposable index.
 
 **Assets.** Live in `miku_docs/assets/`. Upload (roadmap): `POST /assets` writes atomically, keeping the original name but **deduping by content hash** (`name-<short-hash>.ext`) to avoid collisions.
 `![[image.png]]` resolves by basename in `assets/`; served with caching headers.

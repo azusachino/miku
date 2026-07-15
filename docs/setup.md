@@ -13,9 +13,7 @@ The default path is local SQLite and needs no database service:
 make run
 ```
 
-For the optional Postgres profile, run Postgres directly from the devShell
-against a project-local, disposable cluster (`.pgdata/`, gitignored) on port
-`55432`:
+For the optional Postgres profile, run Postgres directly from the devShell against a project-local, disposable cluster (`.pgdata/`, gitignored) on port `55432`:
 
 ```bash
 make db-up        # init (first run) + start Postgres, create the miku database
@@ -91,7 +89,5 @@ already sets via `dockerfile:`). The native stack above is preferred for day-to-
 
 ## Database
 
-The SQLite index is stored at `miku_docs/.miku-index.sqlite` by default.
-Postgres migrations live under `crates/miku-index-postgres/migrations/` and are
-used only for the explicit Postgres profile. Both indexes are fully rebuildable
-from `miku_docs/**/*.md`; dropping and recreating either loses no user data.
+The SQLite index is stored at `miku_docs/.miku-index.sqlite` by default. Postgres migrations live under `crates/miku-index-postgres/migrations/` and are used only for the explicit Postgres profile.
+Both indexes are fully rebuildable from `miku_docs/**/*.md`; dropping and recreating either loses no user data.
