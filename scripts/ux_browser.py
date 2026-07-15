@@ -32,8 +32,7 @@ def check_shell(page: Page) -> None:
     page.remove_listener("request", record_reader_import)
     if editor_imports:
         raise AssertionError(
-            "reader mode must not load external editor modules: "
-            + ", ".join(editor_imports[:3])
+            "reader mode must not load external editor modules: " + ", ".join(editor_imports[:3])
         )
     page.locator("link[rel='icon']").wait_for(state="attached")
     assert_visible(page, ".mk-topbar", "shell topbar")
@@ -193,6 +192,7 @@ def main() -> int:
         page.set_default_timeout(5_000)
         page.set_default_navigation_timeout(10_000)
         console_errors: list[str] = []
+
         def record_console(message) -> None:
             if message.type == "error":
                 console_errors.append(message.text)
