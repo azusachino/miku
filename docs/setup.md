@@ -7,7 +7,7 @@
 
 ## Native dev stack (no containers — Linux & macOS)
 
-The default path is local SQLite and needs no database service:
+The default path is the local memory/Tantivy projection and needs no database service:
 
 ```bash
 make run
@@ -24,7 +24,7 @@ make db-down      # stop Postgres
 make db-reset     # stop + delete .pgdata (index is rebuilt from miku_docs/**/*.md)
 ```
 
-The app defaults to the local Rust-built SQLite index at `miku_docs/.miku-index.sqlite`. `make dev` selects the explicit Postgres profile and sets `DATABASE_URL=postgres://miku@localhost:55432/miku`
+The app defaults to the rebuildable Rust-built memory/Tantivy projection. `MIKU_INDEX_BACKEND=sqlite` remains available for the legacy local index; `make dev` selects the explicit Postgres profile and sets `DATABASE_URL=postgres://miku@localhost:55432/miku`
 (trust auth, no password); migrations run on startup. Override with `MIKU_INDEX_BACKEND=…`, `MIKU_INDEX_PATH=…`, `PGPORT=…`, `PGDATA=…`, or `DATABASE_URL=…`.
 
 ## Remote access (LAN / Tailscale)
@@ -50,7 +50,7 @@ export MIKU_INDEX_BACKEND=postgres
 ```bash
 nix develop       # enter the devShell (provisions all tools)
 make css          # build static/tailwind.generated.css via bun (bun run css)
-make run          # build Tailwind CSS (bun) then run the server (default local SQLite index)
+make run          # build Tailwind CSS (bun) then run the server (default memory/Tantivy projection)
 make check                             # default fmt + lint + tests
 make check-all-features                # all Cargo features
 make check-integration                 # optional service-backed probes
@@ -74,7 +74,7 @@ written to `.artifacts/ux/` (ignored).
 
 ## Containers (Postgres/Valkey scale profile only)
 
-Containers are only for the service-backed **scale profile** — the default `memory`/`sqlite` runtime is a pure local binary (`make run`), so it needs no image. The image (`Containerfile`) is built
+Containers are only for the service-backed **scale profile** — the default `memory` runtime is a pure local binary (`make run`), so it needs no image. The image (`Containerfile`) is built
 with the `postgres,valkey` features and pairs the app with a Postgres service via `compose.yml`.
 
 ```bash
@@ -89,5 +89,5 @@ already sets via `dockerfile:`). The native stack above is preferred for day-to-
 
 ## Database
 
-The SQLite index is stored at `miku_docs/.miku-index.sqlite` by default. Postgres migrations live under `crates/miku-index-postgres/migrations/` and are used only for the explicit Postgres profile.
+The legacy SQLite index is stored at `miku_docs/.miku-index.sqlite` when `MIKU_INDEX_BACKEND=sqlite` is selected. Postgres migrations live under `crates/miku-index-postgres/migrations/` and are used only for the explicit Postgres profile.
 Both indexes are fully rebuildable from `miku_docs/**/*.md`; dropping and recreating either loses no user data.

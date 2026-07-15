@@ -12,3 +12,4 @@ miku-domain = { version = "0.0.2", path = "../miku-domain" }
 miku-indexer = { version = "0.0.2", path = "../miku-indexer" }
 serde_json.workspace = true
 tokio.workspace = true
+tantivy = "0.22"

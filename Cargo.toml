@@ -10,7 +10,8 @@ repository = "https://github.com/azusachino/miku"
 keywords = ["markdown", "wiki", "notes", "backlinks", "fulltext"]
 categories = ["text-processing", "web-programming"]
 
-# `cargo install miku` builds the default memory+sqlite runtime; postgres/valkey
+# `cargo install miku` builds the default memory/Tantivy runtime; sqlite,
+# postgres, and valkey are opt-in compatibility or scale profiles.
 # are opt-in Cargo features. Keep repo-internal docs/config/CI out of the package.
 include = [
   "src/**/*",
@@ -109,7 +110,7 @@ tracing-subscriber = { version = "0.3", default-features = false, features = [
 ] }
 
 [features]
-default = ["memory", "sqlite"]
+default = ["memory"]
 memory = ["miku-app/memory"]
 sqlite = ["miku-app/sqlite"]
 postgres = ["miku-app/postgres"]

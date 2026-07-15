@@ -66,7 +66,7 @@ grep, your editor, your backup) can't touch the data.
 
 - **You own the files.** Plain `.md` in one folder. Delete Miku tomorrow; your knowledge is untouched.
 - **Connections, found for you.** `[[links]]` → backlinks, tags, FTS built in the background. The valuable graph, without hand-maintenance.
-- **The database is disposable, on purpose.** SQLite is the local default and Postgres is optional; nuke either index and Miku rebuilds from files. Nothing important lives anywhere but your disk.
+- **The projections are disposable, on purpose.** Memory/Tantivy is the local default and SQLite/Postgres are optional; nuke any projection and Miku rebuilds from files. Nothing important lives anywhere but your disk.
 - **Self-host or run local.** No account, no telemetry, no cloud.
 - **It gets out of your way.** Browser editor over a textarea. No bundler, no app to learn, no migration the day you need it most.
 

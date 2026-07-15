@@ -35,12 +35,12 @@ This makes the vault easy to inspect, back up, version, or edit with another too
 | Knowledge graph | Backlinks, linked mentions, tags, and paginated tag views                                              |
 | Search          | Metadata quick-switch plus embedded full-text content search powered by Rust's grep/ignore crates      |
 | Editing         | Browser editor, inline reader editing, preview, atomic writes, and conflict-aware saves                |
-| Runtime         | Local SQLite index by default; optional Postgres and Valkey composition for larger deployments         |
+| Runtime         | Rebuildable memory/Tantivy projection by default; optional SQLite, Postgres, and Valkey profiles       |
 | UX              | Light/dark themes, reading-width modes, lazy editor/highlighter loading, and a focused command palette |
 
 ## Quick start
 
-The default development path needs Nix with flakes. It uses the local SQLite index and does not need Postgres.
+The default development path needs Nix with flakes. It uses the rebuildable local memory/Tantivy projection and does not need Postgres or SQLite.
 
 ```bash
 git clone https://github.com/azusachino/miku.git
@@ -69,7 +69,7 @@ The useful local switches are:
 
 | Variable             | Default                        | Purpose                                                    |
 | -------------------- | ------------------------------ | ---------------------------------------------------------- |
-| `MIKU_INDEX_BACKEND` | `sqlite`                       | Select the local or service-backed index implementation    |
+| `MIKU_INDEX_BACKEND` | `memory`                       | Select the rebuildable memory/Tantivy or legacy backend    |
 | `MIKU_INDEX_PATH`    | `miku_docs/.miku-index.sqlite` | Location of the local derived index                        |
 | `MIKU_BIND`          | `0.0.0.0:3000`                 | Address exposed by the HTTP server                         |
 | `MIKU_READONLY`      | unset                          | Deploy the reader without write operations                 |

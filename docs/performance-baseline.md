@@ -16,7 +16,7 @@ This document records the current 0.0.2 SQLite/SQLx profile. Historical backend 
 - The index is disposable and rebuilt from `miku_docs/**/*.md`.
 - Page, link, tag, alias, mention, and FTS writes are transactional at the backend boundary.
 - HTTP reads use the backend-neutral `IndexReader` contract; the filesystem remains the source of truth.
-- The default backend is selected with `MIKU_INDEX_BACKEND=sqlite` and defaults to `miku_docs/.miku-index.sqlite`.
+- The default backend is selected with `MIKU_INDEX_BACKEND=memory` and uses the rebuildable memory/Tantivy projection; SQLite remains available with `MIKU_INDEX_BACKEND=sqlite`.
 
 ## Dependency closure
 

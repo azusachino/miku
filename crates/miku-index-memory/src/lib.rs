@@ -1,4 +1,4 @@
-//! Deterministic in-memory [`miku_domain::IndexStore`] implementation.
+//! Deterministic in-memory graph and Tantivy [`miku_domain::IndexStore`] implementation.
 //!
 //! This is the reference behavior for contract tests and disposable
 //! development. It is not a durable deployment backend.
@@ -11,21 +11,38 @@ use miku_domain::{
 use std::collections::BTreeMap;
 use std::sync::{Arc, RwLock};
 
+mod search;
+
+use search::SearchProjection;
+
 type MentionKey = (String, String, String);
 type MentionMap = BTreeMap<MentionKey, MentionRecord>;
 
 /// An in-memory index keyed by source-relative page path.
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct MemoryIndex {
     pages: Arc<RwLock<BTreeMap<String, PageIndex>>>,
     mentions: Arc<RwLock<MentionMap>>,
+    search: Arc<RwLock<SearchProjection>>,
+}
+
+impl Default for MemoryIndex {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl MemoryIndex {
     /// Create an empty reference index.
     #[must_use]
     pub fn new() -> Self {
-        Self::default()
+        Self {
+            pages: Arc::new(RwLock::new(BTreeMap::new())),
+            mentions: Arc::new(RwLock::new(BTreeMap::new())),
+            search: Arc::new(RwLock::new(
+                SearchProjection::new().expect("in-memory Tantivy projection must initialize"),
+            )),
+        }
     }
 
     fn read_pages(
@@ -42,6 +59,17 @@ impl MemoryIndex {
         self.pages
             .write()
             .map_err(|_| StoreError::Operation("memory index lock poisoned".to_string()))
+    }
+
+    fn rebuild_search(&self) -> StoreResult<()> {
+        let pages = self
+            .pages
+            .read()
+            .map_err(|_| StoreError::Operation("memory index lock poisoned".to_string()))?;
+        self.search
+            .write()
+            .map_err(|_| StoreError::Operation("memory search lock poisoned".to_string()))?
+            .rebuild(&pages.values().cloned().collect::<Vec<_>>())
     }
 }
 
@@ -73,36 +101,10 @@ impl IndexReader for MemoryIndex {
     }
 
     async fn search(&self, request: SearchRequest) -> StoreResult<Vec<SearchHit>> {
-        let query = request.query.trim().to_lowercase();
-        if query.is_empty() || request.limit == 0 {
-            return Ok(Vec::new());
-        }
-
-        let terms: Vec<&str> = query.split_whitespace().collect();
-        let mut hits = self
-            .read_pages()?
-            .values()
-            .filter_map(|page| {
-                let path = page.summary.path.to_lowercase();
-                let title = page.summary.title.to_lowercase();
-                let body = page.body.to_lowercase();
-                let haystack = match request.scope {
-                    miku_domain::SearchScope::All => format!("{path} {title} {body}"),
-                    miku_domain::SearchScope::Title => format!("{path} {title}"),
-                    miku_domain::SearchScope::Body => body.clone(),
-                };
-                terms
-                    .iter()
-                    .all(|term| haystack.contains(term))
-                    .then(|| SearchHit {
-                        path: page.summary.path.clone(),
-                        title: page.summary.title.clone(),
-                        snippet: snippet(&page.body, &query),
-                    })
-            })
-            .collect::<Vec<_>>();
-        hits.truncate(request.limit);
-        Ok(hits)
+        self.search
+            .read()
+            .map_err(|_| StoreError::Operation("memory search lock poisoned".to_string()))?
+            .search(&request)
     }
 
     async fn backlinks(&self, path: &str) -> StoreResult<Vec<Backlink>> {
@@ -166,7 +168,12 @@ impl IndexWriter for MemoryIndex {
     async fn replace_page(&self, page: PageIndex) -> StoreResult<IndexEvent> {
         let path = page.summary.path.clone();
         self.write_pages()?.insert(path.clone(), page);
+        self.rebuild_search()?;
         Ok(IndexEvent::PageIndexed { path })
+    }
+
+    async fn rebuild_search_index(&self) -> StoreResult<()> {
+        self.rebuild_search()
     }
 
     async fn replace_pages(&self, pages: Vec<PageIndex>) -> StoreResult<Vec<IndexEvent>> {
@@ -183,6 +190,8 @@ impl IndexWriter for MemoryIndex {
         for page in pages {
             indexed.insert(page.summary.path.clone(), page);
         }
+        drop(indexed);
+        self.rebuild_search()?;
         Ok(events)
     }
 
@@ -263,20 +272,11 @@ impl IndexWriter for MemoryIndex {
 
     async fn delete_page(&self, path: &str) -> StoreResult<IndexEvent> {
         self.write_pages()?.remove(path);
+        self.rebuild_search()?;
         Ok(IndexEvent::PageDeleted {
             path: path.to_string(),
         })
     }
-}
-
-fn snippet(body: &str, query: &str) -> String {
-    let lower = body.to_lowercase();
-    let start = query
-        .split_whitespace()
-        .find_map(|term| lower.find(term))
-        .unwrap_or(0);
-    let start_chars = lower[..start].chars().count();
-    body.chars().skip(start_chars).take(160).collect()
 }
 
 #[cfg(test)]
@@ -358,5 +358,38 @@ mod tests {
             1
         );
         assert_eq!(index.tags().await.expect("tags")[0].count, 2);
+    }
+
+    #[tokio::test]
+    async fn rebuild_removes_deleted_documents_from_tantivy() {
+        let index = MemoryIndex::new();
+        index
+            .replace_page(page("Gone.md", "Gone", "ephemeral content"))
+            .await
+            .expect("index document");
+        assert_eq!(
+            index
+                .search(SearchRequest {
+                    query: "ephemeral".to_string(),
+                    scope: SearchScope::Body,
+                    limit: 10,
+                })
+                .await
+                .expect("search before delete")
+                .len(),
+            1
+        );
+
+        index.delete_page("Gone.md").await.expect("delete document");
+        index.rebuild_search_index().await.expect("rebuild search");
+        assert!(index
+            .search(SearchRequest {
+                query: "ephemeral".to_string(),
+                scope: SearchScope::Body,
+                limit: 10,
+            })
+            .await
+            .expect("search after delete")
+            .is_empty());
     }
 }

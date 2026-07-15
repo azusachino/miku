@@ -4,7 +4,7 @@ Miku is a filesystem-owned personal Markdown wiki: a browser editor over plain `
 
 ## Core invariant
 
-Markdown files and assets under `miku_docs/` are the **source of truth**. The selected index backend (SQLite by default, Postgres optionally) holds only a **disposable index** that is fully
+Markdown files and assets under `miku_docs/` are the **source of truth**. The selected index backend (memory graph plus Tantivy by default, SQLite/Postgres optionally) holds only a **disposable index** that is fully
 rebuildable from `miku_docs/**/*.md`. Deleting the database loses nothing but rebuild time.
 
 ```
@@ -22,7 +22,7 @@ repo/
 - **HTTP layer (axum):** page render/edit/save routes, search, tags, backlinks, static asset serving. **Read-only** against the index.
 - **Store:** filesystem read/write of `miku_docs/*.md`. Atomic save = write temp + `fsync` + `rename`.
 - **Background indexer:** `notify` watcher on `miku_docs/`; parses changed pages off the request path into the selected index backend. The **sole writer**.
-- **Index backend:** SQLite by default, or Postgres when explicitly selected; both store pages, links, tags, and full-text search projections.
+- **Index backend:** memory graph plus Tantivy by default, with SQLite/Postgres available when explicitly selected; all are projections of files, links, tags, and full-text search.
 
 ## Save / index contract (single-writer model)
 

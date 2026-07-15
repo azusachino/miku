@@ -33,7 +33,7 @@ pub enum RuntimeConfig {
 
 /// Resolve the runtime selected by the process environment.
 pub fn resolve_runtime() -> StoreResult<RuntimeConfig> {
-    let backend = std::env::var("MIKU_INDEX_BACKEND").unwrap_or_else(|_| "sqlite".to_string());
+    let backend = std::env::var("MIKU_INDEX_BACKEND").unwrap_or_else(|_| "memory".to_string());
     let runtime = match backend.as_str() {
         "memory" => RuntimeConfig::Memory,
         "sqlite" => RuntimeConfig::Sqlite {
