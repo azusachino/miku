@@ -124,15 +124,14 @@ a { color: var(--teal); }
   padding: 13px 22px; border-bottom: 1px solid var(--border);
   background: var(--topbar); backdrop-filter: blur(22px); -webkit-backdrop-filter: blur(22px);
 }
-.mk-mobile-files { display: none; }
 .mk-topbar-action {
-  display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 34px; padding: 7px 10px;
+  display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; padding: 0;
   border: 1px solid var(--border); border-radius: 9px; background: var(--panel); color: var(--muted);
   font: 700 12px/1 var(--font-body); cursor: pointer; transition: .18s;
 }
 .mk-topbar-action:hover { color: var(--teal); border-color: var(--teal); }
 .mk-topbar-action .mk-icon { width: 15px; height: 15px; }
-.mk-topbar-action[aria-label='Open settings'] > svg:not(.mk-oss-settings) { display: none; }
+.mk-topbar-action span { display: none; }
 .mk-sidebar-link {
   display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 12px; padding: 8px 10px;
   border: 1px solid var(--border); border-radius: 9px; color: var(--muted); font-size: 12px; font-weight: 700; text-decoration: none;
@@ -1015,9 +1014,6 @@ pre.mermaid svg {
 @media (max-width: 760px) {
   .mk-topbar { gap: 10px; padding: 10px 14px; }
   .mk-brand { width: auto; }
-  .mk-mobile-files { display: inline-flex; align-items: center; justify-content: center; gap: 6px; flex: 0 0 auto; min-height: 36px; padding: 0 10px; border: 1px solid var(--border); border-radius: 9px; background: var(--panel); color: var(--muted); font: 700 12px/1 var(--font-body); }
-  .mk-topbar-action span { display: none; }
-  .mk-topbar-action { width: 36px; height: 36px; padding: 0; }
   .mk-wordmark small, .mk-search-trigger span:not(.mk-kbd) { display: none; }
   .mk-search-trigger { max-width: none; padding: 9px 11px; }
   .mk-sidebar { position: absolute; inset: 0 auto 0 0; z-index: 20; width: min(86vw, 320px); transform: translateX(-102%); transition: transform 180ms ease; }

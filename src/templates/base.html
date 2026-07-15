@@ -325,9 +325,6 @@
 <body x-data="mikuShell()" x-init="init()" @miku-close-sidebar.window="sidebarOpen = false" :class="{ 'mk-zen': zenMode }" class="bg-bg-base text-text-base font-body antialiased selection:bg-teal/32 overflow-hidden h-full">
     <div class="mk-app relative flex flex-col h-screen overflow-hidden" hx-boost="true">
         <header class="mk-topbar relative z-10 flex items-center gap-5 px-5.5 py-3.25 border-b border-border bg-topbar backdrop-blur-[22px] flex-shrink-0">
-            <button type="button" class="mk-mobile-files" @click="sidebarOpen = !sidebarOpen" :aria-expanded="sidebarOpen" aria-label="Open files">
-                <svg class="mk-icon" aria-hidden="true"><use href="/static/lucide.svg#folder"></use></svg><span>Files</span>
-            </button>
             <a class="mk-brand flex items-center gap-3 w-66 flex-shrink-0 no-underline" href="/p/Index" aria-label="Miku home">
                 <span class="mk-logo relative w-10.5 h-10.5 rounded-[14px] bg-grad flex items-center justify-center shadow-[0_8px_22px_var(--tealglow)]" aria-hidden="true">
                     <span class="mk-logo-mark">M</span>
@@ -349,11 +346,11 @@
                         <svg class="mk-icon" aria-hidden="true"><use href="/static/lucide.svg#moon"></use></svg>
                     </button>
                 </div>
-                <button type="button" class="mk-topbar-action" @click="openPalette('commands')" aria-label="Open command palette">
+                <button type="button" class="mk-topbar-action" @click="openPalette('commands')" aria-label="Open command palette" title="Commands">
                     <svg class="mk-icon" aria-hidden="true"><use href="/static/lucide.svg#terminal"></use></svg>
                     <span>Commands</span>
                 </button>
-                <button type="button" class="mk-topbar-action" @click="settingsOpen = true" aria-label="Open settings">
+                <button type="button" class="mk-topbar-action" @click="settingsOpen = true" aria-label="Open settings" title="Settings">
                     <svg class="mk-icon mk-oss-settings" aria-hidden="true"><use href="/static/lucide.svg#settings"></use></svg>
                     <span>Settings</span>
                 </button>

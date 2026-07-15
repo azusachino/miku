@@ -42,6 +42,19 @@ def check_shell(page: Page) -> None:
     assert_visible(page, ".mk-topbar-action:first-of-type", "topbar actions")
     if page.locator(".mk-history-controls").count():
         raise AssertionError("browser history arrows should not be duplicated in the app chrome")
+    if page.locator(".mk-mobile-files").count():
+        raise AssertionError("broken mobile files control must not be rendered")
+    actions = page.locator(".mk-topbar-action")
+    if actions.count() != 2:
+        raise AssertionError("topbar must expose exactly two compact action controls")
+    for index in range(actions.count()):
+        action = actions.nth(index)
+        if not action.get_attribute("aria-label") or not action.get_attribute("title"):
+            raise AssertionError(
+                "compact topbar actions must retain accessible labels and tooltips"
+            )
+        if action.locator("span:visible").count():
+            raise AssertionError("compact topbar actions must not show descriptive text")
     if page.locator(".mk-topbar use[href^='/static/lucide.svg#']").count() < 3:
         raise AssertionError("topbar controls are missing the shared OSS icon sprite")
     if page.locator("button[aria-label='Open settings'] .mk-icon:visible").count() != 1:
