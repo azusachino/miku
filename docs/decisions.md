@@ -107,7 +107,7 @@ materializing them duplicates truth and invites drift. Mirrored in asobi `miku:d
 
 ## ADR-6 — Filesystem watcher at scale
 
-> **Status: Verified** → canonical in `docs/adr/0006-watcher-at-scale.md`. Lifts the `dataflow_v3.md` resolution into a decision so the RocksDB detour is not re-litigated.
+> **Status: Verified** → canonical in `docs/adr/0006-watcher-at-scale.md`. Lifts the `docs/dataflow.md` §8 resolution into a decision so the RocksDB detour is not re-litigated.
 
 **Decision.** Keep v1's `notify` watcher as the sole index trigger; scale it by watching **directories, not files**. Watch budget = directory count, not file count. Three levers in order: (1)
 recursive `notify` (one watch per directory, default); (2) document raising `fs.inotify.max_user_watches` in setup; (3) a `PollWatcher` fallback (zero inotify watches, periodic mtime scan) past an
@@ -117,8 +117,8 @@ extreme directory-count threshold. The startup mtime+hash reconcile sweeps any e
 approaches the limit (100k files in ~200 folders ≈ 200 watches; default cap 65k–524k; macOS FSEvents has no per-file limit). The watcher's only irreplaceable job is **live pickup of external edits** —
 exactly the files-are-truth payoff.
 
-**Rejected.** RocksDB as a durable work-queue / primary store (former `dataflow_v2.md`) — solves a problem Miku doesn't have, adds a second store, and risks the core invariant. See
-`docs/dataflow_v3.md` (supersedes v2). Candidate verified file: `docs/adr/0006-watcher-at-scale.md`.
+**Rejected.** RocksDB as a durable work-queue / primary store — solves a problem Miku doesn't have, adds a second store, and risks the core invariant. See `docs/dataflow.md` §8 (folder-scoped
+watching). Canonical decision: `docs/adr/0006-watcher-at-scale.md`.
 
 ---
 

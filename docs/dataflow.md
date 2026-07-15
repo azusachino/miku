@@ -1,6 +1,6 @@
 # Dataflow & Workflows
 
-All diagrams are Mermaid. See `docs/architecture.md` for the prose design and schema.
+All diagrams are Mermaid. See `docs/architecture.md` for the prose design and schema. Watcher scaling (folder-scoped watching and fallbacks) is covered in §8.
 
 ## 1. System overview
 
@@ -132,3 +132,29 @@ flowchart LR
   TG -->|"tags.tag = :tag"| PG
   SR -->|"body_tsv @@ query (GIN)"| PG
 ```
+
+## 8. Watcher scale — folder-scoped watching
+
+`notify` subscribes at **directory** granularity, so the watch budget scales with directory count, not file count. On Linux an inotify watch is added **per directory** and reports events for every
+file directly inside it; `RecursiveMode::Recursive` adds one watch per subdirectory (auto-adding one when a new subdir appears). macOS FSEvents watches paths, with no per-file limit.
+
+- 100k files across ~200 folders → ~200 watches (default `fs.inotify.max_user_watches` is 65k–524k — not close).
+- 100k files in one folder → 1 watch.
+
+This is why Miku needs no second store to "scale the watcher": an earlier plan (a rejected RocksDB work-queue detour) misdiagnosed the inotify limit as per-file. Three levers, in order of preference:
+
+1. **Watch folders (default)** — already how recursive mode behaves; covers any realistic wiki.
+2. **Raise the sysctl** — document `fs.inotify.max_user_watches` for the rare deep-tree case.
+3. **`PollWatcher` fallback** — zero inotify watches, trading latency for budget; only past a genuinely extreme directory count.
+
+```mermaid
+flowchart TD
+  A["startup"] --> B{"directory count > threshold?"}
+  B -- no --> C["recursive inotify watch<br/>(1 watch per directory)"]
+  B -- yes --> D["PollWatcher fallback<br/>(periodic mtime scan, 0 watches)"]
+  C --> E["live external-edit pickup"]
+  D --> E
+  C -. "new subdir created" .-> F["crate auto-adds a watch;<br/>files raced before it lands<br/>are caught by startup reconcile (§5)"]
+```
+
+A file created in a brand-new directory before its watch registers can be missed; recursive mode auto-registers the new dir and the startup reconcile (§5) sweeps anything missed, so it self-heals.

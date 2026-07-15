@@ -37,4 +37,4 @@ the limit (100k files across ~200 folders ≈ 200 watches; default cap 65k–524
 ## Trade-offs / Rejected
 
 **RocksDB** as a durable work-queue or primary store (the former `dataflow_v2.md`) is rejected: it solves a problem Miku doesn't have, adds a second store, and risks the core invariant
-(files-are-truth). The event-driven, single-writer v1 model is retained unchanged. See `docs/dataflow_v3.md` (supersedes v2).
+(files-are-truth). The event-driven, single-writer v1 model is retained unchanged. See `docs/dataflow.md` §8 (folder-scoped watching).

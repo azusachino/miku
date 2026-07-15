@@ -45,9 +45,12 @@ The default development path needs Nix with flakes. It uses the local Turso inde
 ```bash
 git clone https://github.com/azusachino/miku.git
 cd miku
-nix develop
-make run
+nix develop           # enter the devShell (rust, bun, uv, postgres, …)
+make run              # build the Tailwind CSS with bun, then run the server
 ```
+
+`make run` depends on the `css` target: it runs `bun install --frozen-lockfile` and `bun run css` to compile `static/tailwind.input.css` → `static/tailwind.generated.css` before `cargo run`. `bun`
+comes from the Nix devShell, so no separate Node/Bun install is needed. The generated stylesheet is committed, so a plain `cargo run` also works if you have not changed any CSS.
 
 Open <http://127.0.0.1:3000>. The default content root is `miku_docs/`; put a Markdown file there and refresh the page after the watcher indexes it.
 
@@ -111,7 +114,7 @@ make check                  # formatting, CSS, lint, Python checks, Rust tests
 make check-all-features     # compile and test every Cargo feature combination
 make check-blackbox         # live HTTP checks against a running server
 make check-ux-browser       # Playwright browser acceptance checks
-make release                # crates.io package dry-runs
+make release                # crates.io leaf package dry-runs
 make validate               # check plus release build
 ```
 
