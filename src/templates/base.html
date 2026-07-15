@@ -99,7 +99,7 @@
         .mk-toast {
             position: fixed;
             left: 50%;
-            bottom: 24px;
+            top: 80px;
             transform: translateX(-50%);
             z-index: 210;
             display: flex;
@@ -365,7 +365,7 @@
                                 :class="{ 'is-active': sidebarTab === 'trash' }"
                                 :aria-selected="sidebarTab === 'trash'"
                                 aria-controls="sidebar-trash"
-                                @click="sidebarTab = 'trash'; $store.tree.loadTrash()">Trash</button>
+                                @click="sidebarTab = 'trash'; $store.tree.loadTrash(true)">Trash</button>
                     </nav>
 
                 {% from "_nav_macro.html" import nav_node %}
@@ -627,10 +627,33 @@
             </section>
         </div>
 
+        <div class="mk-overlay" x-show="renameOpen" x-transition.opacity
+             @keydown.enter.window="if (renameOpen) { $event.preventDefault(); confirmRename(); }"
+             @keydown.escape.window="closeRename()" x-cloak>
+            <section class="mk-modal" @click.outside="closeRename()" aria-modal="true" role="dialog" aria-labelledby="rename-title">
+                <div class="mk-modal-bar"></div>
+                <form @submit.prevent="confirmRename()">
+                    <div class="mk-modal-body">
+                        <h2 id="rename-title" class="mk-wordmark">Rename or move</h2>
+                        <div class="mk-card">
+                            <label class="mk-card-label" for="rename-path">Destination path</label>
+                            <input id="rename-path" x-ref="renamePath" class="mk-create-title" type="text"
+                                   x-model="renameTo" autocomplete="off" spellcheck="false">
+                            <p class="text-xs text-muted/70">Use a path relative to the vault, without `.md`.</p>
+                        </div>
+                    </div>
+                    <div class="mk-modal-foot">
+                        <button type="submit" class="mk-btn mk-btn-primary">Move</button>
+                        <button type="button" class="mk-btn mk-btn-ghost" @click="closeRename()">Cancel</button>
+                    </div>
+                </form>
+            </section>
+        </div>
+
         <div class="mk-overlay" x-show="settingsOpen" x-transition.opacity @keydown.escape.window="settingsOpen = false" x-cloak>
             <section class="mk-modal" @click.outside="settingsOpen = false" aria-modal="true" role="dialog" aria-labelledby="settings-title">
                 <div class="mk-modal-body">
-                    <h2 id="settings-title" class="mk-wordmark">Settings<small>appearance and reading</small></h2>
+                    <h2 id="settings-title" class="mk-wordmark">Settings</h2>
 
                     <div class="mk-card">
                         <div class="mk-card-label">Mode</div>
@@ -677,7 +700,7 @@
              @click.outside="$store.tree.closeMenu()"
              @keydown.escape.window="$store.tree.closeMenu()"
              :style="`left:${$store.tree.menu.x}px; top:${$store.tree.menu.y}px;`">
-            <button type="button" class="mk-chip" @click="$store.tree.renamePrompt($store.tree.menu.path)">Rename / move…</button>
+            <button type="button" class="mk-chip" @click="$dispatch('miku-open-rename', { path: $store.tree.menu.path }); $store.tree.closeMenu()">Rename / move…</button>
             <button type="button" class="mk-chip tree-menu-danger" @click="$store.tree.trash($store.tree.menu.path)">Delete</button>
         </div>
 
@@ -693,6 +716,9 @@
             return {
                 settingsOpen: false,
                 createOpen: false,
+                renameOpen: false,
+                renameFrom: '',
+                renameTo: '',
                 paletteOpen: false,
                 paletteMode: 'pages',
                 paletteQuery: '',
@@ -751,6 +777,7 @@
                     this.paneWidths.rail = this.readNumber('railWidth', 260, 220, 440);
                     this.applyReadingPrefs();
                     this.applyPaneWidths();
+                    window.addEventListener('miku-open-rename', event => this.openRename(event.detail.path));
                     this.$watch('animatedAccents', value => { this.writeBool('animatedAccents', value); this.applyReadingPrefs(); });
                     this.$watch('showBacklinks', value => { this.writeBool('showBacklinks', value); this.applyReadingPrefs(); });
                     this.$watch('compactSpacing', value => { this.writeBool('compactSpacing', value); this.applyReadingPrefs(); });
@@ -939,6 +966,31 @@
                 },
                 closeCreate() {
                     this.createOpen = false;
+                },
+                openRename(path) {
+                    this.closePalette();
+                    this.renameFrom = path || '';
+                    this.renameTo = this.renameFrom;
+                    this.renameOpen = Boolean(this.renameFrom);
+                    this.$nextTick(() => {
+                        if (this.$refs.renamePath) {
+                            this.$refs.renamePath.focus();
+                            this.$refs.renamePath.select();
+                        }
+                    });
+                },
+                closeRename() {
+                    this.renameOpen = false;
+                    this.renameFrom = '';
+                    this.renameTo = '';
+                },
+                confirmRename() {
+                    const destination = (this.renameTo || '').trim().replace(/^\/+|\/+$/g, '');
+                    if (!destination || !this.renameFrom) return;
+                    this.renameOpen = false;
+                    if (window.Alpine) {
+                        window.Alpine.store('tree').move(this.renameFrom, destination);
+                    }
                 },
                 confirmCreate() {
                     const path = this.createPath.split('/').map(encodeURIComponent).join('/');

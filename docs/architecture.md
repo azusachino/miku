@@ -31,7 +31,8 @@ This is the key design decision that removes save↔index races:
 1. `POST /save` writes to a temp file → `fsync` → atomic `rename` into `miku_docs/<path>.md`. The handler returns immediately and **does not touch the index**.
 2. The `rename` fires a `notify` event → debounced (~200ms) → the indexer reindexes just that page.
 3. **`notify` is the only index trigger.** Handlers never index directly, so there is no double-indexing and no race. Cost: backlinks lag a save by ~200ms — invisible for a personal wiki.
-4. **Startup reconcile:** full scan comparing file mtime vs `pages.mtime` to catch anything `notify` missed while the process was down.
+4. **Startup reconcile:** metadata scan comparing file mtime vs `pages.mtime` to catch anything `notify` missed while the process was down. The persisted SQLite/Postgres projection remains in place;
+   unchanged files are skipped and only changed, new, or deleted files are written.
 
 Reindex-one-page is a single transaction: upsert the `pages` row, wipe+rewrite that page's `links` / `tags` / FTS rows, then re-resolve any dangling links now pointing at this page.
 

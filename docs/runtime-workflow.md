@@ -31,8 +31,13 @@ process
                                -> set index_ready=true
 ```
 
-`IndexerQueue::new_with_writer` starts the consumer before the listener binds; the consumer is deliberately independent of request handling. The initial reconcile walks the vault, skips unchanged
-files by mtime, writes changed pages in batches, removes stale projections, and then marks readiness.
+`IndexerQueue::new_with_writer` starts the consumer before the listener binds; the consumer is deliberately independent of request handling. The initial reconcile walks the vault, reads the persisted
+index rows, skips unchanged files by mtime, writes changed pages in batches, removes stale projections, and then marks readiness. A restart with the same SQLite path or Postgres database therefore
+performs metadata reconciliation while preserving the existing page and FTS projections; only changed, new, or deleted files are written.
+
+The process uses Tokio's multi-thread runtime. Reconciliation owns one long-lived async consumer; Markdown parsing runs in bounded `spawn_blocking` workers, and SQLx operations remain async. HTTP
+serving continues while reconciliation runs. Container shutdown uses `tini` as PID 1 to forward signals and reap children, while Miku handles SIGTERM/Ctrl-C with Axum graceful shutdown before stopping
+the indexer tasks.
 
 ## Browser page request while indexing
 

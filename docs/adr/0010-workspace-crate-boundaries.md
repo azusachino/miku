@@ -25,7 +25,7 @@ Miku becomes a Cargo workspace with focused packages:
 - `miku-markdown` — parsing, rendering, and index projection extraction;
 - `miku-indexer` — filesystem watcher, reconcile loop, and index events;
 - `miku-index-memory` — reference/test implementation;
-- `miku-index-turso` — local SQLite/Turso implementation;
+- `miku-index-sqlite` — local SQLite implementation;
 - `miku-index-postgres` — Postgres implementation;
 - `miku-cache-valkey` — optional Valkey cache/event integration;
 - `miku-app` — Axum binary, templates, startup, and composition root.

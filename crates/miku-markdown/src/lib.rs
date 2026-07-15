@@ -61,10 +61,22 @@ pub fn extract_title(path: &str, frontmatter: Option<&serde_json::Value>, body: 
         }
     }
 
+    let mut fenced = false;
     for line in body.lines() {
         let trimmed = line.trim();
+        if trimmed.starts_with("```") || trimmed.starts_with("~~~") {
+            fenced = !fenced;
+            continue;
+        }
+        if fenced {
+            continue;
+        }
         if let Some(stripped) = trimmed.strip_prefix("# ") {
-            return stripped.trim().to_string();
+            let title = stripped.trim().trim_end_matches('#').trim();
+            if title.is_empty() || title.starts_with("![") {
+                continue;
+            }
+            return title.to_string();
         }
     }
 
@@ -538,6 +550,18 @@ mod tests {
         let (yaml, body) = parse_frontmatter(content);
         assert!(yaml.is_none());
         assert_eq!(body, "# Header\nBody content");
+    }
+
+    #[test]
+    fn test_extract_title_ignores_code_and_image_headings() {
+        let body = "```text\n# A code sample\n```\n# ![diagram](image.png)\n# Actual title ###\n";
+        assert_eq!(extract_title("notes/today.md", None, body), "Actual title");
+    }
+
+    #[test]
+    fn test_extract_title_falls_back_to_filename() {
+        let body = "~~~markdown\n# A code sample\n~~~\n# ![diagram](image.png)\n";
+        assert_eq!(extract_title("notes/today.md", None, body), "today");
     }
 
     #[test]

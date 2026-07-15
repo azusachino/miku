@@ -859,21 +859,23 @@
         var self = this;
         postJSON("/api/v1/move", { from: from, to: to })
           .then(function (r) {
-            if (r.status === 409) {
-              self.showToast("A page already exists at “" + to + "”.", null);
-              return null;
-            }
-            if (r.status === 404) {
-              self.showToast("That page no longer exists.", null);
-              return null;
-            }
-            if (!r.ok) {
-              window.location.reload();
-              return null;
-            }
-            return r.json();
+            return r.json().then(function (data) {
+              return { ok: r.ok, status: r.status, data: data };
+            }).catch(function () {
+              return { ok: r.ok, status: r.status, data: null };
+            });
           })
-          .then(function (data) {
+          .then(function (result) {
+            var data = result && result.data;
+            if (!result || !result.ok || !data || !data.ok) {
+              var message = result && result.status === 409
+                ? "A page already exists at “" + to + "”."
+                : result && result.status === 404
+                  ? "That page no longer exists."
+                  : (data && data.error) || "The page could not be moved.";
+              self.showToast(message, null);
+              return;
+            }
             // Success reloads so the moved page appears in its new home. The
             // native-feel optimistic version is tracked separately (ux-2.0).
             // Stash the reverse move so init() can offer an Undo post-reload.
@@ -885,16 +887,8 @@
             }
           })
           .catch(function () {
-            window.location.reload();
+            self.showToast("The page could not be moved.", null);
           });
-      },
-      // Prompt-based rename/move (a styled modal is a follow-up).
-      renamePrompt: function (path) {
-        this.closeMenu();
-        var next = window.prompt("Rename or move page (full path, no .md):", path);
-        if (next === null) return;
-        next = next.trim().replace(/^\/+|\/+$/g, "");
-        if (next) this.move(path, next);
       },
 
       /* trash ------------------------------------------------------------ */
@@ -903,18 +897,29 @@
         var self = this;
         postJSON("/api/v1/trash", { path: path })
           .then(function (r) {
-            return r.ok ? r.json() : null;
+            return r.json().then(function (data) {
+              return { ok: r.ok, data: data };
+            }).catch(function () {
+              return { ok: r.ok, data: null };
+            });
           })
-          .then(function (data) {
-            if (!data || !data.ok) {
-              window.location.reload();
+          .then(function (result) {
+            var data = result && result.data;
+            if (!result || !result.ok || !data || !data.ok) {
+              self.showToast((data && data.error) || "The page could not be moved to Trash.", null);
               return;
             }
             // Remove the row in place and offer an Undo — no reload needed.
             document.querySelectorAll('[data-tree-path="' + (window.CSS && CSS.escape ? CSS.escape(path) : path) + '"]').forEach(function (el) {
               el.remove();
             });
-            self.trashLoaded = false; // force the Trash view to refetch next open
+            self.trashItems = [{
+              id: data.id,
+              original_path: data.original_path,
+              title: data.title || path.split("/").pop(),
+              trashed_at: data.trashed_at || Math.floor(Date.now() / 1000)
+            }].concat(self.trashItems.filter(function (item) { return item.id !== data.id; }));
+            self.trashLoaded = true;
             var id = data.id;
             self.showToast("Moved “" + path + "” to Trash.", function () {
               postJSON("/api/v1/trash/restore", { id: id }).then(function () {
@@ -923,13 +928,13 @@
             });
           })
           .catch(function () {
-            window.location.reload();
+            self.showToast("The page could not be moved to Trash.", null);
           });
       },
 
       /* trash view ------------------------------------------------------- */
-      loadTrash: function () {
-        if (this.trashLoaded || this.trashLoading) return;
+      loadTrash: function (force) {
+        if ((!force && this.trashLoaded) || this.trashLoading) return;
         this.trashLoading = true;
         var self = this;
         fetch("/api/v1/trash")
@@ -986,7 +991,7 @@
           function () {
             self.toast.show = false;
           },
-          undo ? 8000 : 4000
+          undo ? 10000 : 6000
         );
       },
       runUndo: function () {

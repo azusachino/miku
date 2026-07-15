@@ -368,12 +368,13 @@ a { color: var(--teal); }
    =========================================================================== */
 .mk-read {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 8px var(--rail-w);
+  grid-template-columns: minmax(0, 68ch) 8px var(--rail-w);
   gap: 26px;
-  width: 100%;
-  max-width: none;
-  margin: 0;
-  padding: 34px 28px 100px 42px;
+  justify-content: center;
+  width: min(100%, 1120px);
+  max-width: 1120px;
+  margin-inline: auto;
+  padding: 34px 28px 100px;
 }
 .mk-article { min-width: 0; max-width: none; }
 .mk-rail {
@@ -580,14 +581,13 @@ a { color: var(--teal); }
 }
 .mk-toc a { display: block; font-size: 13px; font-weight: 600; color: var(--muted); text-decoration: none; padding: 5px 10px; border-radius: 8px; }
 .mk-toc a.is-active { font-weight: 800; color: var(--teal); background: var(--tealsoft); }
-.mk-kv { display: flex; justify-content: space-between; font-size: 13px; }
+.mk-kv { display: grid; grid-template-columns: minmax(0, auto) minmax(0, 1fr); gap: 10px; align-items: start; font-size: 13px; }
 .mk-kv + .mk-kv { margin-top: 11px; }
-.mk-kv .k { color: var(--muted); font-weight: 600; } .mk-kv .v { font-weight: 700; } .mk-kv .v.teal { color: var(--teal); }
+.mk-kv .k { min-width: 0; color: var(--muted); font-weight: 600; }
+.mk-kv .v { min-width: 0; font-weight: 700; overflow-wrap: anywhere; word-break: break-word; text-align: right; }
+.mk-kv .v.teal { color: var(--teal); }
 .mk-kv .v.path {
-  max-width: 150px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  max-width: none;
   text-align: right;
   font-family: var(--font-mono);
   font-size: 11px;
@@ -1065,11 +1065,13 @@ html[data-reading-width="wide"] .mk-read {
   grid-template-columns: minmax(0, 86ch) 8px minmax(200px, 220px);
   column-gap: 20px;
   width: min(100%, 1240px);
+  max-width: 1240px;
 }
 
 html[data-reading-width="full"] .mk-read {
   grid-template-columns: minmax(0, 100ch);
   width: min(100%, 1120px);
+  max-width: 1120px;
 }
 
 html[data-reading-width="full"] .mk-rail,

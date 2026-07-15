@@ -59,12 +59,12 @@ miku-domain = { version = "0.0.2", path = "crates/miku-domain" }
 miku-app = { version = "0.0.2", path = "crates/miku-app", default-features = false }
 miku-markdown = { version = "0.0.2", path = "crates/miku-markdown" }
 miku-indexer = { version = "0.0.2", path = "crates/miku-indexer" }
-thiserror = "2"
 
 # async runtime
 tokio = { version = "1", default-features = false, features = [
   "macros",
   "rt-multi-thread",
+  "signal",
   "sync",
   "time",
   "net",

@@ -24,7 +24,7 @@ Markdown files under `miku_docs/` remain the only source of truth. The database 
 Miku composes one durable `IndexStore` with zero or more read/cache layers:
 
 - `MemoryCache` is the process-local L1 cache in every real deployment;
-- Turso/SQLite or Postgres is the durable primary `IndexStore`;
+- SQLite or Postgres is the durable primary `IndexStore`;
 - Valkey is an optional L2 cache and event transport for the scale profile;
 - an in-process `EventBus` remains the default local event transport.
 

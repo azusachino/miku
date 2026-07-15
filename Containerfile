@@ -33,7 +33,7 @@ RUN cargo build --locked --bin miku --no-default-features --features postgres,va
 FROM debian:bookworm-slim
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates \
+    && apt-get install -y --no-install-recommends ca-certificates tini \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd --system miku \
     && useradd --system --gid miku miku
@@ -52,4 +52,5 @@ RUN mkdir -p /app/miku_docs && chown -R miku:miku /app
 USER miku
 
 EXPOSE 3000
+ENTRYPOINT ["/usr/bin/tini", "--"]
 CMD ["miku"]

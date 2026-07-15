@@ -1,3 +1,4 @@
+use super::routes;
 use super::{AppState, StaticAssets};
 use axum::{
     extract::{Path, Request},
@@ -55,34 +56,34 @@ async fn request_context(mut request: Request, next: Next) -> Response {
 
 pub(super) fn router(state: AppState) -> Router {
     Router::new()
-        .route("/", get(super::redirect_to_index))
-        .route("/search", get(super::search))
-        .route("/tags", get(super::tags_index))
-        .route("/tags/{tag}", get(super::tag_filter))
-        .route("/folders/{*path}", get(super::folder_view))
-        .route("/preview", post(super::preview))
-        .route("/api/v1/pages/{*path}", get(super::reader_page_api))
+        .route("/", get(routes::redirect_to_index))
+        .route("/search", get(routes::search))
+        .route("/tags", get(routes::tags_index))
+        .route("/tags/{tag}", get(routes::tag_filter))
+        .route("/folders/{*path}", get(routes::folder_view))
+        .route("/preview", post(routes::preview))
+        .route("/api/v1/pages/{*path}", get(routes::reader_page_api))
         .route(
             "/p/{*path}",
-            get(super::page_handler).post(super::page_save),
+            get(routes::page_handler).post(routes::page_save),
         )
-        .route("/events", get(super::events))
+        .route("/events", get(routes::events))
         .route("/healthz", get(super::healthz))
         .route("/readyz", get(super::readyz))
         .route("/metrics", get(super::metrics))
-        .route("/api/v1/move", post(super::page_move))
+        .route("/api/v1/move", post(routes::page_move))
         .route(
             "/api/v1/trash",
-            post(super::page_trash).get(super::trash_list),
+            post(routes::page_trash).get(routes::trash_list),
         )
-        .route("/api/v1/trash/restore", post(super::trash_restore))
-        .route("/api/v1/trash/purge", post(super::trash_purge))
-        .route("/api/v1/promote-mention", post(super::promote_mention))
-        .route("/api/v1/nav/children", get(super::nav_children_handler))
-        .route("/api/v1/tags", get(super::tags_api))
-        .route("/api/v1/tags/{tag}/pages", get(super::tag_pages_api))
-        .route("/api/v1/quickswitch", get(super::quickswitch))
-        .route("/api/v1/content-search", get(super::content_search_api))
+        .route("/api/v1/trash/restore", post(routes::trash_restore))
+        .route("/api/v1/trash/purge", post(routes::trash_purge))
+        .route("/api/v1/promote-mention", post(routes::promote_mention))
+        .route("/api/v1/nav/children", get(routes::nav_children_handler))
+        .route("/api/v1/tags", get(routes::tags_api))
+        .route("/api/v1/tags/{tag}/pages", get(routes::tag_pages_api))
+        .route("/api/v1/quickswitch", get(routes::quickswitch))
+        .route("/api/v1/content-search", get(routes::content_search_api))
         .route("/static/{*path}", get(static_asset))
         .nest_service("/assets", ServeDir::new("miku_docs/assets"))
         .layer(TraceLayer::new_for_http().on_response(super::observe_http_response))

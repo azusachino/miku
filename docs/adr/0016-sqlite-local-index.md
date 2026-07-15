@@ -1,6 +1,6 @@
 ---
 id: ADR-0016
-title: SQLite (sqlx) local index, replacing Turso
+title: SQLite (sqlx) local index
 slug: sqlite-local-index
 status: Accepted
 date-proposed: 2026-07-15
@@ -10,33 +10,34 @@ mirror: asobi:miku:decision:sqlite-local-index
 supersedes: [ADR-0011, ADR-0014]
 superseded-by:
 relates-to: [ADR-0009, ADR-0010, ADR-0012, ADR-0013]
-rejects: [rusqlite-sync, libsql-embedded, redb-kv, keep-turso]
-impacts: [crates/miku-index-sqlite, crates/miku-index-turso, crates/miku-app, Cargo.toml, Makefile, docs/setup.md, docs/architecture.md]
+rejects: [rusqlite-sync, libsql-embedded, redb-kv, retained-legacy-backend]
+impacts: [crates/miku-index-sqlite, crates/miku-app, Cargo.toml, Makefile, docs/setup.md, docs/architecture.md]
 config-keys: [MIKU_INDEX_BACKEND, MIKU_INDEX_PATH]
-tags: [index, sqlite, sqlx, fts5, dependencies, turso]
+tags: [index, sqlite, sqlx, fts5, dependencies]
 ---
 
-# ADR-0016 — SQLite (sqlx) local index, replacing Turso
+# ADR-0016 — SQLite (sqlx) local index
 
 ## Decision
 
-Replace the local durable index backend from the native-Rust **Turso** engine (ADR-0011, ADR-0014) with **SQLite via `sqlx`**, sharing the SQL stack with the existing Postgres backend (ADR-0012).
-Full-text search uses SQLite's built-in **FTS5**. `memory` + `sqlite` become the default features; `postgres`/`valkey` stay opt-in. The disposable-index invariant is unchanged — the index is rebuilt
-from `miku_docs/**/*.md`, so there is **no data migration**; users delete the stale `.turso` file and the sweep recreates the SQLite one.
-
-**Turso is removed** — the `crates/miku-index-turso` crate and its feature are deleted, not kept as an opt-in (see Trade-offs).
+The local durable index is **SQLite via `sqlx`**, sharing the SQL stack with the existing Postgres backend. Full-text search uses SQLite's built-in **FTS5**. `memory` + `sqlite` are the default
+features; `postgres`/`valkey` remain opt-in. The disposable-index invariant is unchanged: the index is rebuilt from `miku_docs/**/*.md`, so there is no data migration. Any old local index file is
+disposable and may be removed before the next startup.
 
 ## Why
 
-Measured: the `turso` backend pulls **249 of ~305 normal crates (~80%)** of the default build. It is a pure-Rust SQLite reimplementation that bundles `tantivy` (FTS), ICU collation, and a crypto/sync
-stack. Reading turso 0.7's manifests, that weight is **not gate-able from our level**: `turso` depends on `turso_core` with default features (which include `encryption` → the whole `aes-gcm` stack),
-and on `turso_sync_sdk_kit` non-optionally. There is no feature to disable it short of forking turso.
+The previous local backend pulled a disproportionate dependency closure, including a second full-text implementation and unrelated synchronization/encryption support. Repository-owned checks could not
+gate that weight without maintaining a fork.
 
 Any **C-SQLite-based** backend collapses this: FTS5 ships inside SQLite's C amalgamation (no `tantivy`), and the Rust footprint is small. `sqlx` + `sqlite` also **reuses the SQL driver already pulled
 for Postgres**, unifying both tiers on one async SQL layer (ADR-0009 composition, ADR-0010 boundaries). Expected default-build delta: **~305 → ~100 normal crates**.
 
 This also simplifies the crates.io release surface (ADR-0013): one fewer backend crate to publish, and the default `cargo install miku` gets a lean, durable, FTS-capable index with no
 C-reimplementation baggage.
+
+The resolved dependency closure was measured at the migration boundary. The root package's normal dependency tree fell from 403 unique packages before this ADR to 254 after it, a reduction of 149
+packages (36.9%). The lockfile fell from 482 package records to 312, a reduction of 170 records (35.3%). These counts include the complete normal workspace resolution, including transitive
+dependencies.
 
 ## Design
 
@@ -50,10 +51,11 @@ async-trait.workspace = true
 miku-domain  = { version = "0.0.2", path = "../miku-domain" }
 miku-indexer = { version = "0.0.2", path = "../miku-indexer" }
 serde_json.workspace = true
-sqlx = { version = "0.8.6", default-features = false, features = ["sqlite", "runtime-tokio"] }
+sqlx = { version = "0.8.6", default-features = false, features = ["sqlite", "runtime-tokio", "migrate", "macros"] }
 ```
 
-- **No `rustls`** (SQLite needs no TLS → leaner default) and **no `macros`** (use runtime `query_as`, like the Postgres impl — avoids a build-time `DATABASE_URL`).
+- **SQLite-only runtime features** (SQLite needs no TLS → leaner default). The `macros` feature is used only by `sqlx::migrate!`; all application queries use runtime `query`/`query_as` calls, keeping
+  compile-time database access out of the application path.
 - `pub async fn open(path: &str) -> StoreResult<Self>`:
   ```rust
   let opts = SqliteConnectOptions::from_str(&format!("sqlite://{path}"))?
@@ -106,9 +108,9 @@ Same tables as Postgres (`tb_pages`, `tb_links`, `tb_tags`, `tb_page_aliases`, `
 
 ### Defaults across the tree
 
-- Root `Cargo.toml`: `default = ["memory", "sqlite"]`; add a `sqlite` feature forwarding `miku-app/sqlite`; remove the `turso` feature.
-- Remove `crates/miku-index-turso` from workspace `members` and delete the crate.
-- `Makefile`: `MIKU_INDEX_BACKEND ?= sqlite`, `MIKU_INDEX_PATH ?= miku_docs/.miku-index.sqlite`; replace the `inspect-index` target (currently `-p miku-index-turso --example inspect`).
+- Root `Cargo.toml`: `default = ["memory", "sqlite"]`; add a `sqlite` feature forwarding `miku-app/sqlite`.
+- The workspace contains only the supported SQLite, Postgres, memory, and Valkey backend crates.
+- `Makefile`: `MIKU_INDEX_BACKEND ?= sqlite`, `MIKU_INDEX_PATH ?= miku_docs/.miku-index.sqlite`; `inspect-index` targets the SQLite example.
 - `.gitignore`: ignore `*.sqlite*` (WAL/SHM sidecars) under `miku_docs/`.
 - Docs: README config table, `docs/setup.md`, `docs/architecture.md`.
 
@@ -120,16 +122,15 @@ Same tables as Postgres (`tb_pages`, `tb_links`, `tb_tags`, `tb_page_aliases`, `
 
 - **rusqlite (sync, bundled+fts5)** — leanest (~15–25 crates) but synchronous; would need `spawn_blocking` wrappers and a second SQL idiom alongside sqlx. Rejected for consistency: `sqlx` already
   lives in the tree for Postgres, so unifying on it costs a few more crates but one async SQL layer.
-- **libsql (embedded)** — async-native and in the Turso ecosystem, but heavier than sqlx-sqlite and pulls sync/replication machinery unless carefully gated. Rejected; sqlx-sqlite is simpler and
-  shared.
+- **libsql (embedded)** — async-native, but heavier than sqlx-sqlite and pulls sync/replication machinery unless carefully gated. Rejected; sqlx-sqlite is simpler and shared.
 - **redb / sled (pure-Rust KV)** — tiny (~1–10 crates) but no SQL and no FTS; would force hand-building backlinks/tags/search in app code. Rejected.
-- **Keep Turso as an opt-in feature** — rejected: `cargo test --workspace` and `make check` build every member crate, so a retained `miku-index-turso` keeps its 249 crates compiling in CI. Deleting
-  the crate is the only way to actually shed the weight everywhere.
+- **Retain the previous backend as an opt-in feature** — rejected: `cargo test --workspace` and `make check` build every member crate. Keeping a retired backend in the workspace would preserve its
+  dependency closure and make the default release surface ambiguous.
 
 ## Gotchas (verify early)
 
-1. **FTS5 must be compiled into sqlx's bundled SQLite.** Verify first: run `CREATE VIRTUAL TABLE t USING fts5(x)` at startup. If it errors, enable FTS5 via `libsqlite3-sys` (bundled build flag). This
-   is the #1 risk — check before writing the full impl.
+1. **FTS5 must be compiled into sqlx's SQLite build.** Verify first: run `CREATE VIRTUAL TABLE t USING fts5(x)` at startup. If it errors, enable FTS5 via `libsqlite3-sys` (bundled build flag). This is
+   the #1 risk — check before writing the full impl.
 2. **FTS5 `MATCH` query escaping.** Raw user input (`-` `"` `*` `:`) can break MATCH syntax. Sanitize: split on whitespace, wrap each term in double quotes, optionally append `*` for prefix
    (`"foo" "bar"*`). Add a punctuation test.
 3. **`SQLITE_BUSY`** under concurrent reconcile + reads — WAL + `busy_timeout` handle it; keep the single-writer invariant (indexer is the only writer).
@@ -139,6 +140,7 @@ Same tables as Postgres (`tb_pages`, `tb_links`, `tb_tags`, `tb_page_aliases`, `
 
 - `cargo test -p miku-index-sqlite` against a `tempfile` DB: page round-trip, backlinks, tags, FTS body search, mentions.
 - `MIKU_INDEX_BACKEND=sqlite make run`: a page indexes, `/search` returns FTS hits, restart persists (durable).
-- `cargo tree --edges normal --prefix none | sort -u | wc -l` before/after → confirm the ~305 → ~100 drop.
+- `cargo tree -p miku --edges normal --prefix none | sort -u | wc -l` → current root normal dependency closure: 254 packages, down from 403 before this migration.
+- `rg '^name = ' Cargo.lock | wc -l` → current lockfile resolution: 312 package records, down from 482 before this migration.
 - `make check` and `make check-all-features` green.
 - Ships under `0.0.2`; separate PR from the installable/publishable work.

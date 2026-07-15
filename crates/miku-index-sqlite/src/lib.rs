@@ -824,7 +824,13 @@ mod tests {
         assert_eq!(mentions[0].source_path, "First.md");
 
         // Delete page
-        store.delete_page("Second").await.expect("delete page");
+        let event = store.delete_page("Second").await.expect("delete page");
+        assert_eq!(
+            event,
+            IndexEvent::PageDeleted {
+                path: "Second.md".to_string()
+            }
+        );
         let summaries = store.list_pages().await.expect("list pages post delete");
         assert_eq!(summaries.len(), 1);
 
@@ -834,6 +840,239 @@ mod tests {
             .await
             .expect("mentions post delete");
         assert!(mentions.is_empty());
+
+        let backlinks = store
+            .backlinks("Second")
+            .await
+            .expect("backlinks post delete");
+        assert!(backlinks.is_empty());
+        let hits = store
+            .search(SearchRequest {
+                query: "another".to_string(),
+                scope: SearchScope::Body,
+                limit: 10,
+            })
+            .await
+            .expect("search post delete");
+        assert!(hits.is_empty());
+
+        assert!(store.page("Missing").await.expect("missing page").is_none());
+    }
+
+    #[tokio::test]
+    async fn test_batch_writes_and_transaction_rollback() {
+        let temp_file = NamedTempFile::new().expect("failed to create temp file");
+        let temp_path = temp_file.path().to_str().expect("temp path");
+        let store = SqliteIndex::open(temp_path).await.expect("open store");
+
+        let events = store
+            .replace_pages(vec![
+                test_page("BatchOne.md", "first batch body", vec![], vec![]),
+                test_page("BatchTwo.md", "second batch body", vec![], vec![]),
+            ])
+            .await
+            .expect("replace batch");
+        assert_eq!(events.len(), 2);
+        assert!(store
+            .replace_pages(Vec::new())
+            .await
+            .expect("empty batch")
+            .is_empty());
+
+        let invalid = test_page(
+            "Broken.md",
+            "must not commit",
+            vec!["duplicate", "duplicate"],
+            vec![],
+        );
+        assert!(store.replace_page(invalid).await.is_err());
+        assert!(store
+            .page("Broken")
+            .await
+            .expect("rollback lookup")
+            .is_none());
+        assert!(store
+            .search(SearchRequest {
+                query: "must not commit".to_string(),
+                scope: SearchScope::Body,
+                limit: 10,
+            })
+            .await
+            .expect("rollback search")
+            .is_empty());
+
+        store.rebuild_search_index().await.expect("default rebuild");
+    }
+
+    #[tokio::test]
+    async fn test_search_edges_and_escaping() {
+        let temp_file = NamedTempFile::new().expect("failed to create temp file");
+        let temp_path = temp_file.path().to_str().expect("temp path");
+        let store = SqliteIndex::open(temp_path).await.expect("open store");
+        store
+            .replace_page(test_page(
+                "Percent%_Page.md",
+                "body content",
+                vec![],
+                vec![],
+            ))
+            .await
+            .expect("replace page");
+
+        for scope in [SearchScope::Body, SearchScope::Title, SearchScope::All] {
+            assert!(store
+                .search(SearchRequest {
+                    query: String::new(),
+                    scope,
+                    limit: 10,
+                })
+                .await
+                .expect("empty search")
+                .is_empty());
+            assert!(store
+                .search(SearchRequest {
+                    query: "body".to_string(),
+                    scope,
+                    limit: 0,
+                })
+                .await
+                .expect("zero-limit search")
+                .is_empty());
+        }
+
+        let escaped = store
+            .search(SearchRequest {
+                query: "%_".to_string(),
+                scope: SearchScope::Title,
+                limit: 10,
+            })
+            .await
+            .expect("escaped title search");
+        assert_eq!(escaped.len(), 1);
+        assert_eq!(escaped[0].path, "Percent%_Page.md");
+
+        let metadata_only = store
+            .search(SearchRequest {
+                query: "Percent".to_string(),
+                scope: SearchScope::All,
+                limit: 10,
+            })
+            .await
+            .expect("metadata search");
+        assert_eq!(metadata_only.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_mentions_batches_and_deletions() {
+        let temp_file = NamedTempFile::new().expect("failed to create temp file");
+        let temp_path = temp_file.path().to_str().expect("temp path");
+        let store = SqliteIndex::open(temp_path).await.expect("open store");
+        let mention = |target: &str, source: &str| MentionRecord {
+            target_path: target.to_string(),
+            source_path: source.to_string(),
+            source_title: source.trim_end_matches(".md").to_string(),
+            matched_text: target.trim_end_matches(".md").to_string(),
+            snippet: "context".to_string(),
+        };
+
+        store
+            .replace_mentions_for_sources(vec![
+                (
+                    "SourceOne".to_string(),
+                    vec![mention("TargetOne", "SourceOne")],
+                ),
+                (
+                    "SourceTwo".to_string(),
+                    vec![mention("TargetTwo", "SourceTwo")],
+                ),
+            ])
+            .await
+            .expect("replace mention batch");
+        assert_eq!(
+            store
+                .mentions_for_target("TargetOne")
+                .await
+                .expect("target one")
+                .len(),
+            1
+        );
+        assert_eq!(
+            store
+                .mentions_for_target("TargetTwo")
+                .await
+                .expect("target two")
+                .len(),
+            1
+        );
+
+        store
+            .delete_mentions_for_source("SourceOne")
+            .await
+            .expect("delete source mentions");
+        assert!(store
+            .mentions_for_target("TargetOne")
+            .await
+            .expect("deleted source")
+            .is_empty());
+        store
+            .delete_mentions_for_target("TargetTwo")
+            .await
+            .expect("delete target mentions");
+        assert!(store
+            .mentions_for_target("TargetTwo")
+            .await
+            .expect("deleted target")
+            .is_empty());
+
+        store
+            .replace_mentions_for_sources(vec![
+                (
+                    "SourceOne".to_string(),
+                    vec![mention("TargetOne", "SourceOne")],
+                ),
+                (
+                    "SourceTwo".to_string(),
+                    vec![mention("TargetTwo", "SourceTwo")],
+                ),
+            ])
+            .await
+            .expect("restore mention batch");
+        store
+            .delete_mentions_for_targets(vec!["TargetOne".to_string(), "TargetTwo".to_string()])
+            .await
+            .expect("delete target batch");
+        assert!(store
+            .mentions_for_target("TargetOne")
+            .await
+            .expect("batch target one")
+            .is_empty());
+        assert!(store
+            .mentions_for_target("TargetTwo")
+            .await
+            .expect("batch target two")
+            .is_empty());
+        store
+            .delete_mentions_for_targets(Vec::new())
+            .await
+            .expect("empty target batch");
+    }
+
+    #[tokio::test]
+    async fn test_malformed_persisted_frontmatter_is_reported() {
+        let temp_file = NamedTempFile::new().expect("failed to create temp file");
+        let temp_path = temp_file.path().to_str().expect("temp path");
+        let store = SqliteIndex::open(temp_path).await.expect("open store");
+        store
+            .replace_page(test_page("Malformed.md", "body", vec!["broken"], vec![]))
+            .await
+            .expect("replace page");
+        sqlx::query("UPDATE tb_pages SET frontmatter = '{broken' WHERE path = ?")
+            .bind("Malformed.md")
+            .execute(store.pool())
+            .await
+            .expect("corrupt frontmatter");
+        assert!(store.list_pages().await.is_err());
+        assert!(store.pages_with_tag("broken").await.is_err());
     }
 
     #[tokio::test]

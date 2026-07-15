@@ -11,16 +11,15 @@ ideas are kept at the end so the product boundary stays honest. #feature #guide
 ## Filesystem ownership
 
 Notes remain ordinary `.md` files under `miku_docs/`. They can be edited with
-Miku Note, a text editor, scripts, or git. The database is an index projection,
-not the canonical copy of your content.
+Miku Note, a text editor, scripts, or git. The database is an index projection;
+Markdown files remain the canonical copy of your content.
 
 ## Reader-first navigation
 
 The readonly reader is the primary experience. Direct page URLs use `/p/...`,
 so links, bookmarks, and server-rendered requests continue to work normally.
 Switching between notes keeps the application shell mounted and swaps only the
-reader fragment; it does not reload the document or the shared JavaScript and
-CSS.
+reader fragment; the document, shared JavaScript, and CSS remain loaded.
 
 The reader includes:
 
@@ -87,11 +86,10 @@ updates links, tags, aliases, mentions, full-text search data, and rendering
 metadata for that page. HTTP handlers read the index and do not perform an
 inline reindex.
 
-The index is rebuildable from `miku_docs/**/*.md`. The local runtime uses the
-configured index backend, with Turso as the default local profile; larger
-deployments can select the supported Postgres profile. The index accelerates
-navigation and relationships; it is not a second user-facing body-search
-mode.
+The index is rebuildable from `miku_docs/**/*.md`. The local runtime uses
+SQLite via SQLx by default; larger deployments can select the supported
+Postgres profile. The index accelerates
+navigation and relationships; body search remains the dedicated full-text mode.
 
 ## Move, trash, and restore
 
@@ -101,14 +99,14 @@ and can be restored or purged from the Trash view.
 
 ## Freshness and external edits
 
-Miku Note does not keep an idle event stream open in reader mode. The active
-page checks for a newer indexed version periodically and refreshes when the tab
-becomes visible again. This keeps reading lightweight while still reflecting
+Miku Note keeps the event stream active only while the editor is open. The
+active page checks for a newer indexed version periodically and refreshes when
+the tab becomes visible again. This keeps reading lightweight while still reflecting
 changes made by git, an editor, or another process.
 
 ## Deliberately deferred or rejected
 
-These are not current features:
+The following items remain outside the current feature set:
 
 - mobile or offline-first applications;
 - real-time collaboration and CRDT editing;
