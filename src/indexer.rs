@@ -13,7 +13,7 @@ use std::sync::{
 use std::time::{Duration, Instant};
 use tokio::sync::{broadcast, mpsc};
 use tokio::task::{JoinHandle, JoinSet};
-use tracing::{error, info};
+use tracing::{error, info, warn};
 
 const RECONCILE_SENTINEL: &str = "__reconcile__";
 const BULK_INDEX_REFRESH: &str = "__miku_bulk_index_refresh__";
@@ -29,6 +29,16 @@ pub enum WatcherEvent {
 struct PendingSource {
     relative: PathBuf,
     mtime: i64,
+}
+
+// Skip dot-dirs/files (.trash soft-delete archive, .git, editor swap files)
+// anywhere in the relative path so trashed pages and VCS metadata never enter
+// the index. Mirrors the dot-skip in walk_store_tree, so the live watcher and
+// the reconcile sweep agree on what is indexable.
+fn is_hidden_rel(rel_path: &Path) -> bool {
+    rel_path
+        .components()
+        .any(|component| component.as_os_str().to_string_lossy().starts_with('.'))
 }
 
 pub struct IndexerQueue {
@@ -309,9 +319,11 @@ async fn build_page_batch(
 
     let mut pages = Vec::with_capacity(sources.len());
     while let Some(result) = workers.join_next().await {
-        let page =
-            result.map_err(|error| miku_domain::StoreError::Operation(error.to_string()))??;
-        pages.push(page);
+        if let Some(page) =
+            result.map_err(|error| miku_domain::StoreError::Operation(error.to_string()))??
+        {
+            pages.push(page);
+        }
         if let Some(source) = pending.next() {
             spawn_page_worker(&mut workers, content_root, source);
         }
@@ -321,19 +333,32 @@ async fn build_page_batch(
 }
 
 fn spawn_page_worker(
-    workers: &mut JoinSet<miku_domain::StoreResult<PageIndex>>,
+    workers: &mut JoinSet<miku_domain::StoreResult<Option<PageIndex>>>,
     content_root: &Path,
     source: PendingSource,
 ) {
     let file = content_root.join(&source.relative);
     workers.spawn_blocking(move || {
-        let bytes = fs::read(&file)
-            .map_err(|error| miku_domain::StoreError::Operation(error.to_string()))?;
-        Ok(build_page_index(
+        // A file can vanish or become unreadable between the metadata scan and
+        // this read (concurrent edit/delete). Skip it instead of failing the
+        // whole reconcile — an aborted startup sweep would leave the index
+        // never marked ready and /readyz stuck on 503.
+        let bytes = match fs::read(&file) {
+            Ok(bytes) => bytes,
+            Err(error) => {
+                warn!(
+                    path = %source.relative.display(),
+                    %error,
+                    "skipping unreadable file during reconcile"
+                );
+                return Ok(None);
+            }
+        };
+        Ok(Some(build_page_index(
             &source.relative.to_string_lossy(),
             &bytes,
             source.mtime,
-        ))
+        )))
     });
 }
 
@@ -467,6 +492,9 @@ impl IndexerQueue {
                             let Some(relative) = path.strip_prefix(&root_for_watcher).ok() else {
                                 continue;
                             };
+                            if is_hidden_rel(relative) {
+                                continue;
+                            }
                             let _ = sender_for_watcher.try_send(if path.exists() {
                                 WatcherEvent::Modified(relative.to_path_buf())
                             } else {
