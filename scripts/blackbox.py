@@ -213,7 +213,7 @@ def main() -> int:
     encoded_page = urllib.parse.quote(app_page, safe="/")
 
     # The page source must remain available before the background indexer is
-    # ready. This is the regression path for a fresh/large Turso projection.
+    # ready. This is the regression path for a fresh/large SQLite projection.
     status, _, body = get(f"/p/{encoded_page}")
     expect(status, 200, f"/p/{page} before index ready")
     validate_page(body, page)

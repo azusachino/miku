@@ -20,7 +20,9 @@ services:
       retries: 10
 
   miku:
-    build: .
+    build:
+      context: .
+      dockerfile: Containerfile
     container_name: miku-app
     # Run as the host user (rootless podman keep-id) so the app can write the
     # bind-mounted miku_docs/ files while they stay owned by you on the host. The

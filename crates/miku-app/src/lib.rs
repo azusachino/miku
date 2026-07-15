@@ -18,8 +18,8 @@ use tokio::sync::Mutex;
 pub enum RuntimeConfig {
     /// Disposable in-process backend for tests and temporary runs.
     Memory,
-    /// Durable local Turso backend.
-    Turso { path: String },
+    /// Durable local SQLite backend.
+    Sqlite { path: String },
     /// Durable Postgres backend for the scale tier.
     Postgres { database_url: String },
     /// Postgres primary with an optional Valkey read-through cache.
@@ -33,12 +33,12 @@ pub enum RuntimeConfig {
 
 /// Resolve the runtime selected by the process environment.
 pub fn resolve_runtime() -> StoreResult<RuntimeConfig> {
-    let backend = std::env::var("MIKU_INDEX_BACKEND").unwrap_or_else(|_| "turso".to_string());
+    let backend = std::env::var("MIKU_INDEX_BACKEND").unwrap_or_else(|_| "sqlite".to_string());
     let runtime = match backend.as_str() {
         "memory" => RuntimeConfig::Memory,
-        "turso" => RuntimeConfig::Turso {
+        "sqlite" => RuntimeConfig::Sqlite {
             path: std::env::var("MIKU_INDEX_PATH")
-                .unwrap_or_else(|_| "miku_docs/.miku-index.turso".to_string()),
+                .unwrap_or_else(|_| "miku_docs/.miku-index.sqlite".to_string()),
         },
         "postgres" => RuntimeConfig::Postgres {
             database_url: required_env("DATABASE_URL")?,
@@ -60,7 +60,7 @@ pub fn resolve_runtime() -> StoreResult<RuntimeConfig> {
         },
         other => {
             return Err(miku_domain::StoreError::Unsupported(format!(
-                "MIKU_INDEX_BACKEND must be `memory`, `turso`, `postgres`, or `postgres-valkey`; got {other}"
+                "MIKU_INDEX_BACKEND must be `memory`, `sqlite`, `postgres`, or `postgres-valkey`; got {other}"
             )))
         }
     };
@@ -84,7 +84,7 @@ fn required_env(name: &str) -> StoreResult<String> {
 const fn runtime_name(runtime: &RuntimeConfig) -> &'static str {
     match runtime {
         RuntimeConfig::Memory => "memory",
-        RuntimeConfig::Turso { .. } => "Turso",
+        RuntimeConfig::Sqlite { .. } => "SQLite",
         RuntimeConfig::Postgres { .. } => "Postgres",
         #[cfg(feature = "valkey")]
         RuntimeConfig::PostgresValkey { .. } => "Postgres + Valkey",
@@ -94,7 +94,7 @@ const fn runtime_name(runtime: &RuntimeConfig) -> &'static str {
 const fn runtime_feature(runtime: &RuntimeConfig) -> &'static str {
     match runtime {
         RuntimeConfig::Memory => "memory",
-        RuntimeConfig::Turso { .. } => "turso",
+        RuntimeConfig::Sqlite { .. } => "sqlite",
         RuntimeConfig::Postgres { .. } => "postgres",
         #[cfg(feature = "valkey")]
         RuntimeConfig::PostgresValkey { .. } => "postgres,valkey",
@@ -104,7 +104,7 @@ const fn runtime_feature(runtime: &RuntimeConfig) -> &'static str {
 const fn runtime_enabled(runtime: &RuntimeConfig) -> bool {
     match runtime {
         RuntimeConfig::Memory => cfg!(feature = "memory"),
-        RuntimeConfig::Turso { .. } => cfg!(feature = "turso"),
+        RuntimeConfig::Sqlite { .. } => cfg!(feature = "sqlite"),
         RuntimeConfig::Postgres { .. } => cfg!(feature = "postgres"),
         #[cfg(feature = "valkey")]
         RuntimeConfig::PostgresValkey { .. } => cfg!(all(feature = "postgres", feature = "valkey")),
@@ -217,16 +217,16 @@ pub async fn compose_index(config: RuntimeConfig) -> StoreResult<IndexApi> {
                 Err(missing_feature("memory", "memory"))
             }
         }
-        RuntimeConfig::Turso { path } => {
-            #[cfg(feature = "turso")]
+        RuntimeConfig::Sqlite { path } => {
+            #[cfg(feature = "sqlite")]
             {
-                let store = miku_index_turso::TursoIndex::open(&path).await?;
+                let store = miku_index_sqlite::SqliteIndex::open(&path).await?;
                 Ok(IndexApi::from_store(Arc::new(store)))
             }
-            #[cfg(not(feature = "turso"))]
+            #[cfg(not(feature = "sqlite"))]
             {
                 let _ = path;
-                Err(missing_feature("Turso", "turso"))
+                Err(missing_feature("SQLite", "sqlite"))
             }
         }
         RuntimeConfig::Postgres { database_url } => {

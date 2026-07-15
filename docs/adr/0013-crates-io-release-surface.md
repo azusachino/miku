@@ -24,7 +24,7 @@ layers:
 
 - `miku-domain`;
 - `miku-markdown`;
-- optionally `miku-index-turso` and `miku-index-postgres` after API review.
+- optionally `miku-index-sqlite` and `miku-index-postgres` after API review.
 
 The Miku application is released primarily as a binary/container/Git tag. A future `cargo install miku` package may be published after all public path dependencies have registry versions and the CLI
 contract is intentional.

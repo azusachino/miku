@@ -31,7 +31,7 @@ pub enum StoreError {
 pub struct PageSummary {
     /// Path relative to the Markdown content root, including no leading slash.
     pub path: String,
-    /// Display title derived from frontmatter, heading, or filename.
+    /// Display title derived from frontmatter or filename stem.
     pub title: String,
     /// Opaque user-defined frontmatter retained by the index.
     pub frontmatter: serde_json::Value,
@@ -206,7 +206,7 @@ pub enum IndexEvent {
     Reconciled,
 }
 
-/// Read operations shared by memory, Turso, and Postgres indexes.
+/// Read operations shared by memory, SQLite, and Postgres indexes.
 #[async_trait]
 pub trait IndexReader: Send + Sync {
     /// Return the capabilities of this concrete store.
@@ -230,6 +230,12 @@ pub trait IndexReader: Send + Sync {
     /// Whether the derived mention projection has completed at least one full build.
     async fn mentions_ready(&self) -> StoreResult<bool> {
         Ok(false)
+    }
+
+    /// Read a backend-owned index metadata value used for disposable-cache
+    /// migrations. Stores without durable metadata may return Unsupported.
+    async fn index_metadata(&self, _key: &str) -> StoreResult<Option<String>> {
+        Err(StoreError::Unsupported("index metadata".to_string()))
     }
 
     /// Return all tags and their page counts.
@@ -315,6 +321,12 @@ pub trait IndexWriter: Send + Sync {
         Err(StoreError::Unsupported(
             "derived unlinked mentions".to_string(),
         ))
+    }
+
+    /// Persist a backend-owned index metadata value used for disposable-cache
+    /// migrations. Stores without durable metadata may keep the default.
+    async fn set_index_metadata(&self, _key: &str, _value: &str) -> StoreResult<()> {
+        Err(StoreError::Unsupported("index metadata".to_string()))
     }
 
     /// Delete one page projection and return the resulting event.

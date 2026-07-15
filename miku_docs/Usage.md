@@ -17,8 +17,8 @@ For the default local profile:
 make run
 ```
 
-The server starts at `http://localhost:3000` and uses the Rust-built Turso
-index at `miku_docs/.miku-index.turso`. The index is disposable; the Markdown
+The server starts at `http://localhost:3000` and uses the Rust-built SQLite
+index at `miku_docs/.miku-index.sqlite`. The index is disposable; the Markdown
 files remain the source of truth.
 
 For native Postgres development:
@@ -50,8 +50,9 @@ They are available at `/p/Features` and `/p/guides/Getting%20Started`.
 Wikilink matching is case-insensitive and supports aliases:
 `[[Features|What it does]]`.
 
-The hidden `miku_docs/.trash/` directory contains soft-deleted pages until they
-are restored or purged. Assets belong in `miku_docs/assets/`.
+Miku does not create a Trash directory. Assets belong in
+`miku_docs/assets/`; path changes and file removal remain ordinary filesystem
+operations outside the v0.0.2 UI.
 
 ## Writing Markdown
 
@@ -80,7 +81,7 @@ version without holding an idle event stream open.
 The index can always be rebuilt from the files:
 
 ```bash
-rm -f miku_docs/.miku-index.turso
+rm -f miku_docs/.miku-index.sqlite
 make run
 ```
 

@@ -10,7 +10,7 @@ CREATE TABLE tb_pages (
   id          BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   path        TEXT NOT NULL UNIQUE,            -- relative to miku/, e.g. 'sub/Bar.md'
   slug        TEXT NOT NULL,                   -- normalized basename for [[ ]] resolution
-  title       TEXT NOT NULL,                   -- frontmatter title, else first H1, else filename
+  title       TEXT NOT NULL,                   -- frontmatter title, else filename stem
   frontmatter JSONB NOT NULL DEFAULT '{}',     -- opaque user properties (interpreted keys fan out below)
   has_mermaid BOOLEAN NOT NULL DEFAULT false,  -- index-driven client-asset injection (lazy-load mermaid.js)
   mtime       BIGINT NOT NULL,                 -- file mtime (unix) for startup reconcile

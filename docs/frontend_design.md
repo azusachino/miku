@@ -92,7 +92,7 @@ Alpine handles local state, communicating with the Axum JSON API:
       x-ref="searchInput"
       x-model="query"
       @input.debounce.150ms="
-        const res = await fetch(`/api/v1/autocomplete?q=${encodeURIComponent(query)}`);
+        const res = await fetch(`/api/v1/quickswitch?q=${encodeURIComponent(query)}`);
         results = await res.json();
       "
       type="text"

@@ -4,8 +4,8 @@ Miku is a filesystem-owned personal Markdown wiki: a browser editor over plain `
 
 ## Core invariant
 
-Markdown files and assets under `miku_docs/` are the **source of truth**. Postgres holds only a **disposable index** that is fully rebuildable from `miku_docs/**/*.md`. Deleting the database loses
-nothing but rebuild time.
+Markdown files and assets under `miku_docs/` are the **source of truth**. The selected index backend (SQLite by default, Postgres optionally) holds only a **disposable index** that is fully
+rebuildable from `miku_docs/**/*.md`. Deleting the database loses nothing but rebuild time.
 
 ```
 repo/
@@ -19,10 +19,10 @@ repo/
 
 ## Components
 
-- **HTTP layer (axum):** page render/edit/save routes, search, tags, backlinks, static asset serving. **Read-only** against Postgres.
+- **HTTP layer (axum):** page render/edit/save routes, search, tags, backlinks, static asset serving. **Read-only** against the index.
 - **Store:** filesystem read/write of `miku_docs/*.md`. Atomic save = write temp + `fsync` + `rename`.
-- **Background indexer:** `notify` watcher on `miku_docs/`; parses changed pages off the request path into Postgres. The **sole writer**.
-- **Postgres index:** `pages`, `links`, `tags`, and a `tsvector` FTS column.
+- **Background indexer:** `notify` watcher on `miku_docs/`; parses changed pages off the request path into the selected index backend. The **sole writer**.
+- **Index backend:** SQLite by default, or Postgres when explicitly selected; both store pages, links, tags, and full-text search projections.
 
 ## Save / index contract (single-writer model)
 
@@ -31,11 +31,12 @@ This is the key design decision that removes save↔index races:
 1. `POST /save` writes to a temp file → `fsync` → atomic `rename` into `miku_docs/<path>.md`. The handler returns immediately and **does not touch the index**.
 2. The `rename` fires a `notify` event → debounced (~200ms) → the indexer reindexes just that page.
 3. **`notify` is the only index trigger.** Handlers never index directly, so there is no double-indexing and no race. Cost: backlinks lag a save by ~200ms — invisible for a personal wiki.
-4. **Startup reconcile:** full scan comparing file mtime vs `pages.mtime` to catch anything `notify` missed while the process was down.
+4. **Startup reconcile:** metadata scan comparing file mtime vs `pages.mtime` to catch anything `notify` missed while the process was down. The persisted SQLite/Postgres projection remains in place;
+   unchanged files are skipped and only changed, new, or deleted files are written.
 
 Reindex-one-page is a single transaction: upsert the `pages` row, wipe+rewrite that page's `links` / `tags` / FTS rows, then re-resolve any dangling links now pointing at this page.
 
-Postgres runs with the standard single-writer pattern here: only the indexer writes, HTTP handlers only read.
+Both index backends use the same single-writer pattern here: only the indexer writes, HTTP handlers only read.
 
 Tables are prefixed `tb_`. The authoritative DDL is `migrations/0001_init_index.sql`; this is the overview.
 
@@ -44,7 +45,7 @@ CREATE TABLE tb_pages (
   id          BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   path        TEXT NOT NULL UNIQUE,           -- relative to miku_docs/, e.g. 'sub/Bar.md'
   slug        TEXT NOT NULL,                  -- normalized basename for [[ ]] resolution
-  title       TEXT NOT NULL,                  -- frontmatter title, else first H1, else filename
+  title       TEXT NOT NULL,                  -- frontmatter title, else filename stem
   frontmatter JSONB NOT NULL DEFAULT '{}',    -- opaque user properties
   has_mermaid BOOLEAN NOT NULL DEFAULT false, -- index-driven lazy mermaid.js injection
   mtime       BIGINT NOT NULL,                -- file mtime (unix), for reconcile

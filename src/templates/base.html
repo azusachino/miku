@@ -1,3 +1,4 @@
+{% from "_icons.html" import icon %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -7,7 +8,7 @@
          (e.g. geekbang static001) hotlink-block foreign referers with 403 but
          serve fine with none. Same-origin requests still carry their referrer. -->
     <meta name="referrer" content="same-origin">
-    <link id="miku-favicon" rel="icon" href="/static/miku-icon-dark.svg?theme=dark" type="image/svg+xml">
+    <link id="miku-favicon" rel="icon" href="/static/miku-icon-dark.svg" type="image/svg+xml">
     <title>{% block title %}Miku Note{% endblock %}</title>
 
     <script>
@@ -78,27 +79,11 @@
         .tree-row { position: relative; display: flex; align-items: center; gap: 8px; }
         .tree-page { margin-bottom: 2px; }
         .tree-link { flex: 1; min-width: 0; }
-        .tree-menu-btn { width: 32px; height: 32px; flex: 0 0 32px; opacity: 0; }
-        .tree-row:hover .tree-menu-btn { opacity: 1; }
-        .tree-menu-danger { color: #f85149; }
-
-        /* Cursor-positioned file-tree context menu (single instance). */
-        .mk-tree-menu {
-            position: fixed;
-            z-index: 200;
-            min-width: 168px;
-            padding: 6px;
-            display: flex;
-            flex-direction: column;
-            gap: 4px;
-        }
-        .mk-tree-menu button { width: 100%; justify-content: flex-start; }
-
-        /* Tree action toast (move conflicts / trash undo). */
+        /* Top-level navigation errors. */
         .mk-toast {
             position: fixed;
             left: 50%;
-            bottom: 24px;
+            top: 80px;
             transform: translateX(-50%);
             z-index: 210;
             display: flex;
@@ -113,15 +98,6 @@
             font-size: 13px;
         }
 
-        /* Trash view list. */
-        .mk-trash-list { display: flex; flex-direction: column; gap: 8px; }
-        .mk-trash-item { padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
-        .mk-trash-meta { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-        .mk-trash-meta .name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .mk-trash-meta .path { font-size: 11px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .mk-trash-meta .time { font-size: 11px; color: var(--muted); }
-        .mk-trash-actions { display: flex; gap: 8px; }
-
         .tree-children {
             display: flex;
             flex-direction: column;
@@ -129,22 +105,6 @@
             padding-left: 8px;
             border-left: 1px solid var(--border);
         }
-        .drag-over,
-        .drag-over-root {
-            outline: 2px dashed var(--teal);
-            outline-offset: 2px;
-            border-radius: var(--radius-ctl);
-        }
-        /* Root drop affordance: the Files header doubles as the only root drop
-           target. It reveals a hint and a dashed outline while a drag is in
-           flight so the target is explicit, not the whole empty panel. */
-        .mk-root-drop { display: flex; align-items: baseline; gap: 8px; }
-        .mk-root-drop.is-drop-armed {
-            outline: 1px dashed var(--border);
-            outline-offset: 2px;
-            border-radius: var(--radius-ctl);
-        }
-        .mk-root-hint { font-size: 9.5px; font-weight: 700; letter-spacing: .6px; color: var(--teal); text-transform: none; }
         .new-page-input {
             min-width: 0;
             flex: 1;
@@ -304,7 +264,7 @@
     </style>
 
     <script src="/static/vendor/htmx.min.js" defer></script>
-    <script defer src="/static/miku.js?v=ux-5"></script>
+    <script defer src="/static/miku.js?v=ux-6"></script>
     <script defer src="/static/vendor/alpine.min.js"></script>
 
     {% block head %}{% endblock %}
@@ -327,14 +287,14 @@
             <div class="mk-topbar-right flex items-center gap-2.5 ml-auto">
                 <div class="mk-seg flex p-[3px] rounded-xl bg-panel border border-border" aria-label="Theme">
                     <button type="button" data-set-theme="light" aria-label="Use light theme">
-                        <span class="mk-icon mk-symbol-icon" aria-hidden="true">☼</span>
+                        {{ icon("sun") }}
                     </button>
                     <button type="button" data-set-theme="dark" aria-label="Use dark theme">
-                        <span class="mk-icon mk-symbol-icon" aria-hidden="true">☾</span>
+                        {{ icon("moon") }}
                     </button>
                 </div>
                 <button type="button" class="mk-topbar-action" @click="settingsOpen = true" aria-label="Open settings" title="Settings">
-                    <span class="mk-icon mk-symbol-icon" aria-hidden="true">⚙</span>
+                    {{ icon("settings") }}
                     <span>Settings</span>
                 </button>
             </div>
@@ -360,11 +320,6 @@
                                 :aria-selected="sidebarTab === 'tags'"
                                 aria-controls="sidebar-tags"
                                 @click="sidebarTab = 'tags'; $dispatch('miku-tags-open')">Tags</button>
-                        <button type="button" role="tab" class="mk-tab"
-                                :class="{ 'is-active': sidebarTab === 'trash' }"
-                                :aria-selected="sidebarTab === 'trash'"
-                                aria-controls="sidebar-trash"
-                                @click="sidebarTab = 'trash'; $store.tree.loadTrash()">Trash</button>
                     </nav>
 
                 {% from "_nav_macro.html" import nav_node %}
@@ -386,18 +341,7 @@
                           <span class="mk-kbd">Cmd N</span>
                         </button>
 
-                        {# Root drop target is this header only — NOT the whole
-                           panel — so an accidental drag ending on empty scroll
-                           space can't silently yank a nested page to the vault
-                           root. Guards miku:pitfall:silent-move-to-root. #}
-                        <div class="mk-section-label file-viewer-title mk-root-drop"
-                             :class="{ 'drag-over-root': $store.tree.dropTarget === '', 'is-drop-armed': $store.tree.dragging }"
-                             @dragover.prevent="$store.tree.dropTarget = ''"
-                             @dragleave="if ($store.tree.dropTarget === '') $store.tree.dropTarget = null"
-                             @drop.prevent="$store.tree.dropInto('', $event)">
-                          <span>Files</span>
-                          <span class="mk-root-hint" x-show="$store.tree.dragging" x-cloak>drop to move to root</span>
-                        </div>
+                        <div class="mk-section-label file-viewer-title">Files</div>
                         <div class="nav-tree w-full">
                           {% if nav_pages %}
                             {% for node in nav_pages %}{{ nav_node(node, '', path | default('')) }}{% endfor %}
@@ -460,31 +404,6 @@
                         <a class="mk-sidebar-link" href="/tags">Open full tag index <span aria-hidden="true">→</span></a>
                       </section>
 
-                      {# Trash view: lazy-loads GET /api/v1/trash on first open; Restore/Delete
-                         wire to $store.tree. Trashed files live under miku_docs/.trash and are
-                         excluded from the index. #}
-                      <section id="sidebar-trash" class="mk-sidebar-panel mk-sidebar-tools" role="tabpanel"
-                               x-show="sidebarTab === 'trash'" :hidden="sidebarTab !== 'trash'">
-                        <div class="mk-section-label">Trash</div>
-                        <template x-if="$store.tree.trashItems.length === 0">
-                          <div class="mk-sidebar-empty" x-text="$store.tree.trashLoading ? 'Loading…' : 'Trash is empty.'"></div>
-                        </template>
-                        <div class="mk-trash-list">
-                          <template x-for="item in $store.tree.trashItems" :key="item.id">
-                            <div class="mk-trash-item mk-card">
-                              <div class="mk-trash-meta">
-                                <span class="name" x-text="item.title || item.original_path"></span>
-                                <span class="path" x-text="item.original_path"></span>
-                                <span class="time" x-text="$store.tree.relTime(item.trashed_at)"></span>
-                              </div>
-                              <div class="mk-trash-actions">
-                                <button type="button" class="mk-chip" @click="$store.tree.restore(item.id)">Restore</button>
-                                <button type="button" class="mk-chip tree-menu-danger" @click="$store.tree.purge(item.id)">Delete</button>
-                              </div>
-                            </div>
-                          </template>
-                        </div>
-                      </section>
                     </div>
                 </div>
 
@@ -629,7 +548,7 @@
         <div class="mk-overlay" x-show="settingsOpen" x-transition.opacity @keydown.escape.window="settingsOpen = false" x-cloak>
             <section class="mk-modal" @click.outside="settingsOpen = false" aria-modal="true" role="dialog" aria-labelledby="settings-title">
                 <div class="mk-modal-body">
-                    <h2 id="settings-title" class="mk-wordmark">Settings<small>appearance and reading</small></h2>
+                    <h2 id="settings-title" class="mk-wordmark">Settings</h2>
 
                     <div class="mk-card">
                         <div class="mk-card-label">Mode</div>
@@ -669,22 +588,6 @@
             </section>
         </div>
 
-        {# File-tree context menu — single instance, positioned at the cursor and
-           driven entirely by $store.tree (see static/miku.js). Replaces the old
-           per-row inline menu/rename/trash forms. #}
-        <div class="mk-tree-menu mk-card" x-show="$store.tree.menu.open" x-cloak
-             @click.outside="$store.tree.closeMenu()"
-             @keydown.escape.window="$store.tree.closeMenu()"
-             :style="`left:${$store.tree.menu.x}px; top:${$store.tree.menu.y}px;`">
-            <button type="button" class="mk-chip" @click="$store.tree.renamePrompt($store.tree.menu.path)">Rename / move…</button>
-            <button type="button" class="mk-chip tree-menu-danger" @click="$store.tree.trash($store.tree.menu.path)">Delete</button>
-        </div>
-
-        {# Tree action toast: move-conflict messages and the trash Undo affordance. #}
-        <div class="mk-toast" x-show="$store.tree.toast.show" x-transition.opacity x-cloak>
-            <span x-text="$store.tree.toast.message"></span>
-            <button type="button" class="mk-chip" x-show="$store.tree.toast.undo" @click="$store.tree.runUndo()">Undo</button>
-        </div>
     </div>
 
     <script>
@@ -692,6 +595,7 @@
             return {
                 settingsOpen: false,
                 createOpen: false,
+                createNavigating: false,
                 paletteOpen: false,
                 paletteMode: 'pages',
                 paletteQuery: '',
@@ -940,6 +844,7 @@
                     this.createOpen = false;
                 },
                 confirmCreate() {
+                    if (this.createNavigating) return;
                     const path = this.createPath.split('/').map(encodeURIComponent).join('/');
                     if (!path) return;
                     // The server owns the seed bodies; pass only the chosen
@@ -947,7 +852,29 @@
                     const query = this.createTemplate && this.createTemplate !== 'blank'
                         ? '?template=' + encodeURIComponent(this.createTemplate)
                         : '';
-                    window.location.href = '/p/' + path + '/edit' + query;
+                    const target = '/p/' + path + '/edit' + query;
+                    this.createNavigating = true;
+                    this.createOpen = false;
+                    document.documentElement.setAttribute('data-nav-loading', 'true');
+                    fetch(target, { headers: { Accept: 'text/html' } })
+                        .then(response => {
+                            if (!response.ok) throw new Error('Editor request failed');
+                            return response.text();
+                        })
+                        .then(html => {
+                            history.pushState({}, '', target);
+                            // Replace the document from the fetched SSR shell so
+                            // the browser does not perform a second full-page
+                            // navigation (and show its tab loading indicator).
+                            document.open();
+                            document.write(html);
+                            document.close();
+                        })
+                        .catch(() => {
+                            this.createNavigating = false;
+                            document.documentElement.removeAttribute('data-nav-loading');
+                            if (this.$store.tree) this.$store.tree.showToast('Could not open the editor.', null);
+                        });
                 },
                 toggleEdit() {
                     const path = window.location.pathname;

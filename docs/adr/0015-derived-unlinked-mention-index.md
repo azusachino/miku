@@ -14,12 +14,12 @@ frontmatter, and self-references. The page route will only read this relation; i
 The durable page projection remains the source for rebuilding the relation. The relation is disposable and may be empty or stale while reconciliation is running. Linked forward links and backlinks
 remain authoritative and immediately available through the normal index projection.
 
-Tantivy, as used by the Turso FTS implementation, remains the general-purpose full-text candidate/search engine. It may accelerate a rebuild or provide a fallback candidate set, but it is not the
-source of truth for mention semantics or promotion safety.
+SQLite FTS5 remains the general-purpose full-text candidate/search engine. It may accelerate a rebuild or provide a fallback candidate set, but it is not the source of truth for mention semantics or
+promotion safety.
 
 ## Why
 
-The previous page path searched body FTS and then reread candidate files during every render. On the 14k-page corpus this added about 1.6 seconds to page views and competed with the single Turso
+The previous page path searched body FTS and then reread candidate files during every render. On the 14k-page corpus this added about 1.6 seconds to page views and competed with the local index
 connection. This violated the runtime invariant that a readable page must not wait for secondary discovery features.
 
 The indexer already parses changed Markdown into complete `PageIndex` values. Computing mention relations in that background pipeline amortizes the work, makes the request path bounded, and lets the

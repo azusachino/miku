@@ -28,7 +28,7 @@ MemoryCache + optional Valkey L2/cache-events + Postgres IndexStore
 Postgres is the durable primary and retains its native FTS/trigram capabilities behind the backend-neutral contract. Valkey accelerates repeated reads and may carry invalidation/pub-sub events, but it
 is never authoritative.
 
-A Valkey outage degrades to the in-process cache and Postgres. There is no silent fallback from Postgres to Turso or memory.
+A Valkey outage degrades to the in-process cache and Postgres. There is no silent fallback from Postgres to SQLite or memory.
 
 ## Why
 

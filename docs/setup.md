@@ -7,8 +7,13 @@
 
 ## Native dev stack (no containers — Linux & macOS)
 
-The fastest path, and the one to use on the Mac mini: run Postgres directly from the devShell against a project-local, disposable cluster (`.pgdata/`, gitignored) on port `55432`, then `cargo run`. No
-podman, no Docker, no VM — just processes.
+The default path is local SQLite and needs no database service:
+
+```bash
+make run
+```
+
+For the optional Postgres profile, run Postgres directly from the devShell against a project-local, disposable cluster (`.pgdata/`, gitignored) on port `55432`:
 
 ```bash
 make db-up        # init (first run) + start Postgres, create the miku database
@@ -19,7 +24,7 @@ make db-down      # stop Postgres
 make db-reset     # stop + delete .pgdata (index is rebuilt from miku_docs/**/*.md)
 ```
 
-The app defaults to the local Rust-built Turso index at `miku_docs/.miku-index.turso`. `make dev` selects the explicit Postgres profile and sets `DATABASE_URL=postgres://miku@localhost:55432/miku`
+The app defaults to the local Rust-built SQLite index at `miku_docs/.miku-index.sqlite`. `make dev` selects the explicit Postgres profile and sets `DATABASE_URL=postgres://miku@localhost:55432/miku`
 (trust auth, no password); migrations run on startup. Override with `MIKU_INDEX_BACKEND=…`, `MIKU_INDEX_PATH=…`, `PGPORT=…`, `PGDATA=…`, or `DATABASE_URL=…`.
 
 ## Remote access (LAN / Tailscale)
@@ -44,15 +49,16 @@ export MIKU_INDEX_BACKEND=postgres
 
 ```bash
 nix develop       # enter the devShell (provisions all tools)
-make run          # run the server with the default local Turso index
+make css          # build static/tailwind.generated.css via bun (bun run css)
+make run          # build Tailwind CSS (bun) then run the server (default local SQLite index)
 make check                             # default fmt + lint + tests
 make check-all-features                # all Cargo features
 make check-integration                 # optional service-backed probes
-make release                           # crates.io package dry-runs
+make release                           # crates.io leaf package dry-runs
 make validate                          # check + release build
 make check-blackbox                    # live HTTP checks against a running app
 make check-ux-browser                 # Playwright browser acceptance (install Chromium once)
-MIKU_BENCH_BACKEND=turso make benchmark # benchmark a running local Turso app
+MIKU_BENCH_BACKEND=sqlite make benchmark # benchmark a running local SQLite app
 ```
 
 All quality targets are thin Make wrappers around `uv run python scripts/ci.py`, so local and GitHub CI use the same implementation. The Python commands can also be invoked directly when debugging a
@@ -66,12 +72,22 @@ Project automation/scripts are Python run via `uv run python scripts/<x>.py` (ro
 The browser acceptance harness uses Playwright against a real local process. Install its browser once with `uv run playwright install chromium`, then run `make check-ux-browser`. Screenshots are
 written to `.artifacts/ux/` (ignored).
 
-## Containers (optional, Linux)
+## Containers (Postgres/Valkey scale profile only)
 
-The `compose.yml` + `make stack-*` targets still provide a podman/Docker stack (`make stack-up`, or `COMPOSE="docker compose" make stack-up`). The native stack above is preferred for local
-development.
+Containers are only for the service-backed **scale profile** — the default `memory`/`sqlite` runtime is a pure local binary (`make run`), so it needs no image. The image (`Containerfile`) is built
+with the `postgres,valkey` features and pairs the app with a Postgres service via `compose.yml`.
+
+```bash
+make stack-up          # podman compose up -d (Postgres + app on postgres backend)
+make stack-build       # rebuild + recreate the miku image
+make stack-logs        # follow logs
+make stack-down        # stop the stack
+```
+
+`COMPOSE` defaults to `podman compose`; there is no hard Docker requirement. Override for Docker Desktop: `COMPOSE="docker compose" make stack-up` (Docker needs `-f Containerfile`, which `compose.yml`
+already sets via `dockerfile:`). The native stack above is preferred for day-to-day local development.
 
 ## Database
 
-The Postgres index is a disposable cache. Migrations live under `crates/miku-index-postgres/migrations/` and are applied by the Postgres composition layer in `miku-app`. The index is fully rebuildable
-from `miku_docs/**/*.md` — dropping and re-migrating the database loses no user data.
+The SQLite index is stored at `miku_docs/.miku-index.sqlite` by default. Postgres migrations live under `crates/miku-index-postgres/migrations/` and are used only for the explicit Postgres profile.
+Both indexes are fully rebuildable from `miku_docs/**/*.md`; dropping and recreating either loses no user data.

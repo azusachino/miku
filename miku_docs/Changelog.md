@@ -42,11 +42,11 @@ starting point and [[Features]] for the current product boundary. #release
 
 ### Scope clarification
 
-- The content root is `miku_docs/`, not `miku/`.
-- The default local index is Turso; the supported Postgres profile remains
-  available for the scale/container path.
-- The browser editor is CodeMirror-based and opt-in from the reader; it is not
-  loaded during ordinary reading.
+- The content root is `miku_docs/`.
+- The default local index is SQLite via SQLx; the supported Postgres profile
+  remains available for the scale/container path.
+- The browser editor is CodeMirror-based and opt-in from the reader; ordinary
+  reading leaves its modules unloaded.
 
 ### Brand language
 

@@ -11,16 +11,15 @@ ideas are kept at the end so the product boundary stays honest. #feature #guide
 ## Filesystem ownership
 
 Notes remain ordinary `.md` files under `miku_docs/`. They can be edited with
-Miku Note, a text editor, scripts, or git. The database is an index projection,
-not the canonical copy of your content.
+Miku Note, a text editor, scripts, or git. The database is an index projection;
+Markdown files remain the canonical copy of your content.
 
 ## Reader-first navigation
 
 The readonly reader is the primary experience. Direct page URLs use `/p/...`,
 so links, bookmarks, and server-rendered requests continue to work normally.
 Switching between notes keeps the application shell mounted and swaps only the
-reader fragment; it does not reload the document or the shared JavaScript and
-CSS.
+reader fragment; the document, shared JavaScript, and CSS remain loaded.
 
 The reader includes:
 
@@ -87,28 +86,28 @@ updates links, tags, aliases, mentions, full-text search data, and rendering
 metadata for that page. HTTP handlers read the index and do not perform an
 inline reindex.
 
-The index is rebuildable from `miku_docs/**/*.md`. The local runtime uses the
-configured index backend, with Turso as the default local profile; larger
-deployments can select the supported Postgres profile. The index accelerates
-navigation and relationships; it is not a second user-facing body-search
-mode.
+The index is rebuildable from `miku_docs/**/*.md`. The local runtime uses
+SQLite via SQLx by default; larger deployments can select the supported
+Postgres profile. The index accelerates
+navigation and relationships; body search remains the dedicated full-text mode.
 
-## Move, trash, and restore
+## File ownership boundary
 
-Pages can be dragged into folders or moved to another path. Deletion is a soft
-delete: the file moves into `miku_docs/.trash/`, disappears from the live index,
-and can be restored or purged from the Trash view.
+The file tree is read-only in v0.0.2. Miku does not move, rename, delete, or
+trash pages. Use the editor for content changes and use your filesystem, editor,
+scripts, or git when changing paths or removing files; the watcher reconciles
+those external changes into the disposable index.
 
 ## Freshness and external edits
 
-Miku Note does not keep an idle event stream open in reader mode. The active
-page checks for a newer indexed version periodically and refreshes when the tab
-becomes visible again. This keeps reading lightweight while still reflecting
+Miku Note keeps the event stream active only while the editor is open. The
+active page checks for a newer indexed version periodically and refreshes when
+the tab becomes visible again. This keeps reading lightweight while still reflecting
 changes made by git, an editor, or another process.
 
 ## Deliberately deferred or rejected
 
-These are not current features:
+The following items remain outside the current feature set:
 
 - mobile or offline-first applications;
 - real-time collaboration and CRDT editing;

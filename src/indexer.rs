@@ -13,11 +13,13 @@ use std::sync::{
 use std::time::{Duration, Instant};
 use tokio::sync::{broadcast, mpsc};
 use tokio::task::{JoinHandle, JoinSet};
-use tracing::{error, info};
+use tracing::{error, info, warn};
 
 const RECONCILE_SENTINEL: &str = "__reconcile__";
 const BULK_INDEX_REFRESH: &str = "__miku_bulk_index_refresh__";
 const DEFAULT_RECONCILE_BATCH_SIZE: usize = 512;
+const TITLE_RESOLUTION_META_KEY: &str = "title_resolution";
+const TITLE_RESOLUTION_VERSION: &str = "frontmatter-title-then-filename-v1";
 
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
 pub enum WatcherEvent {
@@ -31,12 +33,43 @@ struct PendingSource {
     mtime: i64,
 }
 
+// Skip dot-dirs/files (.git, editor swap files, and other hidden artifacts).
+// anywhere in the relative path so trashed pages and VCS metadata never enter
+// the index. Mirrors the dot-skip in walk_store_tree, so the live watcher and
+// the reconcile sweep agree on what is indexable.
+fn is_hidden_rel(rel_path: &Path) -> bool {
+    rel_path
+        .components()
+        .any(|component| component.as_os_str().to_string_lossy().starts_with('.'))
+}
+
 pub struct IndexerQueue {
     sender: mpsc::Sender<WatcherEvent>,
     reconcile_queued: Arc<AtomicBool>,
     ready: Arc<AtomicBool>,
     _watcher: notify::RecommendedWatcher,
     tasks: Vec<JoinHandle<()>>,
+}
+
+#[derive(Clone)]
+pub struct ReconcileTrigger {
+    sender: mpsc::Sender<WatcherEvent>,
+    reconcile_queued: Arc<AtomicBool>,
+}
+
+impl ReconcileTrigger {
+    pub fn disabled() -> Self {
+        let (sender, receiver) = mpsc::channel(1);
+        drop(receiver);
+        Self {
+            sender,
+            reconcile_queued: Arc::new(AtomicBool::new(false)),
+        }
+    }
+
+    pub fn trigger(&self) {
+        IndexerQueue::try_queue_reconcile(&self.sender, &self.reconcile_queued);
+    }
 }
 
 async fn index_store_file(
@@ -91,6 +124,11 @@ async fn reconcile_store(
         .map(|page| (page.path.clone(), page))
         .collect::<HashMap<String, PageSummary>>();
     let existing_duration = existing_started.elapsed();
+    let title_resolution_changed = match reader.index_metadata(TITLE_RESOLUTION_META_KEY).await {
+        Ok(version) => version.as_deref() != Some(TITLE_RESOLUTION_VERSION),
+        Err(miku_domain::StoreError::Unsupported(_)) => false,
+        Err(error) => return Err(error),
+    };
     let scanned_files = files.len();
     let mut seen = HashSet::with_capacity(files.len());
     let batch_size = IndexerQueue::reconcile_batch_size();
@@ -118,9 +156,10 @@ async fn reconcile_store(
         metadata_duration += metadata_started.elapsed();
         let path = relative.to_string_lossy().into_owned();
         seen.insert(path.clone());
-        if existing
-            .get(&path)
-            .is_some_and(|indexed| indexed.mtime == mtime)
+        if !title_resolution_changed
+            && existing
+                .get(&path)
+                .is_some_and(|indexed| indexed.mtime == mtime)
         {
             unchanged_pages += 1;
             continue;
@@ -156,6 +195,10 @@ async fn reconcile_store(
         .mark_mentions_ready()
         .await
         .or_else(ignore_unsupported)?;
+    writer
+        .set_index_metadata(TITLE_RESOLUTION_META_KEY, TITLE_RESOLUTION_VERSION)
+        .await
+        .or_else(ignore_unsupported)?;
     if deleted {
         let _ = events.send(BULK_INDEX_REFRESH.to_string());
     }
@@ -171,6 +214,7 @@ async fn reconcile_store(
         indexed_pages,
         unchanged_pages,
         deleted_pages,
+        title_resolution_changed,
         batches,
         search_rebuilt,
         parse_concurrency,
@@ -309,9 +353,11 @@ async fn build_page_batch(
 
     let mut pages = Vec::with_capacity(sources.len());
     while let Some(result) = workers.join_next().await {
-        let page =
-            result.map_err(|error| miku_domain::StoreError::Operation(error.to_string()))??;
-        pages.push(page);
+        if let Some(page) =
+            result.map_err(|error| miku_domain::StoreError::Operation(error.to_string()))??
+        {
+            pages.push(page);
+        }
         if let Some(source) = pending.next() {
             spawn_page_worker(&mut workers, content_root, source);
         }
@@ -321,19 +367,32 @@ async fn build_page_batch(
 }
 
 fn spawn_page_worker(
-    workers: &mut JoinSet<miku_domain::StoreResult<PageIndex>>,
+    workers: &mut JoinSet<miku_domain::StoreResult<Option<PageIndex>>>,
     content_root: &Path,
     source: PendingSource,
 ) {
     let file = content_root.join(&source.relative);
     workers.spawn_blocking(move || {
-        let bytes = fs::read(&file)
-            .map_err(|error| miku_domain::StoreError::Operation(error.to_string()))?;
-        Ok(build_page_index(
+        // A file can vanish or become unreadable between the metadata scan and
+        // this read (concurrent edit/delete). Skip it instead of failing the
+        // whole reconcile — an aborted startup sweep would leave the index
+        // never marked ready and /readyz stuck on 503.
+        let bytes = match fs::read(&file) {
+            Ok(bytes) => bytes,
+            Err(error) => {
+                warn!(
+                    path = %source.relative.display(),
+                    %error,
+                    "skipping unreadable file during reconcile"
+                );
+                return Ok(None);
+            }
+        };
+        Ok(Some(build_page_index(
             &source.relative.to_string_lossy(),
             &bytes,
             source.mtime,
-        ))
+        )))
     });
 }
 
@@ -467,6 +526,9 @@ impl IndexerQueue {
                             let Some(relative) = path.strip_prefix(&root_for_watcher).ok() else {
                                 continue;
                             };
+                            if is_hidden_rel(relative) {
+                                continue;
+                            }
                             let _ = sender_for_watcher.try_send(if path.exists() {
                                 WatcherEvent::Modified(relative.to_path_buf())
                             } else {
@@ -517,6 +579,14 @@ impl IndexerQueue {
 
     pub fn trigger_reconcile(&self) {
         Self::try_queue_reconcile(&self.sender, &self.reconcile_queued);
+    }
+
+    #[must_use]
+    pub fn reconcile_trigger(&self) -> ReconcileTrigger {
+        ReconcileTrigger {
+            sender: self.sender.clone(),
+            reconcile_queued: Arc::clone(&self.reconcile_queued),
+        }
     }
 
     #[must_use]

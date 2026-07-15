@@ -74,10 +74,34 @@ def integration() -> None:
         print("skip: VALKEY_URL is not set; Valkey runtime smoke omitted")
 
 
+# Real publishing order: leaf → root. `cargo publish` requires the whole non-dev
+# dependency closure (including the optional postgres/valkey backends) to already
+# be on crates.io, so a real release walks this list top-to-bottom, one crate at
+# a time, waiting for each to land on the index before the next.
+PUBLISH_ORDER = (
+    "miku-domain",
+    "miku-markdown",
+    "miku-indexer",
+    "miku-index-memory",
+    "miku-index-sqlite",
+    "miku-index-postgres",
+    "miku-cache-valkey",
+    "miku-app",
+    "miku",
+)
+
+# Only the leaves (no internal path deps) can be dry-run before publishing:
+# `cargo publish --dry-run` resolves every dependency against the crates.io index
+# during packaging, so a crate whose deps are not yet published cannot be
+# validated ahead of time. This target packages the leaves as a metadata/include
+# pre-flight; the rest are covered by the real publish and by `make check`.
+DRY_RUN_LEAVES = ("miku-domain", "miku-markdown")
+
+
 def release() -> None:
-    for package in ("miku-domain", "miku-markdown"):
-        cargo("package", "--list", "-p", package)
+    for package in DRY_RUN_LEAVES:
         cargo("publish", "--dry-run", "--allow-dirty", "-p", package)
+    print("publish order (real release, leaf → root): " + " -> ".join(PUBLISH_ORDER))
 
 
 def scale() -> None:

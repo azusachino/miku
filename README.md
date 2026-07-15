@@ -35,19 +35,22 @@ This makes the vault easy to inspect, back up, version, or edit with another too
 | Knowledge graph | Backlinks, linked mentions, tags, and paginated tag views                                              |
 | Search          | Metadata quick-switch plus embedded full-text content search powered by Rust's grep/ignore crates      |
 | Editing         | Browser editor, inline reader editing, preview, atomic writes, and conflict-aware saves                |
-| Runtime         | Local Turso index by default; optional Postgres and Valkey composition for larger deployments          |
+| Runtime         | Local SQLite index by default; optional Postgres and Valkey composition for larger deployments         |
 | UX              | Light/dark themes, reading-width modes, lazy editor/highlighter loading, and a focused command palette |
 
 ## Quick start
 
-The default development path needs Nix with flakes. It uses the local Turso index and does not need Postgres.
+The default development path needs Nix with flakes. It uses the local SQLite index and does not need Postgres.
 
 ```bash
 git clone https://github.com/azusachino/miku.git
 cd miku
-nix develop
-make run
+nix develop           # enter the devShell (rust, bun, uv, postgres, …)
+make run              # build the Tailwind CSS with bun, then run the server
 ```
+
+`make run` depends on the `css` target: it runs `bun install --frozen-lockfile` and `bun run css` to compile `static/tailwind.input.css` → `static/tailwind.generated.css` before `cargo run`. `bun`
+comes from the Nix devShell, so no separate Node/Bun install is needed. The generated stylesheet is committed, so a plain `cargo run` also works if you have not changed any CSS.
 
 Open <http://127.0.0.1:3000>. The default content root is `miku_docs/`; put a Markdown file there and refresh the page after the watcher indexes it.
 
@@ -64,14 +67,14 @@ See [`docs/setup.md`](docs/setup.md) for external Postgres, Tailscale/LAN access
 
 The useful local switches are:
 
-| Variable             | Default                       | Purpose                                                    |
-| -------------------- | ----------------------------- | ---------------------------------------------------------- |
-| `MIKU_INDEX_BACKEND` | `turso`                       | Select the local or service-backed index implementation    |
-| `MIKU_INDEX_PATH`    | `miku_docs/.miku-index.turso` | Location of the local derived index                        |
-| `MIKU_BIND`          | `0.0.0.0:3000`                | Address exposed by the HTTP server                         |
-| `MIKU_READONLY`      | unset                         | Deploy the reader without write operations                 |
-| `DATABASE_URL`       | unset                         | Postgres connection string when using the Postgres profile |
-| `VALKEY_URL`         | unset                         | Optional Valkey endpoint for the scale profile             |
+| Variable             | Default                        | Purpose                                                    |
+| -------------------- | ------------------------------ | ---------------------------------------------------------- |
+| `MIKU_INDEX_BACKEND` | `sqlite`                       | Select the local or service-backed index implementation    |
+| `MIKU_INDEX_PATH`    | `miku_docs/.miku-index.sqlite` | Location of the local derived index                        |
+| `MIKU_BIND`          | `0.0.0.0:3000`                 | Address exposed by the HTTP server                         |
+| `MIKU_READONLY`      | unset                          | Deploy the reader without write operations                 |
+| `DATABASE_URL`       | unset                          | Postgres connection string when using the Postgres profile |
+| `VALKEY_URL`         | unset                          | Optional Valkey endpoint for the scale profile             |
 
 The vault is intentionally single-user and login-less at this stage. If the server is reachable beyond a trusted machine, put it behind the network or identity boundary appropriate for your
 deployment.
@@ -111,7 +114,7 @@ make check                  # formatting, CSS, lint, Python checks, Rust tests
 make check-all-features     # compile and test every Cargo feature combination
 make check-blackbox         # live HTTP checks against a running server
 make check-ux-browser       # Playwright browser acceptance checks
-make release                # crates.io package dry-runs
+make release                # crates.io leaf package dry-runs
 make validate               # check plus release build
 ```
 

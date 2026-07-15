@@ -52,19 +52,18 @@ pub fn parse_frontmatter(content: &str) -> (Option<serde_json::Value>, &str) {
     (None, content)
 }
 
-/// Title resolution: frontmatter `title`, else the first `# H1`, else the
-/// path basename.
-pub fn extract_title(path: &str, frontmatter: Option<&serde_json::Value>, body: &str) -> String {
+/// Resolve a page title from explicit metadata, then the durable file name.
+///
+/// Markdown headings are document content and must not silently become page
+/// identity. This keeps imported files stable even when they contain example
+/// headings, raw HTML, or code samples.
+pub fn extract_title(path: &str, frontmatter: Option<&serde_json::Value>, _body: &str) -> String {
     if let Some(fm) = frontmatter {
         if let Some(title) = fm.get("title").and_then(|t| t.as_str()) {
-            return title.to_string();
-        }
-    }
-
-    for line in body.lines() {
-        let trimmed = line.trim();
-        if let Some(stripped) = trimmed.strip_prefix("# ") {
-            return stripped.trim().to_string();
+            let title = title.trim();
+            if !title.is_empty() {
+                return title.to_string();
+            }
         }
     }
 
@@ -538,6 +537,36 @@ mod tests {
         let (yaml, body) = parse_frontmatter(content);
         assert!(yaml.is_none());
         assert_eq!(body, "# Header\nBody content");
+    }
+
+    #[test]
+    fn test_extract_title_ignores_headings_and_falls_back_to_filename() {
+        let body = "# A document heading\n\n## A section\n";
+        assert_eq!(extract_title("notes/today.md", None, body), "today");
+    }
+
+    #[test]
+    fn test_extract_title_handles_setext_tabs_and_empty_frontmatter() {
+        let body = "    # code sample\n\nNot the title\n===\n\n#\tActual title\n";
+        let frontmatter = serde_json::json!({"title": "  "});
+        assert_eq!(
+            extract_title("notes/today.md", Some(&frontmatter), body),
+            "today"
+        );
+    }
+
+    #[test]
+    fn test_extract_title_ignores_heading_like_text_inside_raw_html() {
+        let body =
+            "<p>comment\n# &#47;usr&#47;share&#47;bcc&#47;tools&#47;memleak -a -p 21642\n</p>\n";
+        assert_eq!(
+            extract_title(
+                "docs/18 - 案例篇：内存泄漏了，我该如何定位和处理？.md",
+                None,
+                body
+            ),
+            "18 - 案例篇：内存泄漏了，我该如何定位和处理？"
+        );
     }
 
     #[test]

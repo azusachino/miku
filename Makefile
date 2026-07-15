@@ -60,7 +60,7 @@ benchmark:
 	$(NIX_RUN)uv run python scripts/ci.py benchmark
 
 inspect-index:
-	$(NIX_RUN)cargo run -p miku-index-turso --example inspect -- "$(MIKU_INDEX_PATH)"
+	$(NIX_RUN)cargo run -p miku-index-sqlite --example inspect -- "$(MIKU_INDEX_PATH)"
 
 # --- Native (no-container) local dev stack ---------------------------------
 # Runs Postgres directly from the nix devShell against a project-local cluster
@@ -71,10 +71,12 @@ PGDATA  ?= .pgdata
 PGPORT  ?= 55432
 PGHOST  := $(abspath $(PGDATA))
 DATABASE_URL ?= postgres://miku@localhost:$(PGPORT)/miku
-MIKU_INDEX_BACKEND ?= turso
-MIKU_INDEX_PATH ?= miku_docs/.miku-index.turso
+MIKU_INDEX_BACKEND ?= sqlite
+MIKU_INDEX_PATH ?= miku_docs/.miku-index.sqlite
 MIKU_RECONCILE_BATCH_SIZE ?= 512
 MIKU_PARSE_CONCURRENCY ?= 8
+# Local dev logs at debug; the binary itself defaults to info (override anytime).
+RUST_LOG ?= info,miku=debug,tower_http=debug
 
 # One-time cluster init. Superuser is `miku` and auth is trust (local dev only),
 # so the DATABASE_URL needs no password and is username-agnostic across hosts.
@@ -100,18 +102,18 @@ db-psql:
 
 # Start the DB (if needed) and run the server in the foreground.
 dev: db-up
-	MIKU_INDEX_BACKEND=postgres DATABASE_URL="$(DATABASE_URL)" $(NIX_RUN)cargo run
+	RUST_LOG="$(RUST_LOG)" MIKU_INDEX_BACKEND=postgres DATABASE_URL="$(DATABASE_URL)" $(NIX_RUN)cargo run
 
 # Same, but in a tmux session: pane 0 = server, pane 1 = Postgres log tail.
 dev-tmux: db-up
 	tmux new-session -d -s miku -n miku \
-		'MIKU_INDEX_BACKEND=postgres DATABASE_URL="$(DATABASE_URL)" nix develop --command cargo run'
+		'RUST_LOG="$(RUST_LOG)" MIKU_INDEX_BACKEND=postgres DATABASE_URL="$(DATABASE_URL)" nix develop --command cargo run'
 	tmux split-window -t miku:miku -v 'tail -f $(PGDATA)/server.log'
 	tmux select-pane -t miku:miku.0
 	tmux attach -t miku
 
 run: css
-	MIKU_INDEX_BACKEND="$(MIKU_INDEX_BACKEND)" MIKU_INDEX_PATH="$(MIKU_INDEX_PATH)" MIKU_RECONCILE_BATCH_SIZE="$(MIKU_RECONCILE_BATCH_SIZE)" MIKU_PARSE_CONCURRENCY="$(MIKU_PARSE_CONCURRENCY)" $(NIX_RUN)cargo run
+	RUST_LOG="$(RUST_LOG)" MIKU_INDEX_BACKEND="$(MIKU_INDEX_BACKEND)" MIKU_INDEX_PATH="$(MIKU_INDEX_PATH)" MIKU_RECONCILE_BATCH_SIZE="$(MIKU_RECONCILE_BATCH_SIZE)" MIKU_PARSE_CONCURRENCY="$(MIKU_PARSE_CONCURRENCY)" $(NIX_RUN)cargo run
 
 clean:
 	$(NIX_RUN)cargo clean

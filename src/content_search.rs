@@ -1,7 +1,5 @@
-use grep::{
-    regex::RegexMatcherBuilder,
-    searcher::{sinks::UTF8, SearcherBuilder},
-};
+use grep_regex::RegexMatcherBuilder;
+use grep_searcher::{sinks::UTF8, SearcherBuilder};
 use ignore::WalkBuilder;
 use serde::Serialize;
 use std::path::Path;
@@ -72,9 +70,7 @@ pub fn search(
     {
         let entry = entry.map_err(|error| error.to_string())?;
         let path = entry.path();
-        if !is_markdown_file(root, path)
-            || path.components().any(|part| part.as_os_str() == ".trash")
-        {
+        if !is_markdown_file(root, path) {
             continue;
         }
 
