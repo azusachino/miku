@@ -716,6 +716,7 @@
             return {
                 settingsOpen: false,
                 createOpen: false,
+                createNavigating: false,
                 renameOpen: false,
                 renameFrom: '',
                 renameTo: '',
@@ -993,6 +994,7 @@
                     }
                 },
                 confirmCreate() {
+                    if (this.createNavigating) return;
                     const path = this.createPath.split('/').map(encodeURIComponent).join('/');
                     if (!path) return;
                     // The server owns the seed bodies; pass only the chosen
@@ -1000,7 +1002,29 @@
                     const query = this.createTemplate && this.createTemplate !== 'blank'
                         ? '?template=' + encodeURIComponent(this.createTemplate)
                         : '';
-                    window.location.href = '/p/' + path + '/edit' + query;
+                    const target = '/p/' + path + '/edit' + query;
+                    this.createNavigating = true;
+                    this.createOpen = false;
+                    document.documentElement.setAttribute('data-nav-loading', 'true');
+                    fetch(target, { headers: { Accept: 'text/html' } })
+                        .then(response => {
+                            if (!response.ok) throw new Error('Editor request failed');
+                            return response.text();
+                        })
+                        .then(html => {
+                            history.pushState({}, '', target);
+                            // Replace the document from the fetched SSR shell so
+                            // the browser does not perform a second full-page
+                            // navigation (and show its tab loading indicator).
+                            document.open();
+                            document.write(html);
+                            document.close();
+                        })
+                        .catch(() => {
+                            this.createNavigating = false;
+                            document.documentElement.removeAttribute('data-nav-loading');
+                            if (this.$store.tree) this.$store.tree.showToast('Could not open the editor.', null);
+                        });
                 },
                 toggleEdit() {
                     const path = window.location.pathname;

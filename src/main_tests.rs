@@ -103,8 +103,6 @@ fn test_shell_has_resizable_panes_without_repeated_page_marks() {
         .expect("Failed to read base.html template");
     let page =
         std::fs::read_to_string("src/templates/page.html").expect("Failed to read page.html");
-    let css = std::fs::read_to_string("static/miku.css").expect("Failed to read miku.css");
-
     assert!(base.contains("mk-sidebar-resizer"));
     assert!(page.contains("mk-rail-resizer"));
     assert!(base.contains("miku:ui:v1"));
@@ -112,7 +110,9 @@ fn test_shell_has_resizable_panes_without_repeated_page_marks() {
     assert!(base.contains("miku-open-rename"));
     assert!(base.contains("id=\"rename-path\""));
     assert!(!base.contains("window.prompt"));
-    assert!(css.contains("grid-template-columns: minmax(0, 68ch) 8px var(--rail-w)"));
+    assert!(base.contains("fetch(target, { headers: { Accept: 'text/html' } })"));
+    assert!(base.contains("document.open();"));
+    assert!(base.contains("document.write(html);"));
     assert!(!page.contains("mk-page-mark"));
 }
 
