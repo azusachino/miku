@@ -28,6 +28,7 @@ members = [
   "crates/miku-index-memory",
   "crates/miku-app",
   "crates/miku-index-postgres",
+  "crates/miku-index-sqlite",
   "crates/miku-index-turso",
   "crates/miku-cache-valkey",
 ]

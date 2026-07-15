@@ -1851,6 +1851,7 @@ version = "0.30.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2e99fb7a497b1e3339bc746195567ed8d3e24945ecd636e3619d20b9de9e9149"
 dependencies = [
+ "cc",
  "pkg-config",
  "vcpkg",
 ]
@@ -2107,6 +2108,19 @@ dependencies = [
  "miku-indexer",
  "serde_json",
  "sqlx",
+]
+
+[[package]]
+name = "miku-index-sqlite"
+version = "0.0.2"
+dependencies = [
+ "async-trait",
+ "miku-domain",
+ "miku-indexer",
+ "serde_json",
+ "sqlx",
+ "tempfile",
+ "tokio",
 ]
 
 [[package]]
