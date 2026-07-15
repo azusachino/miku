@@ -1,13 +1,27 @@
-use super::AppState;
+use super::{AppState, StaticAssets};
 use axum::{
-    extract::Request,
+    extract::{Path, Request},
+    http::{header, StatusCode},
     middleware::{self, Next},
-    response::Response,
+    response::{IntoResponse, Response},
     routing::{get, post},
     Router,
 };
 use std::sync::atomic::{AtomicU64, Ordering};
 use tower_http::{services::ServeDir, trace::TraceLayer};
+
+// Serve a static asset baked into the binary (see StaticAssets in main.rs). The
+// /assets route stays a filesystem ServeDir — those are vault content, not
+// shipped assets.
+async fn static_asset(Path(path): Path<String>) -> Response {
+    match StaticAssets::get(&path) {
+        Some(file) => {
+            let mime = mime_guess::from_path(&path).first_or_octet_stream();
+            ([(header::CONTENT_TYPE, mime.as_ref())], file.data).into_response()
+        }
+        None => StatusCode::NOT_FOUND.into_response(),
+    }
+}
 
 static REQUEST_SEQUENCE: AtomicU64 = AtomicU64::new(1);
 
@@ -69,7 +83,7 @@ pub(super) fn router(state: AppState) -> Router {
         .route("/api/v1/tags/{tag}/pages", get(super::tag_pages_api))
         .route("/api/v1/quickswitch", get(super::quickswitch))
         .route("/api/v1/content-search", get(super::content_search_api))
-        .nest_service("/static", ServeDir::new("static"))
+        .route("/static/{*path}", get(static_asset))
         .nest_service("/assets", ServeDir::new("miku_docs/assets"))
         .layer(TraceLayer::new_for_http().on_response(super::observe_http_response))
         .layer(middleware::from_fn(request_context))

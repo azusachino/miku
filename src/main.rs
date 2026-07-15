@@ -46,6 +46,17 @@ impl tracing_subscriber::fmt::time::FormatTime for LocalLogTimer {
     }
 }
 
+/// Templates baked into the binary (see the rust-embed dep in Cargo.toml) so the
+/// app renders without a source tree next to the executable.
+#[derive(rust_embed::RustEmbed)]
+#[folder = "src/templates"]
+struct TemplateAssets;
+
+/// Static assets (CSS/JS/icons) baked into the binary and served from `/static`.
+#[derive(rust_embed::RustEmbed)]
+#[folder = "static"]
+pub(crate) struct StaticAssets;
+
 struct HttpMetrics {
     started_at: Instant,
     requests_total: AtomicU64,
@@ -360,9 +371,12 @@ async fn main() -> Result<()> {
         .map_err(|error| anyhow::anyhow!(error))
         .context("Failed to compose the selected Miku runtime")?;
 
-    // 5. Initialize Minijinja template environment
+    // 5. Initialize Minijinja template environment from the embedded templates
+    // so the binary renders without a source tree beside it.
     let mut templates_env = Environment::new();
-    templates_env.set_loader(minijinja::path_loader("src/templates"));
+    templates_env.set_loader(|name| {
+        Ok(TemplateAssets::get(name).map(|file| String::from_utf8_lossy(&file.data).into_owned()))
+    });
 
     // SSE broadcast channel: the indexer is the sole sender; each browser /events
     // connection is a subscriber. Capacity 256 bounds backpressure; slow
@@ -1452,7 +1466,7 @@ fn trash_dir() -> PathBuf {
 // that could escape that directory.
 fn safe_trash_id(id: &str) -> Result<(), AppError> {
     if id.is_empty() || id.contains('/') || id.contains('\\') || id.contains("..") {
-        return Err(anyhow::anyhow!("Invalid trash id").into());
+        return Err(AppError::bad_request(anyhow::anyhow!("Invalid trash id")));
     }
     Ok(())
 }

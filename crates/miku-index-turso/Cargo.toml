@@ -1,7 +1,6 @@
 [package]
 name = "miku-index-turso"
 version = "0.0.2"
-publish = false
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
@@ -9,8 +8,8 @@ description = "Durable local Turso index store for Miku"
 
 [dependencies]
 async-trait.workspace = true
-miku-domain = { path = "../miku-domain" }
-miku-index-memory = { path = "../miku-index-memory" }
+miku-domain = { version = "0.0.2", path = "../miku-domain" }
+miku-index-memory = { version = "0.0.2", path = "../miku-index-memory" }
 serde_json.workspace = true
 tokio.workspace = true
 turso = { version = "0.7.0", default-features = false, features = ["fts"] }

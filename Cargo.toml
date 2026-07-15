@@ -10,8 +10,8 @@ repository = "https://github.com/azusachino/miku"
 keywords = ["markdown", "wiki", "notes", "backlinks", "fulltext"]
 categories = ["text-processing", "web-programming"]
 
-# Publish only the runnable crate; keep repo-internal docs/config/CI out of the
-# permanent public package.
+# `cargo install miku` builds the default memory+turso runtime; postgres/valkey
+# are opt-in Cargo features. Keep repo-internal docs/config/CI out of the package.
 include = [
   "src/**/*",
   "static/**/*",
@@ -44,7 +44,8 @@ aho-corasick = "1"
 comrak = { version = "0.52", default-features = false }
 lazy_static = "1"
 regex = "1"
-grep = "0.4"
+grep-regex = "0.1"
+grep-searcher = "0.1"
 ignore = "0.4"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -54,10 +55,10 @@ thiserror = "2"
 
 [dependencies]
 anyhow = "1"
-miku-domain = { path = "crates/miku-domain" }
-miku-app = { path = "crates/miku-app", default-features = false }
-miku-markdown = { path = "crates/miku-markdown" }
-miku-indexer = { path = "crates/miku-indexer" }
+miku-domain = { version = "0.0.2", path = "crates/miku-domain" }
+miku-app = { version = "0.0.2", path = "crates/miku-app", default-features = false }
+miku-markdown = { version = "0.0.2", path = "crates/miku-markdown" }
+miku-indexer = { version = "0.0.2", path = "crates/miku-indexer" }
 thiserror = "2"
 
 # async runtime
@@ -69,14 +70,20 @@ tokio = { version = "1", default-features = false, features = [
   "net",
 ] }
 tokio-stream = { version = "0.1", features = ["sync"] }
-grep.workspace = true
+grep-regex.workspace = true
+grep-searcher.workspace = true
 ignore.workspace = true
 
 # web
 axum = "0.8"
-tower = "0.5"
 tower-http = { version = "0.6", features = ["fs", "trace"] }
 minijinja = { version = "2", features = ["loader"] }
+
+# Templates + static assets are baked into the binary so `cargo install miku`
+# runs from any directory (the miku_docs/ content dir stays CWD/vault-relative).
+# debug-embed embeds in debug builds too, so a moved binary works in dev as well.
+rust-embed = { version = "8", features = ["debug-embed"] }
+mime_guess = "2"
 
 # filesystem watcher (background indexer)
 notify = "7"

@@ -1,7 +1,6 @@
 [package]
 name = "miku-app"
 version = "0.0.2"
-publish = false
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
@@ -9,11 +8,11 @@ description = "Backend-neutral application index API for Miku"
 
 [dependencies]
 async-trait.workspace = true
-miku-domain = { path = "../miku-domain" }
-miku-index-memory = { path = "../miku-index-memory", optional = true }
-miku-index-postgres = { path = "../miku-index-postgres", optional = true }
-miku-index-turso = { path = "../miku-index-turso", optional = true }
-miku-cache-valkey = { path = "../miku-cache-valkey", optional = true }
+miku-domain = { version = "0.0.2", path = "../miku-domain" }
+miku-index-memory = { version = "0.0.2", path = "../miku-index-memory", optional = true }
+miku-index-postgres = { version = "0.0.2", path = "../miku-index-postgres", optional = true }
+miku-index-turso = { version = "0.0.2", path = "../miku-index-turso", optional = true }
+miku-cache-valkey = { version = "0.0.2", path = "../miku-cache-valkey", optional = true }
 sqlx = { version = "0.8.6", optional = true, features = ["postgres", "runtime-tokio-rustls"] }
 serde.workspace = true
 serde_json.workspace = true
@@ -27,5 +26,5 @@ postgres = ["dep:miku-index-postgres", "dep:sqlx"]
 valkey = ["dep:miku-cache-valkey"]
 
 [dev-dependencies]
-miku-index-memory = { path = "../miku-index-memory" }
+miku-index-memory = { version = "0.0.2", path = "../miku-index-memory" }
 tokio.workspace = true

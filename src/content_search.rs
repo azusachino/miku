@@ -1,7 +1,5 @@
-use grep::{
-    regex::RegexMatcherBuilder,
-    searcher::{sinks::UTF8, SearcherBuilder},
-};
+use grep_regex::RegexMatcherBuilder;
+use grep_searcher::{sinks::UTF8, SearcherBuilder};
 use ignore::WalkBuilder;
 use serde::Serialize;
 use std::path::Path;
