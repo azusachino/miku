@@ -349,13 +349,14 @@ where
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    // 1. Initialize tracing with an env filter
+    // 1. Initialize tracing. Default to plain `info`; verbose debug logging is
+    //    opt-in via RUST_LOG, which the Makefile's `run`/`dev` targets set for
+    //    local dev. Release binaries and the container stay quiet by default.
     tracing_subscriber::fmt()
         .with_timer(LocalLogTimer)
         .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| {
-                tracing_subscriber::EnvFilter::new("info,miku=debug,tower_http=debug")
-            }),
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info")),
         )
         .init();
 
