@@ -100,6 +100,8 @@ pub struct Note {
     /// Ordered parent references from workspace frontmatter.
     #[serde(default)]
     pub parents: Vec<NoteId>,
+    /// Optional sibling ordering value from workspace frontmatter.
+    pub order: Option<i64>,
     /// User-defined frontmatter retained by the domain.
     #[serde(default)]
     pub properties: BTreeMap<String, Value>,
@@ -112,6 +114,7 @@ impl Note {
         source_path: impl Into<String>,
         title: impl Into<String>,
         parents: Vec<NoteId>,
+        order: Option<i64>,
         properties: BTreeMap<String, Value>,
     ) -> Result<Self, WorkspaceError> {
         let source_path = source_path.into();
@@ -124,6 +127,7 @@ impl Note {
             source_path,
             title: title.into(),
             parents,
+            order,
             properties,
         })
     }
@@ -311,6 +315,7 @@ mod tests {
             format!("{id}.md"),
             id,
             Vec::new(),
+            None,
             BTreeMap::new(),
         )
         .expect("test note")

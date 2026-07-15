@@ -23,6 +23,7 @@ include = [
 [workspace]
 members = [
   "crates/miku-domain",
+  "crates/miku-vault",
   "crates/miku-markdown",
   "crates/miku-indexer",
   "crates/miku-index-memory",
@@ -50,6 +51,7 @@ ignore = "0.4"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 serde_yaml = "0.9"
+uuid = { version = "1", features = ["v4", "serde"] }
 tokio = { version = "1", default-features = false, features = ["macros", "rt", "sync"] }
 thiserror = "2"
 
