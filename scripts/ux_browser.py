@@ -89,8 +89,8 @@ def check_shell(page: Page) -> None:
             )
         if action.locator("span:visible").count():
             raise AssertionError("compact topbar actions must not show descriptive text")
-    if page.locator(".mk-topbar use[href^='/static/lucide.svg#']").count() < 3:
-        raise AssertionError("topbar controls are missing the shared OSS icon sprite")
+    if page.locator(".mk-topbar .mk-icon:visible").count() < 3:
+        raise AssertionError("topbar controls are missing their icons")
     if page.locator("button[aria-label='Open settings'] .mk-icon:visible").count() != 1:
         raise AssertionError("settings control must render exactly one visible icon")
     page.locator("[data-set-theme='light']").first.click()
