@@ -60,7 +60,7 @@ benchmark:
 	$(NIX_RUN)uv run python scripts/ci.py benchmark
 
 inspect-index:
-	$(NIX_RUN)cargo run -p miku-index-turso --example inspect -- "$(MIKU_INDEX_PATH)"
+	$(NIX_RUN)cargo run -p miku-index-sqlite --example inspect -- "$(MIKU_INDEX_PATH)"
 
 # --- Native (no-container) local dev stack ---------------------------------
 # Runs Postgres directly from the nix devShell against a project-local cluster
@@ -71,8 +71,8 @@ PGDATA  ?= .pgdata
 PGPORT  ?= 55432
 PGHOST  := $(abspath $(PGDATA))
 DATABASE_URL ?= postgres://miku@localhost:$(PGPORT)/miku
-MIKU_INDEX_BACKEND ?= turso
-MIKU_INDEX_PATH ?= miku_docs/.miku-index.turso
+MIKU_INDEX_BACKEND ?= sqlite
+MIKU_INDEX_PATH ?= miku_docs/.miku-index.sqlite
 MIKU_RECONCILE_BATCH_SIZE ?= 512
 MIKU_PARSE_CONCURRENCY ?= 8
 # Local dev logs at debug; the binary itself defaults to info (override anytime).

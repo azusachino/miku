@@ -19,7 +19,7 @@ make db-down      # stop Postgres
 make db-reset     # stop + delete .pgdata (index is rebuilt from miku_docs/**/*.md)
 ```
 
-The app defaults to the local Rust-built Turso index at `miku_docs/.miku-index.turso`. `make dev` selects the explicit Postgres profile and sets `DATABASE_URL=postgres://miku@localhost:55432/miku`
+The app defaults to the local Rust-built SQLite index at `miku_docs/.miku-index.sqlite`. `make dev` selects the explicit Postgres profile and sets `DATABASE_URL=postgres://miku@localhost:55432/miku`
 (trust auth, no password); migrations run on startup. Override with `MIKU_INDEX_BACKEND=…`, `MIKU_INDEX_PATH=…`, `PGPORT=…`, `PGDATA=…`, or `DATABASE_URL=…`.
 
 ## Remote access (LAN / Tailscale)
@@ -45,7 +45,7 @@ export MIKU_INDEX_BACKEND=postgres
 ```bash
 nix develop       # enter the devShell (provisions all tools)
 make css          # build static/tailwind.generated.css via bun (bun run css)
-make run          # build Tailwind CSS (bun) then run the server (default local Turso index)
+make run          # build Tailwind CSS (bun) then run the server (default local SQLite index)
 make check                             # default fmt + lint + tests
 make check-all-features                # all Cargo features
 make check-integration                 # optional service-backed probes
@@ -53,7 +53,7 @@ make release                           # crates.io leaf package dry-runs
 make validate                          # check + release build
 make check-blackbox                    # live HTTP checks against a running app
 make check-ux-browser                 # Playwright browser acceptance (install Chromium once)
-MIKU_BENCH_BACKEND=turso make benchmark # benchmark a running local Turso app
+MIKU_BENCH_BACKEND=sqlite make benchmark # benchmark a running local SQLite app
 ```
 
 All quality targets are thin Make wrappers around `uv run python scripts/ci.py`, so local and GitHub CI use the same implementation. The Python commands can also be invoked directly when debugging a
@@ -69,8 +69,8 @@ written to `.artifacts/ux/` (ignored).
 
 ## Containers (Postgres/Valkey scale profile only)
 
-Containers are only for the service-backed **scale profile** — the default `memory`/`turso` runtime is a pure local binary (`make run`), so it needs no image. The image (`Containerfile`) is built with
-the `postgres,valkey` features and pairs the app with a Postgres service via `compose.yml`.
+Containers are only for the service-backed **scale profile** — the default `memory`/`sqlite` runtime is a pure local binary (`make run`), so it needs no image. The image (`Containerfile`) is built
+with the `postgres,valkey` features and pairs the app with a Postgres service via `compose.yml`.
 
 ```bash
 make stack-up          # podman compose up -d (Postgres + app on postgres backend)

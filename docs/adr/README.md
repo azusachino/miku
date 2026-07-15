@@ -30,22 +30,23 @@ this folder.
 
 ## Index
 
-| ADR                                            | Title                                          | Status   | Accepted   |
-| ---------------------------------------------- | ---------------------------------------------- | -------- | ---------- |
-| [0001](0001-fts-english.md)                    | Full-text search (Postgres english FTS)        | Accepted | 2026-06-26 |
-| [0002](0002-markdown-wikilink-grammar.md)      | Markdown & wikilink grammar (comrak)           | Accepted | 2026-06-26 |
-| [0003](0003-write-conflicts-auth.md)           | Write conflicts & auth                         | Accepted | 2026-06-26 |
-| [0004](0004-rename-delete-assets.md)           | Rename / delete & assets                       | Accepted | 2026-06-26 |
-| [0005](0005-nav-explorer.md)                   | Navigation explorer (folder/file tree)         | Accepted | 2026-06-26 |
-| [0006](0006-watcher-at-scale.md)               | Filesystem watcher at scale                    | Accepted | 2026-06-26 |
-| [0007](0007-frontend-rendering.md)             | Frontend rendering & client-JS budget          | Accepted | 2026-06-26 |
-| [0008](0008-theme-switching.md)                | Theme switching (palette × mode)               | Accepted | 2026-06-26 |
-| [0009](0009-index-store-composition.md)        | Index store and cache composition              | Accepted | 2026-07-14 |
-| [0010](0010-workspace-crate-boundaries.md)     | Cargo workspace and crate boundaries           | Accepted | 2026-07-14 |
-| [0011](0011-local-tier-turso-index.md)         | Local deployment tier with Turso index         | Accepted | 2026-07-14 |
-| [0012](0012-scale-tier-postgres-valkey.md)     | Scale deployment tier with Postgres and Valkey | Accepted | 2026-07-14 |
-| [0013](0013-crates-io-release-surface.md)      | crates.io release surface                      | Accepted | 2026-07-14 |
-| [0014](0014-native-turso-07-local-backend.md)  | Native Turso 0.7 local backend                 | Accepted | 2026-07-14 |
-| [0015](0015-derived-unlinked-mention-index.md) | Derived unlinked-mention index                 | Accepted | 2026-07-14 |
+| ADR                                            | Title                                          | Status     | Accepted   |
+| ---------------------------------------------- | ---------------------------------------------- | ---------- | ---------- |
+| [0001](0001-fts-english.md)                    | Full-text search (Postgres english FTS)        | Accepted   | 2026-06-26 |
+| [0002](0002-markdown-wikilink-grammar.md)      | Markdown & wikilink grammar (comrak)           | Accepted   | 2026-06-26 |
+| [0003](0003-write-conflicts-auth.md)           | Write conflicts & auth                         | Accepted   | 2026-06-26 |
+| [0004](0004-rename-delete-assets.md)           | Rename / delete & assets                       | Accepted   | 2026-06-26 |
+| [0005](0005-nav-explorer.md)                   | Navigation explorer (folder/file tree)         | Accepted   | 2026-06-26 |
+| [0006](0006-watcher-at-scale.md)               | Filesystem watcher at scale                    | Accepted   | 2026-06-26 |
+| [0007](0007-frontend-rendering.md)             | Frontend rendering & client-JS budget          | Accepted   | 2026-06-26 |
+| [0008](0008-theme-switching.md)                | Theme switching (palette × mode)               | Accepted   | 2026-06-26 |
+| [0009](0009-index-store-composition.md)        | Index store and cache composition              | Accepted   | 2026-07-14 |
+| [0010](0010-workspace-crate-boundaries.md)     | Cargo workspace and crate boundaries           | Accepted   | 2026-07-14 |
+| [0011](0011-local-tier-turso-index.md)         | Local deployment tier with Turso index         | Superseded | 2026-07-14 |
+| [0012](0012-scale-tier-postgres-valkey.md)     | Scale deployment tier with Postgres and Valkey | Accepted   | 2026-07-14 |
+| [0013](0013-crates-io-release-surface.md)      | crates.io release surface                      | Accepted   | 2026-07-14 |
+| [0014](0014-native-turso-07-local-backend.md)  | Native Turso 0.7 local backend                 | Superseded | 2026-07-14 |
+| [0015](0015-derived-unlinked-mention-index.md) | Derived unlinked-mention index                 | Accepted   | 2026-07-14 |
+| [0016](0016-sqlite-local-index.md)             | SQLite (sqlx) local index, replacing Turso     | Accepted   | 2026-07-15 |
 
 Staged (proposed, not yet verified) in `docs/decisions.md`: none outstanding.

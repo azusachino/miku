@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
 # Image for the service-backed scale profile ONLY (Postgres, optional Valkey).
-# The default memory/turso profile is a pure local binary — run it natively with
+# The default memory/sqlite profile is a pure local binary — run it natively with
 # `make run`; it needs no image. Built with podman by default
 # (`podman build -t miku -f Containerfile .`); `docker build -f Containerfile .`
 # also works.
@@ -26,7 +26,7 @@ COPY static ./static
 
 # Scale image: build only the service-backed features (Postgres + Valkey), so
 # one image serves both the `postgres` and `postgres-valkey` runtimes. The
-# default turso/memory backends are intentionally left out.
+# default sqlite/memory backends are intentionally left out.
 RUN cargo build --locked --bin miku --no-default-features --features postgres,valkey
 
 # ---- Runtime stage ----

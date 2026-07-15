@@ -41,8 +41,8 @@ The reconcile batch defaults to 512. Compare the write/event overhead with the s
 ```bash
 for size in 128 512 1000; do
   MIKU_RECONCILE_BATCH_SIZE=$size \
-  MIKU_INDEX_PATH="/tmp/miku-$size.turso" \
-  MIKU_BENCH_BACKEND=turso \
+  MIKU_INDEX_PATH="/tmp/miku-$size.sqlite" \
+  MIKU_BENCH_BACKEND=sqlite \
   make run
 done
 ```
@@ -61,7 +61,7 @@ RUST_LOG=info make run 2>&1 | tee /tmp/miku-index.log
 
 # shell 2, after the server is responding
 MIKU_INDEX_LOG=/tmp/miku-index.log \
-  MIKU_BENCH_BACKEND=turso make benchmark
+  MIKU_BENCH_BACKEND=sqlite make benchmark
 ```
 
 The Rust indexer emits `startup index reconcile ready elapsed_ms=...`, one `index reconcile batch committed ... write_ms=...` event per batch, and an

@@ -2,7 +2,7 @@
 id: ADR-0014
 title: Native Turso 0.7 local backend
 slug: native-turso-07-local-backend
-status: Accepted
+status: Superseded
 date-proposed: 2026-07-14
 date-accepted: 2026-07-14
 deciders: [haru]

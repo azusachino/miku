@@ -10,7 +10,7 @@ repository = "https://github.com/azusachino/miku"
 keywords = ["markdown", "wiki", "notes", "backlinks", "fulltext"]
 categories = ["text-processing", "web-programming"]
 
-# `cargo install miku` builds the default memory+turso runtime; postgres/valkey
+# `cargo install miku` builds the default memory+sqlite runtime; postgres/valkey
 # are opt-in Cargo features. Keep repo-internal docs/config/CI out of the package.
 include = [
   "src/**/*",

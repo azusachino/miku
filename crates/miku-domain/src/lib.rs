@@ -206,7 +206,7 @@ pub enum IndexEvent {
     Reconciled,
 }
 
-/// Read operations shared by memory, Turso, and Postgres indexes.
+/// Read operations shared by memory, SQLite, and Postgres indexes.
 #[async_trait]
 pub trait IndexReader: Send + Sync {
     /// Return the capabilities of this concrete store.

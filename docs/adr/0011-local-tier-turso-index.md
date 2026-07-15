@@ -2,7 +2,7 @@
 id: ADR-0011
 title: Local deployment tier with Turso index
 slug: local-tier-turso-index
-status: Accepted
+status: Superseded
 date-proposed: 2026-07-14
 date-accepted: 2026-07-14
 deciders: [haru]

@@ -35,12 +35,12 @@ This makes the vault easy to inspect, back up, version, or edit with another too
 | Knowledge graph | Backlinks, linked mentions, tags, and paginated tag views                                              |
 | Search          | Metadata quick-switch plus embedded full-text content search powered by Rust's grep/ignore crates      |
 | Editing         | Browser editor, inline reader editing, preview, atomic writes, and conflict-aware saves                |
-| Runtime         | Local Turso index by default; optional Postgres and Valkey composition for larger deployments          |
+| Runtime         | Local SQLite index by default; optional Postgres and Valkey composition for larger deployments         |
 | UX              | Light/dark themes, reading-width modes, lazy editor/highlighter loading, and a focused command palette |
 
 ## Quick start
 
-The default development path needs Nix with flakes. It uses the local Turso index and does not need Postgres.
+The default development path needs Nix with flakes. It uses the local SQLite index and does not need Postgres.
 
 ```bash
 git clone https://github.com/azusachino/miku.git
@@ -67,14 +67,14 @@ See [`docs/setup.md`](docs/setup.md) for external Postgres, Tailscale/LAN access
 
 The useful local switches are:
 
-| Variable             | Default                       | Purpose                                                    |
-| -------------------- | ----------------------------- | ---------------------------------------------------------- |
-| `MIKU_INDEX_BACKEND` | `turso`                       | Select the local or service-backed index implementation    |
-| `MIKU_INDEX_PATH`    | `miku_docs/.miku-index.turso` | Location of the local derived index                        |
-| `MIKU_BIND`          | `0.0.0.0:3000`                | Address exposed by the HTTP server                         |
-| `MIKU_READONLY`      | unset                         | Deploy the reader without write operations                 |
-| `DATABASE_URL`       | unset                         | Postgres connection string when using the Postgres profile |
-| `VALKEY_URL`         | unset                         | Optional Valkey endpoint for the scale profile             |
+| Variable             | Default                        | Purpose                                                    |
+| -------------------- | ------------------------------ | ---------------------------------------------------------- |
+| `MIKU_INDEX_BACKEND` | `sqlite`                       | Select the local or service-backed index implementation    |
+| `MIKU_INDEX_PATH`    | `miku_docs/.miku-index.sqlite` | Location of the local derived index                        |
+| `MIKU_BIND`          | `0.0.0.0:3000`                 | Address exposed by the HTTP server                         |
+| `MIKU_READONLY`      | unset                          | Deploy the reader without write operations                 |
+| `DATABASE_URL`       | unset                          | Postgres connection string when using the Postgres profile |
+| `VALKEY_URL`         | unset                          | Optional Valkey endpoint for the scale profile             |
 
 The vault is intentionally single-user and login-less at this stage. If the server is reachable beyond a trusted machine, put it behind the network or identity boundary appropriate for your
 deployment.

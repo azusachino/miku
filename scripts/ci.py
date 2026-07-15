@@ -83,7 +83,7 @@ PUBLISH_ORDER = (
     "miku-markdown",
     "miku-indexer",
     "miku-index-memory",
-    "miku-index-turso",
+    "miku-index-sqlite",
     "miku-index-postgres",
     "miku-cache-valkey",
     "miku-app",

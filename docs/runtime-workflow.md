@@ -10,7 +10,7 @@ black-box verification.
 - The HTTP server must bind and serve page routes without waiting for the initial filesystem reconciliation to finish.
 - `/p/{path}` remains accessible while reconciliation is running. A temporary indexing failure is logged and must not turn an otherwise readable page into a startup failure.
 - `index_ready=false` means “the initial reconciliation has not completed”; it is an operator/smoke-test signal, not a page-route gate.
-- The Turso driver connection is single-use at a time. Backend code serializes durable Turso operations, while the HTTP read model remains available.
+- The SQLite backend handles durable SQLite operations, while the HTTP read model remains available.
 
 ## Startup sequence
 
@@ -18,14 +18,14 @@ black-box verification.
 process
   -> resolve runtime from env + Cargo features
   -> compose IndexApi in miku-app
-  -> load durable Turso projection into MemoryIndex
+  -> load durable SQLite projection into MemoryIndex
   -> create IndexerQueue and spawn its consumer/ticker tasks
   -> build Axum router and bind HTTP listener
   -> browser may request /p/Index immediately
                          \
                           -> background reconcile miku_docs
                                -> parse Markdown
-                               -> durable Turso batch write
+                               -> durable SQLite batch write
                                -> update MemoryIndex
                                -> emit /events page refresh
                                -> set index_ready=true
@@ -44,7 +44,7 @@ For `GET /p/Index`:
 4. Explicit backlinks are read from the index projection.
 5. Unlinked mentions, when enabled, are read from a derived target-keyed relation. A missing or stale relation returns an empty secondary panel; the handler does not issue a body search or reread the
    vault to discover candidates.
-6. If the indexer is currently writing, the page route remains independent of the Turso writer and serves the filesystem page plus the available in-process projection.
+6. If the indexer is currently writing, the page route remains independent of the SQLite writer and serves the filesystem page plus the available in-process projection.
 7. The response is returned independently of whether the background reconcile has finished. New index events are delivered to browsers through SSE at `/events`.
 
 The important distinction is that the page source is filesystem-owned, while search, backlinks, tags, and navigation metadata are projection-backed. A partially rebuilt projection can be temporarily
@@ -52,14 +52,14 @@ stale; it must not make the source page inaccessible.
 
 ## Thread/task ownership
 
-| Actor                 | Owns                                                   | Blocking boundary                                    |
-| --------------------- | ------------------------------------------------------ | ---------------------------------------------------- |
-| Tokio HTTP tasks      | page, search, edit, API, and SSE requests              | filesystem reads and `IndexApi` calls                |
-| Indexer consumer task | startup reconcile, watcher events, periodic reconcile  | Markdown parsing and `IndexWriter` calls             |
-| Notify callback       | converts filesystem events to bounded-channel messages | `try_send`; never performs database work             |
-| Reconcile ticker task | queues a coalesced full reconcile                      | bounded channel/atomic flag                          |
-| Turso backend mutex   | one durable driver operation at a time                 | only the Turso connection, not the whole HTTP server |
-| MemoryIndex           | process-local read projection                          | short `RwLock` critical sections                     |
+| Actor                 | Owns                                                   | Blocking boundary                                     |
+| --------------------- | ------------------------------------------------------ | ----------------------------------------------------- |
+| Tokio HTTP tasks      | page, search, edit, API, and SSE requests              | filesystem reads and `IndexApi` calls                 |
+| Indexer consumer task | startup reconcile, watcher events, periodic reconcile  | Markdown parsing and `IndexWriter` calls              |
+| Notify callback       | converts filesystem events to bounded-channel messages | `try_send`; never performs database work              |
+| Reconcile ticker task | queues a coalesced full reconcile                      | bounded channel/atomic flag                           |
+| SQLite backend pool   | durable SQLite database operations                     | only the SQLite connection, not the whole HTTP server |
+| MemoryIndex           | process-local read projection                          | short `RwLock` critical sections                      |
 
 No route owns or spawns a second indexer. `IndexerQueue::shutdown` aborts and awaits its owned tasks during process shutdown.
 
@@ -68,7 +68,7 @@ No route owns or spawns a second indexer. `IndexerQueue::shutdown` aborts and aw
 The Rust tests cover backend contracts and driver-level concurrency. The uv suite covers the actual running application:
 
 ```bash
-make run                         # starts Turso + background indexer
+make run                         # starts SQLite + background indexer
 make check-blackbox              # waits for /readyz index_ready=true
 MIKU_BLACKBOX_URL=... make check-blackbox
 ```
