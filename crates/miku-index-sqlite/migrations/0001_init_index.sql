@@ -7,7 +7,7 @@ CREATE TABLE tb_pages (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,
   path        TEXT NOT NULL UNIQUE,            -- relative to miku/, e.g. 'sub/Bar.md'
   slug        TEXT NOT NULL,                   -- normalized basename for [[ ]] resolution
-  title       TEXT NOT NULL,                   -- frontmatter title, else first H1, else filename
+  title       TEXT NOT NULL,                   -- frontmatter title, else filename stem
   frontmatter TEXT NOT NULL DEFAULT '{}',      -- JSON as text
   has_mermaid INTEGER NOT NULL DEFAULT 0,      -- boolean 0/1
   mtime       INTEGER NOT NULL                 -- file mtime (unix) for startup reconcile

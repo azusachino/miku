@@ -62,18 +62,10 @@ Building accounts/RBAC is explicitly rejected — it reinvents Notion and breaks
 
 ## ADR-4 — Rename/delete & assets
 
-**Rename = first-class operation, not a bare file move.** A bare rename leaves every `[[OldName]]` dangling. **Decision:** `POST /page/rename` (1) atomically renames the file, (2) finds referrers via
-`tb_links.target_id`, (3) rewrites `[[Old]]→[[New]]` in each referrer through the normal atomic-save path (preserving display aliases: `[[Old|Disp]]→[[New|Disp]]`). Each rewrite fires `notify` →
-normal reindex. Honest caveat: this is the **one operation that writes many files** — best-effort at the FS level; partial failures are self-healed by the startup reconcile. UX: a "this will update N
-backlinks" confirmation before committing.
-
-**Reindex is automatic for both.** `notify` is the sole index trigger (architecture invariant), so the rename's link-rewrites and the file move each fire fs events → normal reindex. No handler indexes
-directly.
-
-**Delete = soft-delete with a 7-day archive.** Deleting never `rm`s immediately. The file is **moved to `miku_docs/.trash/<original-path>@<deleted-at>.md`**, and `.trash/` is **excluded from the
-watcher and index** — so the page vanishes from search/backlinks at once (its row is removed; inbound links go dangling via `ON DELETE SET NULL`), while the bytes survive. A periodic GC purges trash
-entries older than **`MIKU_TRASH_TTL` (default 7 days)**. **Restore** = move the file back → `notify` → reindex. Trash lives _inside_ the content root (so it travels with backups and the k8s PVC) but
-is ignore-listed, keeping the live index pure. UX: a "N backlinks will dangle" warning before deleting.
+**Status: superseded for v0.0.2.** Miku does not expose rename, move, delete,
+Trash, restore, or purge operations. The file tree is read-only; users manage
+paths and file removal with their filesystem, editor, scripts, or git. The
+watcher reconciles those external changes into the disposable index.
 
 **Assets.** Live in `miku_docs/assets/`. Upload (roadmap): `POST /assets` writes atomically, keeping the original name but **deduping by content hash** (`name-<short-hash>.ext`) to avoid collisions.
 `![[image.png]]` resolves by basename in `assets/`; served with caching headers.

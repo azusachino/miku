@@ -52,40 +52,17 @@ pub fn parse_frontmatter(content: &str) -> (Option<serde_json::Value>, &str) {
     (None, content)
 }
 
-/// Title resolution: frontmatter `title`, else the first `# H1`, else the
-/// path basename.
-pub fn extract_title(path: &str, frontmatter: Option<&serde_json::Value>, body: &str) -> String {
+/// Resolve a page title from explicit metadata, then the durable file name.
+///
+/// Markdown headings are document content and must not silently become page
+/// identity. This keeps imported files stable even when they contain example
+/// headings, raw HTML, or code samples.
+pub fn extract_title(path: &str, frontmatter: Option<&serde_json::Value>, _body: &str) -> String {
     if let Some(fm) = frontmatter {
         if let Some(title) = fm.get("title").and_then(|t| t.as_str()) {
             let title = title.trim();
             if !title.is_empty() {
                 return title.to_string();
-            }
-        }
-    }
-
-    let arena = comrak::Arena::new();
-    let root = comrak::parse_document(&arena, body, &comrak_options());
-    for node in root.descendants() {
-        if let NodeValue::Heading(heading) = &node.data.borrow().value {
-            if heading.level != 1 {
-                continue;
-            }
-            let has_image = node
-                .children()
-                .any(|child| matches!(child.data.borrow().value, NodeValue::Image(..)));
-            let has_non_image_content = node.children().any(|child| {
-                !matches!(
-                    child.data.borrow().value,
-                    NodeValue::Image(..) | NodeValue::SoftBreak | NodeValue::LineBreak
-                )
-            });
-            if has_image && !has_non_image_content {
-                continue;
-            }
-            let title = heading_text(node).trim().to_string();
-            if !title.is_empty() && !title.starts_with("![") {
-                return title.trim_end_matches('#').trim().to_string();
             }
         }
     }
@@ -563,14 +540,8 @@ mod tests {
     }
 
     #[test]
-    fn test_extract_title_ignores_code_and_image_headings() {
-        let body = "```text\n# A code sample\n```\n# ![diagram](image.png)\n# Actual title ###\n";
-        assert_eq!(extract_title("notes/today.md", None, body), "Actual title");
-    }
-
-    #[test]
-    fn test_extract_title_falls_back_to_filename() {
-        let body = "~~~markdown\n# A code sample\n~~~\n# ![diagram](image.png)\n";
+    fn test_extract_title_ignores_headings_and_falls_back_to_filename() {
+        let body = "# A document heading\n\n## A section\n";
         assert_eq!(extract_title("notes/today.md", None, body), "today");
     }
 
@@ -580,7 +551,7 @@ mod tests {
         let frontmatter = serde_json::json!({"title": "  "});
         assert_eq!(
             extract_title("notes/today.md", Some(&frontmatter), body),
-            "Not the title"
+            "today"
         );
     }
 

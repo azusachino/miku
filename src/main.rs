@@ -306,7 +306,6 @@ struct NavNode {
 #[derive(Clone)]
 struct AppState {
     index: IndexApi,
-    reconcile: miku::indexer::ReconcileTrigger,
     templates: Arc<Environment<'static>>,
     index_ready: Arc<AtomicBool>,
     // Broadcasts the relative path (`.md` stripped) of each page the background
@@ -397,7 +396,6 @@ async fn main() -> Result<()> {
 
     let state = AppState {
         index: index.clone(),
-        reconcile: indexer.reconcile_trigger(),
         templates: Arc::new(templates_env),
         index_ready: indexer.ready_handle(),
         events: events_tx,

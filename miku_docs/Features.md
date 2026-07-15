@@ -91,11 +91,12 @@ SQLite via SQLx by default; larger deployments can select the supported
 Postgres profile. The index accelerates
 navigation and relationships; body search remains the dedicated full-text mode.
 
-## Move, trash, and restore
+## File ownership boundary
 
-Pages can be dragged into folders or moved to another path. Deletion is a soft
-delete: the file moves into `miku_docs/.trash/`, disappears from the live index,
-and can be restored or purged from the Trash view.
+The file tree is read-only in v0.0.2. Miku does not move, rename, delete, or
+trash pages. Use the editor for content changes and use your filesystem, editor,
+scripts, or git when changing paths or removing files; the watcher reconciles
+those external changes into the disposable index.
 
 ## Freshness and external edits
 

@@ -1,5 +1,10 @@
 # Miku HTTP API Design Specification
 
+> **Current for v0.0.2.** This document describes the shipped API only. Miku
+> does not expose move, rename, delete, Trash, restore, or purge endpoints;
+> path changes and file removal are managed outside the application. Content
+> editing remains available through `POST /p/*path`.
+
 Operational endpoints are intentionally outside the application API version: `GET /healthz` is the liveness probe, `GET /readyz` is the readiness probe, and `GET /metrics` is the Prometheus endpoint.
 Application JSON endpoints use the versioned `/api/v1/` prefix.
 
@@ -31,148 +36,38 @@ These routes handle the core Multi-Page Application (MPA) flow, working with Jav
 | **GET**  | `/search`          | Render the full-text search results page (searches Miku index).                                          | `q` (search query)                                                        |
 | **GET**  | `/tags`            | View tag cloud or hierarchical tag index.                                                                | None                                                                      |
 | **GET**  | `/tags/*tag`       | View list of pages containing `#tag` or nested `#tag/subtag`.                                            | None                                                                      |
-| **GET**  | `/backlinks/*path` | Dedicated backlinks and unlinked mentions page.                                                          | `page` (pagination offset)                                                |
+| **GET**  | `/folders/*path` | Browse a folder view derived from indexed pages.                                                          | None                                                                      |
 
 ---
 
 ## 3. JSON REST APIs (`/api/v1/*`)
 
-These endpoints support the command palette (`Ctrl-K`), autocomplete, and dynamic page management.
+These endpoints support navigation, tags, search, mention promotion, and the
+background index event stream. They do not mutate filesystem paths.
 
 ### A. Autocomplete & Navigation
 
-#### 1. Fuzzy Autocomplete
+| Method | Route | Purpose |
+| :----- | :---- | :------ |
+| GET | `/api/v1/pages/*path` | Return one indexed page projection. |
+| GET | `/api/v1/nav/children?dir=...` | Load one folder's navigation children. |
+| GET | `/api/v1/quickswitch?q=...` | Search indexed page metadata for the command palette. |
+| GET | `/api/v1/content-search?q=...` | Search Markdown source content. |
+| GET | `/api/v1/tags` | Return indexed tag counts. |
+| GET | `/api/v1/tags/*tag/pages` | Return pages for one tag. |
+| POST | `/api/v1/promote-mention` | Convert one selected plain-text mention into a wikilink. |
 
-- **Route:** `GET /api/v1/autocomplete`
-- **Description:** Returns a quick, fuzzy-matched list of pages for `[[wiki link]]` autocompletion. Uses GIN `pg_trgm` indexes on slugs/titles/aliases.
-- **Query Params:** `q=thermo`
-- **Response (200 OK):**
-  ```json
-  [
-    {
-      "title": "Thermodynamics Lecture 2",
-      "slug": "thermodynamics-lecture-2",
-      "path": "physics/thermo-2.md",
-      "match_type": "title"
-    },
-    {
-      "title": "Entropy",
-      "slug": "entropy",
-      "path": "physics/entropy.md",
-      "match_type": "alias"
-    }
-  ]
-  ```
+### B. Content and page APIs
 
-#### 2. Page Directory Listing
+The only page mutation in v0.0.2 is content saving:
 
-- **Route:** `GET /api/v1/pages`
-- **Description:** Returns all indexed pages (from `miku_docs/`), titles, and paths. Used by frontend to build a local cache for instant search/navigation.
-- **Response (200 OK):**
-  ```json
-  [
-    {
-      "path": "Index.md",
-      "slug": "index",
-      "title": "Home Index",
-      "tags": ["index", "meta"],
-      "mtime": 1719323145
-    }
-  ]
-  ```
+- **Route:** `POST /p/*path`
+- **Description:** Atomically saves Markdown content after optimistic
+  concurrency validation. The filesystem watcher reindexes the changed file.
+- **Form:** `body` and `loaded_hash`.
 
-### B. Page Actions
-
-#### 1. Safe Rename / Refactor
-
-- **Route:** `POST /api/v1/page/rename`
-- **Description:** Renames a file and rewrites all incoming links.
-- **Payload:**
-  ```json
-  {
-    "old_path": "work/project-a.md",
-    "new_path": "projects/miku.md",
-    "dry_run": false
-  }
-  ```
-- **Response (200 OK - Dry Run):**
-  ```json
-  {
-    "dry_run": true,
-    "backlinks_to_rewrite": 8,
-    "referencing_files": ["Index.md", "work/todo.md"]
-  }
-  ```
-- **Response (200 OK - Execution completed):**
-  ```json
-  {
-    "dry_run": false,
-    "files_updated": 9,
-    "message": "Renamed work/project-a.md to projects/miku.md. Updated 8 references."
-  }
-  ```
-
-#### 2. Soft Delete
-
-- **Route:** `DELETE /api/v1/page/*path`
-- **Description:** Soft-deletes a page (moves from `miku_docs/` to `miku_docs/.trash/`) with a timestamp suffix.
-- **Response (200 OK):**
-  ```json
-  {
-    "path": "sub/Bar.md",
-    "deleted_at": 1719323145,
-    "trash_path": ".trash/sub/Bar@1719323145.md",
-    "backlinks_dangling": 3
-  }
-  ```
-
-### C. Trash Management
-
-#### 1. List Trash
-
-- **Route:** `GET /api/v1/trash`
-- **Response (200 OK):**
-  ```json
-  [
-    {
-      "original_path": "sub/Bar.md",
-      "trash_path": ".trash/sub/Bar@1719323145.md",
-      "deleted_at": 1719323145
-    }
-  ]
-  ```
-
-#### 2. Restore Page
-
-- **Route:** `POST /api/v1/trash/restore`
-- **Payload:**
-  ```json
-  {
-    "trash_path": ".trash/sub/Bar@1719323145.md"
-  }
-  ```
-- **Response (200 OK):**
-  ```json
-  {
-    "restored_path": "sub/Bar.md",
-    "message": "Page sub/Bar.md successfully restored. Backlinks auto-resolved."
-  }
-  ```
-
-### D. Media Assets
-
-#### 1. Hash-Deduped Upload
-
-- **Route:** `POST /api/v1/assets`
-- **Description:** Uploads a file (multipart form) into `miku_docs/assets/`, renaming it to `filename-<short-hash>.ext` if there's a name collision.
-- **Response (201 Created):**
-  ```json
-  {
-    "filename": "chart-a1b2c3d.png",
-    "url": "/static/assets/chart-a1b2c3d.png",
-    "embed_syntax": "![[chart-a1b2c3d.png]]"
-  }
-  ```
+There is deliberately no application API for changing a page path or deleting
+files. Those operations remain ordinary filesystem or git operations.
 
 ---
 

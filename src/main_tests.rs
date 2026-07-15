@@ -107,9 +107,9 @@ fn test_shell_has_resizable_panes_without_repeated_page_marks() {
     assert!(page.contains("mk-rail-resizer"));
     assert!(base.contains("miku:ui:v1"));
     assert!(base.contains("window.mikuStorage"));
-    assert!(base.contains("miku-open-rename"));
-    assert!(base.contains("id=\"rename-path\""));
-    assert!(base.contains("mk-rename-input"));
+    assert!(!base.contains("miku-open-rename"));
+    assert!(!base.contains("id=\"rename-path\""));
+    assert!(!base.contains("mk-rename-input"));
     assert!(!base.contains("window.prompt"));
     assert!(base.contains("fetch(target, { headers: { Accept: 'text/html' } })"));
     assert!(base.contains("document.open();"));
@@ -604,7 +604,6 @@ async fn test_app_router_registers_events_route() {
         index: compose_index(RuntimeConfig::Memory)
             .await
             .expect("memory index API"),
-        reconcile: miku::indexer::ReconcileTrigger::disabled(),
         templates: Arc::new(templates_env),
         index_ready: Arc::new(AtomicBool::new(true)),
         events,
@@ -671,35 +670,4 @@ fn test_safe_file_path_accepts_canonical_and_md_aliases() {
         .map(|path| path.to_string_lossy().into_owned())
         .unwrap_or_default();
     assert_eq!(canonical, md_alias);
-}
-
-#[test]
-fn test_safe_trash_id_accepts_generated_id() {
-    // Ids are `<flattened-path>-<ts>` (with an optional `-<n>` suffix).
-    assert!(safe_trash_id("Notes-Daily-1719800000").is_ok());
-    assert!(safe_trash_id("Index-1719800000-2").is_ok());
-}
-
-#[test]
-fn test_safe_trash_id_rejects_traversal_and_separators() {
-    assert!(safe_trash_id("").is_err());
-    assert!(safe_trash_id("../secret").is_err());
-    assert!(safe_trash_id("nested/id").is_err());
-    assert!(safe_trash_id("back\\slash").is_err());
-}
-
-#[test]
-fn test_trash_manifest_round_trips() {
-    let manifest = TrashManifest {
-        id: "Notes-Daily-1719800000".to_string(),
-        original_path: "Notes/Daily".to_string(),
-        title: "Daily".to_string(),
-        trashed_at: 1_719_800_000,
-    };
-    let json = serde_json::to_string(&manifest).expect("serialize");
-    let back: TrashManifest = serde_json::from_str(&json).expect("deserialize");
-    assert_eq!(back.id, manifest.id);
-    assert_eq!(back.original_path, "Notes/Daily");
-    assert_eq!(back.title, "Daily");
-    assert_eq!(back.trashed_at, 1_719_800_000);
 }

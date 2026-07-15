@@ -701,8 +701,6 @@ a { color: var(--teal); }
 .mk-modal-bar { height: 6px; background: linear-gradient(90deg, var(--teal), var(--pink), var(--teal)); background-size: 200% auto; animation: shimmer 6s linear infinite; }
 .mk-modal-body { padding: 26px 28px; }
 .mk-create-title { width: 100%; border: none; outline: none; background: transparent; color: var(--text); font-family: var(--font-display); font-weight: 700; font-size: 30px; padding: 0 0 6px; }
-.mk-rename-input { width: 100%; border: 1px solid var(--border); outline: none; border-radius: var(--radius-ctl); background: var(--panel2); color: var(--text); font-family: var(--font-body); font-weight: 500; font-size: 15px; line-height: 1.4; padding: 10px 12px; }
-.mk-rename-input:focus { border-color: var(--teal); box-shadow: 0 0 0 3px var(--tealsoft); }
 .mk-create-path { display: flex; align-items: center; gap: 7px; font-family: var(--font-mono); font-size: 12px; font-weight: 500; color: var(--muted); }
 .mk-choice { display: flex; flex-wrap: wrap; gap: 8px; }
 .mk-chip { display: inline-flex; align-items: center; gap: 7px; padding: 8px 14px; border-radius: 11px; border: 1px solid var(--border); background: var(--panel); color: var(--muted); font-family: var(--font-body); font-weight: 700; font-size: 13px; cursor: pointer; transition: .14s; }

@@ -4,20 +4,22 @@ All diagrams are Mermaid. See `docs/architecture.md` for the prose design and sc
 
 ## 1. System overview
 
-Files are the source of truth; Postgres is a disposable index. HTTP handlers only **read** Postgres; the background indexer is the **only** writer.
+Files are the source of truth; SQLite is the default disposable index, with
+Postgres available as an explicit profile. HTTP handlers only **read** the
+index; the background indexer is the **only** writer.
 
 ```mermaid
 flowchart LR
   Browser["Browser<br/>(rendered HTML + textarea)"]
 
   subgraph Server["Miku — Rust single binary"]
-    HTTP["axum HTTP layer<br/>(read-only on Postgres)"]
+    HTTP["axum HTTP layer<br/>(read-only on index)"]
     Store["Store<br/>(atomic file I/O)"]
-    Indexer["Background indexer<br/>(sole Postgres writer)"]
+    Indexer["Background indexer<br/>(sole index writer)"]
   end
 
   FS[("miku_docs/ Markdown<br/>source of truth")]
-  PG[("Postgres<br/>disposable index")]
+  PG[("SQLite / Postgres<br/>disposable index")]
 
   Browser -->|"GET view / edit"| HTTP
   Browser -->|"POST save"| HTTP

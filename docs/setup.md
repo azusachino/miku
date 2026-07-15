@@ -7,8 +7,15 @@
 
 ## Native dev stack (no containers — Linux & macOS)
 
-The fastest path, and the one to use on the Mac mini: run Postgres directly from the devShell against a project-local, disposable cluster (`.pgdata/`, gitignored) on port `55432`, then `cargo run`. No
-podman, no Docker, no VM — just processes.
+The default path is local SQLite and needs no database service:
+
+```bash
+make run
+```
+
+For the optional Postgres profile, run Postgres directly from the devShell
+against a project-local, disposable cluster (`.pgdata/`, gitignored) on port
+`55432`:
 
 ```bash
 make db-up        # init (first run) + start Postgres, create the miku database
@@ -84,5 +91,7 @@ already sets via `dockerfile:`). The native stack above is preferred for day-to-
 
 ## Database
 
-The Postgres index is a disposable cache. Migrations live under `crates/miku-index-postgres/migrations/` and are applied by the Postgres composition layer in `miku-app`. The index is fully rebuildable
-from `miku_docs/**/*.md` — dropping and re-migrating the database loses no user data.
+The SQLite index is stored at `miku_docs/.miku-index.sqlite` by default.
+Postgres migrations live under `crates/miku-index-postgres/migrations/` and are
+used only for the explicit Postgres profile. Both indexes are fully rebuildable
+from `miku_docs/**/*.md`; dropping and recreating either loses no user data.

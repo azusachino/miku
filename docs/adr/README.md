@@ -35,7 +35,7 @@ this folder.
 | [0001](0001-fts-english.md)                    | Full-text search (Postgres english FTS)        | Accepted   | 2026-06-26 |
 | [0002](0002-markdown-wikilink-grammar.md)      | Markdown & wikilink grammar (comrak)           | Accepted   | 2026-06-26 |
 | [0003](0003-write-conflicts-auth.md)           | Write conflicts & auth                         | Accepted   | 2026-06-26 |
-| [0004](0004-rename-delete-assets.md)           | Rename / delete & assets                       | Accepted   | 2026-06-26 |
+| [0004](0004-rename-delete-assets.md)           | Rename / delete & assets                       | Superseded | 2026-06-26 |
 | [0005](0005-nav-explorer.md)                   | Navigation explorer (folder/file tree)         | Accepted   | 2026-06-26 |
 | [0006](0006-watcher-at-scale.md)               | Filesystem watcher at scale                    | Accepted   | 2026-06-26 |
 | [0007](0007-frontend-rendering.md)             | Frontend rendering & client-JS budget          | Accepted   | 2026-06-26 |

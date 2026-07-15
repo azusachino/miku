@@ -71,13 +71,6 @@ pub(super) fn router(state: AppState) -> Router {
         .route("/healthz", get(super::healthz))
         .route("/readyz", get(super::readyz))
         .route("/metrics", get(super::metrics))
-        .route("/api/v1/move", post(routes::page_move))
-        .route(
-            "/api/v1/trash",
-            post(routes::page_trash).get(routes::trash_list),
-        )
-        .route("/api/v1/trash/restore", post(routes::trash_restore))
-        .route("/api/v1/trash/purge", post(routes::trash_purge))
         .route("/api/v1/promote-mention", post(routes::promote_mention))
         .route("/api/v1/nav/children", get(routes::nav_children_handler))
         .route("/api/v1/tags", get(routes::tags_api))

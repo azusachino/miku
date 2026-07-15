@@ -293,6 +293,14 @@ impl IndexReader for SqliteIndex {
         Ok(value.as_deref() == Some(MENTIONS_READY_VERSION))
     }
 
+    async fn index_metadata(&self, key: &str) -> StoreResult<Option<String>> {
+        sqlx::query_scalar("SELECT value FROM tb_index_meta WHERE key = ?")
+            .bind(key)
+            .fetch_optional(self.pool())
+            .await
+            .map_err(database_error)
+    }
+
     async fn tags(&self) -> StoreResult<Vec<TagCount>> {
         sqlx::query_as::<_, (String, i64)>(
             "SELECT tag, COUNT(*) FROM tb_tags GROUP BY tag ORDER BY COUNT(*) DESC, tag",
@@ -588,6 +596,19 @@ impl IndexWriter for SqliteIndex {
              ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value",
         )
         .bind(MENTIONS_READY_VERSION)
+        .execute(self.pool())
+        .await
+        .map_err(database_error)
+        .map(|_| ())
+    }
+
+    async fn set_index_metadata(&self, key: &str, value: &str) -> StoreResult<()> {
+        sqlx::query(
+            "INSERT INTO tb_index_meta (key, value) VALUES (?, ?)
+             ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value",
+        )
+        .bind(key)
+        .bind(value)
         .execute(self.pool())
         .await
         .map_err(database_error)

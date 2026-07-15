@@ -50,8 +50,9 @@ They are available at `/p/Features` and `/p/guides/Getting%20Started`.
 Wikilink matching is case-insensitive and supports aliases:
 `[[Features|What it does]]`.
 
-The hidden `miku_docs/.trash/` directory contains soft-deleted pages until they
-are restored or purged. Assets belong in `miku_docs/assets/`.
+Miku does not create a Trash directory. Assets belong in
+`miku_docs/assets/`; path changes and file removal remain ordinary filesystem
+operations outside the v0.0.2 UI.
 
 ## Writing Markdown
 

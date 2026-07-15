@@ -18,6 +18,8 @@ use tracing::{error, info, warn};
 const RECONCILE_SENTINEL: &str = "__reconcile__";
 const BULK_INDEX_REFRESH: &str = "__miku_bulk_index_refresh__";
 const DEFAULT_RECONCILE_BATCH_SIZE: usize = 512;
+const TITLE_RESOLUTION_META_KEY: &str = "title_resolution";
+const TITLE_RESOLUTION_VERSION: &str = "frontmatter-title-then-filename-v1";
 
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
 pub enum WatcherEvent {
@@ -31,7 +33,7 @@ struct PendingSource {
     mtime: i64,
 }
 
-// Skip dot-dirs/files (.trash soft-delete archive, .git, editor swap files)
+// Skip dot-dirs/files (.git, editor swap files, and other hidden artifacts).
 // anywhere in the relative path so trashed pages and VCS metadata never enter
 // the index. Mirrors the dot-skip in walk_store_tree, so the live watcher and
 // the reconcile sweep agree on what is indexable.
@@ -122,6 +124,11 @@ async fn reconcile_store(
         .map(|page| (page.path.clone(), page))
         .collect::<HashMap<String, PageSummary>>();
     let existing_duration = existing_started.elapsed();
+    let title_resolution_changed = match reader.index_metadata(TITLE_RESOLUTION_META_KEY).await {
+        Ok(version) => version.as_deref() != Some(TITLE_RESOLUTION_VERSION),
+        Err(miku_domain::StoreError::Unsupported(_)) => false,
+        Err(error) => return Err(error),
+    };
     let scanned_files = files.len();
     let mut seen = HashSet::with_capacity(files.len());
     let batch_size = IndexerQueue::reconcile_batch_size();
@@ -149,9 +156,10 @@ async fn reconcile_store(
         metadata_duration += metadata_started.elapsed();
         let path = relative.to_string_lossy().into_owned();
         seen.insert(path.clone());
-        if existing
-            .get(&path)
-            .is_some_and(|indexed| indexed.mtime == mtime)
+        if !title_resolution_changed
+            && existing
+                .get(&path)
+                .is_some_and(|indexed| indexed.mtime == mtime)
         {
             unchanged_pages += 1;
             continue;
@@ -187,6 +195,10 @@ async fn reconcile_store(
         .mark_mentions_ready()
         .await
         .or_else(ignore_unsupported)?;
+    writer
+        .set_index_metadata(TITLE_RESOLUTION_META_KEY, TITLE_RESOLUTION_VERSION)
+        .await
+        .or_else(ignore_unsupported)?;
     if deleted {
         let _ = events.send(BULK_INDEX_REFRESH.to_string());
     }
@@ -202,6 +214,7 @@ async fn reconcile_store(
         indexed_pages,
         unchanged_pages,
         deleted_pages,
+        title_resolution_changed,
         batches,
         search_rebuilt,
         parse_concurrency,
