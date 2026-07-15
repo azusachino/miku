@@ -8,7 +8,7 @@ date-accepted: 2026-07-14
 deciders: [haru]
 mirror: asobi:miku:decision:native-turso-07-local-backend
 supersedes: [ADR-0011]
-superseded-by:
+superseded-by: [ADR-0016]
 relates-to: [ADR-0009, ADR-0010]
 impacts: [crates/miku-index-turso, crates/miku-app, Makefile, docs/setup.md]
 config-keys: [MIKU_INDEX_BACKEND, MIKU_INDEX_PATH]

@@ -8,7 +8,7 @@ date-accepted: 2026-07-14
 deciders: [haru]
 mirror: asobi:miku:decision:local-tier-turso-index
 supersedes: []
-superseded-by:
+superseded-by: [ADR-0016]
 relates-to: [ADR-0009, ADR-0010]
 impacts: [crates/miku-index-turso, Makefile, docs/setup.md]
 config-keys: [MIKU_TIER, MIKU_PRIMARY, MIKU_DB_PATH, TURSO_DATABASE_URL, TURSO_AUTH_TOKEN]
