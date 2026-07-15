@@ -911,6 +911,21 @@
             document.querySelectorAll('[data-tree-path="' + (window.CSS && CSS.escape ? CSS.escape(path) : path) + '"]').forEach(function (el) {
               el.remove();
             });
+            var currentPath = window.location.pathname.indexOf("/p/") === 0
+              ? decodeURIComponent(window.location.pathname.slice(3).replace(/\/edit$/, ""))
+              : "";
+            if (currentPath === path) {
+              history.pushState({}, "", "/");
+              document.title = "Miku Note";
+              var view = document.querySelector(".mk-view");
+              if (view) {
+                view.replaceChildren();
+                var empty = document.createElement("div");
+                empty.className = "mk-empty";
+                empty.textContent = "This page was moved to Trash.";
+                view.appendChild(empty);
+              }
+            }
             self.trashItems = [{
               id: data.id,
               original_path: data.original_path,
@@ -989,7 +1004,7 @@
           function () {
             self.toast.show = false;
           },
-          undo ? 10000 : 6000
+          undo ? 10000 : 10000
         );
       },
       runUndo: function () {

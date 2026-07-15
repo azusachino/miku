@@ -109,6 +109,7 @@ fn test_shell_has_resizable_panes_without_repeated_page_marks() {
     assert!(base.contains("window.mikuStorage"));
     assert!(base.contains("miku-open-rename"));
     assert!(base.contains("id=\"rename-path\""));
+    assert!(base.contains("mk-rename-input"));
     assert!(!base.contains("window.prompt"));
     assert!(base.contains("fetch(target, { headers: { Accept: 'text/html' } })"));
     assert!(base.contains("document.open();"));
