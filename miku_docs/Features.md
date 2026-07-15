@@ -1,121 +1,124 @@
-# Miku Features
+# Miku Note Features
 
-Miku combines filesystem simplicity with wiki intelligence. This page describes the core features that make the system work. #feature #guide
+Miku Note is a filesystem-owned Markdown wiki with a thin browser reader and a
+rebuildable background index. This page lists what is available now; deferred
+ideas are kept at the end so the product boundary stays honest. #feature #guide
 
 > [!NOTE]
-> Your Markdown files under `miku/` are the source of truth. Postgres holds only
-> a disposable index that is fully rebuildable from those files.
+> Markdown files under `miku_docs/` are the source of truth. The index is
+> disposable and can be rebuilt from those files.
 
-## Architecture at a Glance
+## Filesystem ownership
 
-Saves flow through an atomic write; the filesystem watcher is the *only* trigger
-for the background indexer, which is the sole writer to the Postgres index:
+Notes remain ordinary `.md` files under `miku_docs/`. They can be edited with
+Miku Note, a text editor, scripts, or git. The database is an index projection,
+not the canonical copy of your content.
 
-```mermaid
-flowchart LR
-    Editor[Browser editor] -->|atomic save| FS[(miku/*.md)]
-    FS -->|notify watch| Indexer[Background indexer]
-    Indexer -->|sole writer| PG[(Postgres index)]
-    PG -->|read-only| Handlers[HTTP handlers]
-    Handlers --> Editor
-```
+## Reader-first navigation
 
-> [!IMPORTANT]
-> HTTP handlers are read-only against Postgres. Never index inside the save
-> handler — the `notify` watcher is the single index trigger, which keeps the
-> single-writer model race-free.
+The readonly reader is the primary experience. Direct page URLs use `/p/...`,
+so links, bookmarks, and server-rendered requests continue to work normally.
+Switching between notes keeps the application shell mounted and swaps only the
+reader fragment; it does not reload the document or the shared JavaScript and
+CSS.
 
-## Wikilinks
+The reader includes:
 
-Pages are connected using the `[[PageName]]` syntax. When you write `[[Index]]`, Miku automatically renders it as a clickable link to the Index page. Wikilinks are the foundation of knowledge organization in Miku — they let you think in a network of ideas rather than a linear hierarchy.
+- a collapsible filesystem explorer;
+- breadcrumbs, backlinks, unlinked mentions, and page properties;
+- Thin, Wide, and Full reading-width modes;
+- light/dark themes, accent colors, compact spacing, and Zen mode;
+- a quick switcher and command palette (`Ctrl-K` / `Ctrl-Shift-P`).
 
-The wikilink parser respects case-insensitive page matching, so `[[index]]` and `[[Index]]` both work. Behind the scenes, the indexer crawls your Markdown files, extracts every wikilink, and builds a graph.
+## Markdown and rich rendering
 
-## Backlinks
+The Rust renderer supports CommonMark/GFM features including tables,
+strikethrough, task lists, autolinks, footnotes, alerts, and raw HTML for
+trusted local files.
 
-Write a [[Features]] link on any page, and Miku automatically shows you everywhere [[Features]] is mentioned. Backlinks surface unexpected connections and help you navigate your wiki without manually maintaining "see also" lists.
+Miku Note also supports:
 
-The backlinks panel loads on demand, so large, densely-connected wikis stay responsive. See the architecture docs for pagination strategy.
+- `[[Page]]` wikilinks, aliases, and missing-link styling;
+- `![[asset.png]]` asset embeds;
+- inline `#tags` and YAML frontmatter properties;
+- fenced Mermaid diagrams;
+- fenced code blocks with language-aware Prism highlighting;
+- inline and display LaTeX-style math (`$...$` and `$$...$$`).
 
-## Tags
+Mermaid, Prism, and KaTeX are loaded only when the current reader content needs
+them. Code blocks receive a small copy action on demand. These enhancements are
+progressive: the server-rendered Markdown remains the source of the page.
 
-Sprinkle `#hashtags` naturally in your prose. Miku extracts them, indexes them, and provides a tag-based filter view. Unlike rigid category systems, tags are informal and additive — the same page can have #docs, #feature, and #guide simultaneously.
+## Wikilinks, backlinks, and mentions
 
-The tag index is rebuilt as you save, and the `/tags` view lets you browse pages grouped by tag or navigate to a single tag's pages. #feature
+Write `[[PageName]]` to connect notes. Matching is case-insensitive, and links
+can include a display alias such as `[[Index|Home]]`.
 
-## Full-Text Search
+When a note links to another note, the target page shows explicit backlinks.
+The indexer also records plain-text mentions as a secondary discovery surface;
+an unlinked mention can be promoted to a real wikilink from the reader.
 
-Every page is indexed for full-text search. Type in the search box and find any phrase or word across your entire wiki. The search respects Markdown structure, so searches for content in code blocks and links work as expected. #feature
+## Tags and search
 
-Search is powered by Postgres full-text indexing and runs asynchronously, so it never blocks edits. Results are ranked by relevance.
+Use tags such as `#docs`, `#feature`, or `#area/sub` anywhere in prose. Tags
+from Markdown and frontmatter are indexed together.
 
-## Syntax Highlighting
+- `/tags` shows the tag index and loads more results as you scroll;
+- `/tags/<tag>` shows matching pages and also uses scroll-triggered paging;
+- `/search` searches Markdown source content directly with embedded ripgrep;
+  results are grouped by note and loaded as you scroll;
+- `Cmd-K` opens one palette with Pages, Content, and Commands tabs;
+- Pages uses the disposable title/path index for fast switching, while Content
+  uses the Markdown files as the search source of truth.
 
-Fenced code blocks are highlighted client-side by Prism, which loads the grammar
-for each language on demand. Tag a fence with a language to get colors:
+## Editing and safe writes
 
-```rust
-fn extract_tags(body: &str) -> Vec<String> {
-    body.split_whitespace()
-        .filter_map(|w| w.strip_prefix('#'))
-        .map(str::to_owned)
-        .collect()
-}
-```
+Editing is opt-in from the reader. The inline editor uses CodeMirror 6 and
+loads its editor modules only when editing starts; the full editor remains
+available at `/p/<path>/edit`.
 
-```python
-def slugify(name: str) -> str:
-    return name.strip().lower().removesuffix(".md")
-```
+Saving writes a temporary file, flushes it, and atomically renames it into
+place. A changed-file hash protects against overwriting edits made elsewhere.
 
-```typescript
-const move = async (from: string, to: string): Promise<void> => {
-  const body = new URLSearchParams({ from, to });
-  await fetch("/api/move", { method: "POST", body });
-};
-```
+## Background indexing
 
-```sql
-SELECT path, title
-FROM tb_pages
-WHERE body_tsv @@ websearch_to_tsquery('english', $1)
-ORDER BY ts_rank(body_tsv, websearch_to_tsquery('english', $1)) DESC;
-```
+The filesystem watcher is the sole live index trigger. After a file changes, it
+updates links, tags, aliases, mentions, full-text search data, and rendering
+metadata for that page. HTTP handlers read the index and do not perform an
+inline reindex.
 
-```bash
-make run        # start the server
-make check      # fmt-check + lint + test
-```
+The index is rebuildable from `miku_docs/**/*.md`. The local runtime uses the
+configured index backend, with Turso as the default local profile; larger
+deployments can select the supported Postgres profile. The index accelerates
+navigation and relationships; it is not a second user-facing body-search
+mode.
 
-> [!TIP]
-> An unlabeled fence renders as plain monospace — only labeled fences are
-> colorized.
+## Move, trash, and restore
 
-## Atomic Saves
+Pages can be dragged into folders or moved to another path. Deletion is a soft
+delete: the file moves into `miku_docs/.trash/`, disappears from the live index,
+and can be restored or purged from the Trash view.
 
-When you save a page, Miku writes to a temporary file, then atomically renames it into place. This guarantees that the wiki is never left in a partially-written state — even if the server crashes mid-save, your data stays consistent.
+## Freshness and external edits
 
-The atomic save also triggers the background indexer to refresh affected pages only, so you never wait for a full re-index. #feature
+Miku Note does not keep an idle event stream open in reader mode. The active
+page checks for a newer indexed version periodically and refreshes when the tab
+becomes visible again. This keeps reading lightweight while still reflecting
+changes made by git, an editor, or another process.
 
-## Background Indexer
+## Deliberately deferred or rejected
 
-The indexer runs continuously in the background, watching the `miku/` directory for changes. It is the sole writer to the Postgres index — HTTP handlers only read. This single-writer model eliminates races and double-indexing bugs.
+These are not current features:
 
-When a page is edited or created, the indexer extracts wikilinks, tags, and full-text content, updating the pages, links, and tags tables in Postgres. The index is fully rebuildable from your `.md` files, so it's safe to drop and recreate at any time. See [[Usage]] for how to trigger a full re-index. #feature
+- mobile or offline-first applications;
+- real-time collaboration and CRDT editing;
+- built-in encryption or cloud sync;
+- a Notion-style database/block model;
+- a plugin runtime or general client-side application framework;
+- graph/canvas view;
+- drag-and-drop asset upload;
+- Dataview-style queries and daily-note/calendar workflows;
+- MDX/JSX as a Markdown rendering requirement.
 
-## No Fragmentation
-
-Because your wiki lives in `miku/` alongside your git history, every page is version-controlled by default. You can see when [[Index]] was last edited, revert a broken save, and audit changes over time. Miku never creates orphaned or unreachable pages — every file is either on disk or deleted and gone from history.
-
-> [!TIP]
-> Drag a page onto a folder in the sidebar to move it, or drop it on empty space
-> to send it back to the top level.
-
-> [!WARNING]
-> Deleting a page moves it to `miku/.trash/`. It is removed from the live index,
-> but the file is not permanently erased — clear the trash folder yourself when
-> you are sure.
-
----
-
-For a hands-on introduction, see [[Sandbox]]. To get Miku running, see [[Usage]].
+For a hands-on compatibility page, see [[Sandbox]]. For setup instructions,
+see [[Usage]].

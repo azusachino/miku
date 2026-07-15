@@ -44,6 +44,8 @@ aho-corasick = "1"
 comrak = { version = "0.52", default-features = false }
 lazy_static = "1"
 regex = "1"
+grep = "0.4"
+ignore = "0.4"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 serde_yaml = "0.9"
@@ -67,6 +69,8 @@ tokio = { version = "1", default-features = false, features = [
   "net",
 ] }
 tokio-stream = { version = "0.1", features = ["sync"] }
+grep.workspace = true
+ignore.workspace = true
 
 # web
 axum = "0.8"
@@ -99,6 +103,9 @@ turso = ["miku-app/turso"]
 postgres = ["miku-app/postgres"]
 valkey = ["miku-app/valkey"]
 postgres-valkey = ["postgres", "valkey"]
+
+[dev-dependencies]
+tempfile = "3"
 
 [lints.clippy]
 pedantic = { level = "warn", priority = -1 }

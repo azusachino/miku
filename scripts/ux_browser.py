@@ -20,10 +20,20 @@ def assert_visible(page: Page, selector: str, label: str) -> None:
 
 def check_shell(page: Page) -> None:
     editor_imports: list[str] = []
+    optional_reader_assets: list[str] = []
+    event_stream_requests: list[str] = []
 
     def record_reader_import(request) -> None:
         if "esm.sh/" in request.url and request.resource_type == "script":
             editor_imports.append(request.url)
+        if (
+            "prism" in request.url.lower()
+            or "mermaid" in request.url.lower()
+            or "katex" in request.url.lower()
+        ):
+            optional_reader_assets.append(request.url)
+        if request.url.endswith("/events"):
+            event_stream_requests.append(request.url)
 
     page.on("request", record_reader_import)
     page.goto(f"{BASE_URL}{PAGE_PATH}", wait_until="domcontentloaded", timeout=10_000)
@@ -34,18 +44,43 @@ def check_shell(page: Page) -> None:
         raise AssertionError(
             "reader mode must not load external editor modules: " + ", ".join(editor_imports[:3])
         )
+    if optional_reader_assets:
+        raise AssertionError(
+            "reader mode must not preload optional Prism/Mermaid assets: "
+            + ", ".join(optional_reader_assets[:3])
+        )
+    if event_stream_requests:
+        raise AssertionError("reader mode must not open the idle /events stream")
     page.locator("link[rel='icon']").wait_for(state="attached")
     assert_visible(page, ".mk-topbar", "shell topbar")
     assert_visible(page, ".mk-sidebar", "shell sidebar")
     assert_visible(page, ".mk-article", "reading article")
+    if "miku_docs/" in page.locator("body").inner_text():
+        raise AssertionError("reader chrome must not expose the filesystem root")
+    layout = page.locator(".mk-article").evaluate(
+        "article => {"
+        "const main = article.closest('.mk-read').getBoundingClientRect();"
+        "const rect = article.getBoundingClientRect();"
+        "const rail = document.querySelector('.mk-rail');"
+        "return {width: rect.width, center: rect.left + rect.width / 2, "
+        "mainCenter: main.left + main.width / 2, "
+        "rail: !!rail && getComputedStyle(rail).display !== 'none'};"
+        "}"
+    )
+    if layout["width"] > 760:
+        raise AssertionError(f"reading column is too wide: {layout['width']}")
+    if abs(layout["center"] - layout["mainCenter"]) > 48:
+        raise AssertionError("reading column is not centered in the main content area")
+    if page.evaluate("window.innerWidth") <= 1280 and layout["rail"]:
+        raise AssertionError("right rail must not squeeze the reading column at this width")
     assert_visible(page, ".mk-topbar-action:first-of-type", "topbar actions")
     if page.locator(".mk-history-controls").count():
         raise AssertionError("browser history arrows should not be duplicated in the app chrome")
     if page.locator(".mk-mobile-files").count():
         raise AssertionError("broken mobile files control must not be rendered")
     actions = page.locator(".mk-topbar-action")
-    if actions.count() != 2:
-        raise AssertionError("topbar must expose exactly two compact action controls")
+    if actions.count() != 1:
+        raise AssertionError("topbar must expose exactly one compact action control")
     for index in range(actions.count()):
         action = actions.nth(index)
         if not action.get_attribute("aria-label") or not action.get_attribute("title"):
@@ -112,6 +147,33 @@ def check_tags(page: Page) -> None:
     page.wait_for_url("**/tags")
     if "Tags" not in page.locator("h1").first.inner_text():
         raise AssertionError("tag index did not render")
+    if page.locator(".mk-tag-index [data-tag-cloud]").count():
+        if page.locator("[data-tag-sentinel]").count():
+            before = page.locator(".mk-tag-index [data-tag-cloud] > a").count()
+            page.locator("[data-tag-sentinel]").scroll_into_view_if_needed()
+            page.wait_for_function(
+                "before => document.querySelectorAll("
+                "'.mk-tag-index [data-tag-cloud] > a'"
+                ").length > before",
+                arg=before,
+                timeout=15_000,
+            )
+        if page.locator("[data-tag-load-more]").count():
+            raise AssertionError("tag index must use scroll loading, not a button")
+    page.goto(f"{BASE_URL}/tags/release", wait_until="domcontentloaded")
+    if "miku_docs/" in page.locator("body").inner_text():
+        raise AssertionError("tag results must not expose the filesystem root")
+    if page.locator("[data-tag-page-load-more]").count():
+        raise AssertionError("tag results must use scroll loading, not a button")
+    sentinel = page.locator("[data-tag-page-sentinel]")
+    if sentinel.count():
+        initial_results = page.locator("[data-tag-page-list] > a").count()
+        sentinel.scroll_into_view_if_needed()
+        page.wait_for_function(
+            "initial => document.querySelectorAll('[data-tag-page-list] > a').length > initial || "
+            "!document.querySelector('[data-tag-page-sentinel]')",
+            arg=initial_results,
+        )
     page.goto(f"{BASE_URL}{PAGE_PATH}", wait_until="domcontentloaded")
 
 
@@ -147,6 +209,30 @@ def check_navigation(page: Page) -> None:
         raise AssertionError(f"reader navigation reloaded the document: {document_requests}")
     if "Features" not in page.locator(".mk-h1").inner_text():
         raise AssertionError("page navigation did not render Features")
+    page.locator(".mk-prose .mermaid svg").wait_for(state="attached", timeout=10_000)
+    page.locator(".mk-prose pre code .token").first.wait_for(state="attached", timeout=10_000)
+    if page.locator(".mk-prose .mk-copy-btn").count() != 5:
+        raise AssertionError("code blocks must receive one copy button each")
+    if page.locator(".mk-article[data-page-updated]").count() != 1:
+        raise AssertionError("reader fragments must expose their freshness marker")
+    changelog = page.locator(".tree-link[href='/p/Changelog']").first
+    changelog.click()
+    page.wait_for_url("**/p/Changelog")
+    page.locator(".mk-prose .mermaid svg").wait_for(state="attached", timeout=10_000)
+    sandbox = page.locator(".tree-link[href='/p/Sandbox']").first
+    sandbox.click()
+    page.wait_for_url("**/p/Sandbox")
+    page.locator(".mk-prose .mermaid svg").wait_for(state="attached", timeout=10_000)
+    page.locator(".mk-prose pre code .token").first.wait_for(state="attached", timeout=10_000)
+    page.locator(".mk-prose .katex").nth(1).wait_for(state="attached", timeout=10_000)
+    if page.locator(".mk-prose .katex").count() != 2:
+        raise AssertionError("Sandbox math must render inline and display equations")
+    if page.locator(".mk-prose .mk-copy-btn").count() != 1:
+        raise AssertionError("Sandbox code block must receive one copy button")
+    page.go_back()
+    page.wait_for_url("**/p/Changelog")
+    page.go_back()
+    page.wait_for_url("**/p/Features")
     page.go_back()
     page.wait_for_url(f"**{PAGE_PATH}")
 

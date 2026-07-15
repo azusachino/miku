@@ -114,6 +114,8 @@ pub fn comrak_options() -> comrak::Options<'static> {
     options.extension.tasklist = true;
     options.extension.autolink = true;
     options.extension.alerts = true;
+    options.extension.math_dollars = true;
+    options.extension.math_code = true;
     options.extension.wikilinks_title_after_pipe = true;
     options.extension.header_id_prefix = Some(String::new());
     options
@@ -666,6 +668,17 @@ mod tests {
         assert!(html.contains("<table>"));
         assert!(html.contains("<th>Col 1</th>"));
         assert!(html.contains("<td>Val 1</td>"));
+    }
+
+    #[test]
+    fn test_render_math_markers() {
+        let html = render_html("Inline $x^2$ and display:\n\n$$\nE = mc^2\n$$", &|norm| {
+            Some(norm.to_string())
+        });
+        assert!(html.contains(r#"data-math-style="inline""#));
+        assert!(html.contains(r#"data-math-style="display""#));
+        assert!(html.contains("x^2"));
+        assert!(html.contains("E = mc^2"));
     }
 
     #[test]

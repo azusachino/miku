@@ -1,32 +1,37 @@
-# Miku: A Filesystem-Owned Personal Wiki
+# Miku Note: Notes You Still Own
 
-Miku (麒麟草) is a lightweight, filesystem-centric personal Markdown wiki with browser-based editing and server-side intelligence. Unlike wiki systems that treat files as secondary exports, Miku treats plain `.md` files in your `miku/` directory as the source of truth — they live alongside your site, fully version-controlled, and never locked behind a database.
+Miku Note is a filesystem-owned personal Markdown wiki. Your notes stay as
+ordinary files under `miku_docs/`; the browser is a reader and editor, while a
+rebuildable background index supplies links, tags, mentions, and search. #docs
+#feature
 
-## What Is Miku? #docs #feature
+## What Miku Note does
 
-Miku is built around a core belief: **your notes should be plain text, owned by you, and searchable**. It provides:
+- **Keeps files portable** — edit the same `.md` files in Miku Note, git, or a
+  text editor.
+- **Connects notes** — `[[wikilinks]]`, aliases, backlinks, and unlinked-mention
+  discovery turn a folder into a navigable knowledge network.
+- **Finds content** — embedded ripgrep searches Markdown source, while the
+  disposable index keeps page switching, tags, and relationships fast.
+- **Reads quickly** — direct `/p/...` URLs are server-rendered, and switching
+  pages keeps the shell and shared assets mounted instead of reloading them.
+- **Renders Markdown well** — alerts, tables, code highlighting, Mermaid, and
+  math are available without making every reader page pay their asset cost.
 
-- **Browser Editor**: Edit Markdown files in your browser; saves are atomic and trigger background indexing.
-- **Wikilinks**: Link pages using `[[PageName]]` syntax — automatic backlink discovery means your wiki learns connections as you write.
-- **Smart Indexing**: Full-text search, tag discovery, and backlink graphs computed in the background without slowing down reads.
-- **No Lock-In**: Your content is just `.md` files — edit with any text editor, version-control with git, host anywhere.
+## Start here
 
-## Core Features
+- [[Features]] — the current feature inventory and scope boundary.
+- [[Usage]] — local setup, content paths, and the development commands.
+- [[Sandbox]] — live examples of Markdown, diagrams, code, math, and links.
+- [[Changelog]] — shipped and in-progress product changes. #release
 
-See [[Features]] for a deep dive into wikilinks, backlinks, tags, full-text search, atomic saves, and the background indexer that powers Miku.
+## Core invariant
 
-## Getting Started
+`miku_docs/**/*.md` is the source of truth. The configured local index backend
+is disposable and rebuildable; editing or deleting the index never deletes your
+notes.
 
-To run Miku locally, see [[Usage]]. The app serves both the wiki interface and a REST API for index queries.
+## Release history
 
-## Release History
-
-Miku v0.0.1 shipped on 2026-06-26 as an MVP. See [[Changelog]] for details on what's included and planned for future releases. #release
-
-## Playground
-
-New to Miku? Check out [[Sandbox]] for a guided tour of Markdown syntax and wikilink behavior. #demo
-
----
-
-Last updated: 2026-06-30
+The original MVP shipped as v0.0.1. The current working line is the Miku Note
+frontend and reader refresh; see [[Changelog]] for the details and status.

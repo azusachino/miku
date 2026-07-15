@@ -1,6 +1,6 @@
-# Sandbox: Markdown & Wikilink Playground
+# Sandbox: Miku Note Markdown Playground
 
-Welcome to the Sandbox! This page demonstrates Miku's Markdown support and wikilink behavior. #demo
+Welcome to the Sandbox! This page demonstrates Miku Note's Markdown support and wikilink behavior. #demo
 
 ## Markdown Syntax
 
@@ -27,23 +27,39 @@ fn extract_wikilinks(markdown: &str) -> Vec<String> {
 }
 ```
 
+### Mermaid Diagrams
+
+```mermaid
+flowchart LR
+    Markdown[Markdown file] --> Server[Reader server]
+    Server --> Browser[Browser]
+```
+
 ### Tables
 
 | Feature | Status | Notes |
 |---------|--------|-------|
 | Wikilinks | Stable | Bi-directional backlinks included |
-| Full-Text Search | Stable | Postgres FTS with ranking |
+| Content Search | Stable | Embedded ripgrep search over Markdown source |
 | Tag Index | Stable | Hashtag-based filtering |
 | Atomic Saves | Stable | Guarantees consistency |
 | Background Indexer | Stable | Single-writer, incremental updates |
 
+### Math
+
+Inline math such as $x^2 + y^2 = z^2$ and display equations are rendered on demand:
+
+$$
+E = mc^2
+$$
+
 ## Wikilinks Showcase
 
-Miku uses wikilinks to connect your wiki into a network. Try clicking these links:
+Miku Note uses wikilinks to connect your notes into a network. Try clicking these links:
 
 - [[Index]] — the main landing page and entry point to the wiki.
 - [[Features]] — a detailed walkthrough of each Miku capability.
-- [[Usage]] — how to set up and run Miku locally.
+- [[Usage]] — how to set up and run Miku Note locally.
 - [[Changelog]] — release notes and version history.
 
 You can also use link text overrides: [[Index|Back to Home]] displays as "Back to Home" but links to [[Index]].
@@ -58,7 +74,7 @@ The [[Features]] page discusses tags in detail — how they're extracted, indexe
 
 Explore the wiki:
 1. Click through the wikilinks above to see backlinks in action.
-2. Use full-text search (top of the page) to find phrases like "atomic saves" or "background indexer".
+2. Use content search (top of the page) to find phrases like "atomic saves" or "background indexer". The same search is available in the Content tab of `Cmd-K`.
 3. Browse the [[Index]] to see the wiki structure.
 4. Read [[Features]] to understand how wikilinks, tags, and backlinks work behind the scenes.
 

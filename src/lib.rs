@@ -7,3 +7,4 @@ pub use anyhow::{bail, Context, Result};
 
 pub mod indexer;
 pub use miku_markdown as markdown;
+pub mod content_search;

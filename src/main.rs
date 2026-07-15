@@ -108,48 +108,96 @@ struct UnlinkedMention {
     snippet: String,
 }
 
-#[derive(serde::Serialize)]
+#[derive(Clone, serde::Serialize)]
 struct TagCount {
     tag: String,
     count: i64,
+}
+
+#[derive(serde::Deserialize)]
+struct TagsQuery {
+    offset: Option<usize>,
+    limit: Option<usize>,
+}
+
+#[derive(serde::Serialize)]
+struct TagsPage {
+    tags: Vec<TagCount>,
+    offset: usize,
+    limit: usize,
+    total: usize,
+    has_more: bool,
+    next_offset: usize,
+}
+
+#[derive(serde::Serialize)]
+struct TagPagesPage {
+    pages: Vec<PageRef>,
+    offset: usize,
+    limit: usize,
+    total: usize,
+    has_more: bool,
+    next_offset: usize,
+}
+
+const TAG_PAGE_SIZE: usize = 50;
+const TAG_RESULT_PAGE_SIZE: usize = 50;
+
+fn paginate_tags(tags: Vec<TagCount>, offset: usize, requested_limit: usize) -> TagsPage {
+    let total = tags.len();
+    let limit = requested_limit.clamp(1, 100);
+    let offset = offset.min(total);
+    let page_tags: Vec<TagCount> = tags.into_iter().skip(offset).take(limit).collect();
+    let next_offset = offset + page_tags.len();
+    TagsPage {
+        tags: page_tags,
+        offset,
+        limit,
+        total,
+        has_more: next_offset < total,
+        next_offset,
+    }
+}
+
+fn paginate_page_refs(pages: Vec<PageRef>, offset: usize, requested_limit: usize) -> TagPagesPage {
+    let total = pages.len();
+    let limit = requested_limit.clamp(1, 100);
+    let offset = offset.min(total);
+    let page_pages: Vec<PageRef> = pages.into_iter().skip(offset).take(limit).collect();
+    let next_offset = offset + page_pages.len();
+    TagPagesPage {
+        pages: page_pages,
+        offset,
+        limit,
+        total,
+        has_more: next_offset < total,
+        next_offset,
+    }
+}
+
+async fn pages_for_tag(state: &AppState, tag: &str) -> Result<Vec<PageRef>, AppError> {
+    Ok(state
+        .index
+        .pages_with_tag(tag)
+        .await
+        .map_err(|error| anyhow::anyhow!(error))
+        .context("Failed to load pages for tag")?
+        .into_iter()
+        .map(|page| PageRef {
+            path: page
+                .path
+                .strip_suffix(".md")
+                .unwrap_or(&page.path)
+                .to_string(),
+            title: page.title,
+        })
+        .collect())
 }
 
 #[derive(serde::Serialize)]
 struct PageRef {
     path: String,
     title: String,
-}
-
-#[derive(serde::Serialize)]
-struct SearchResult {
-    path: String,
-    title: String,
-    snippet: String,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum SearchScope {
-    All,
-    Title,
-    Body,
-}
-
-impl SearchScope {
-    fn from_param(scope: Option<&str>) -> Self {
-        match scope {
-            Some("title") => Self::Title,
-            Some("body") => Self::Body,
-            _ => Self::All,
-        }
-    }
-
-    const fn as_str(self) -> &'static str {
-        match self {
-            Self::All => "all",
-            Self::Title => "title",
-            Self::Body => "body",
-        }
-    }
 }
 
 #[derive(serde::Serialize)]
@@ -195,6 +243,10 @@ struct ReaderPagePayload {
     breadcrumbs: Vec<BreadcrumbItem>,
 }
 
+fn reader_page_path(path: &str) -> String {
+    path.strip_suffix(".md").unwrap_or(path).to_string()
+}
+
 fn render_reader_fragment(
     state: &AppState,
     payload: &ReaderPagePayload,
@@ -214,39 +266,6 @@ fn render_reader_fragment(
         frontmatter => &payload.frontmatter,
         breadcrumbs => &payload.breadcrumbs,
     })?)
-}
-
-fn search_snippet(body: &str, query: &str) -> String {
-    let plain = body.split_whitespace().collect::<Vec<_>>().join(" ");
-    if plain.is_empty() {
-        return "No preview available.".to_string();
-    }
-
-    let needle = query
-        .split_whitespace()
-        .find(|word| word.chars().any(char::is_alphanumeric))
-        .unwrap_or(query)
-        .to_ascii_lowercase();
-    let plain_lower = plain.to_ascii_lowercase();
-    let match_at = plain_lower.find(&needle).unwrap_or(0);
-    let start = plain[..match_at]
-        .rfind(' ')
-        .and_then(|idx| plain[..idx].rfind(' '))
-        .and_then(|idx| plain[..idx].rfind(' '))
-        .unwrap_or(0);
-    let end = plain[match_at..]
-        .char_indices()
-        .filter(|(_, ch)| ch.is_whitespace())
-        .nth(30)
-        .map(|(idx, _)| match_at + idx)
-        .unwrap_or(plain.len());
-    let snippet = plain[start..end].trim();
-
-    if end < plain.len() {
-        format!("{snippet}...")
-    } else {
-        snippet.to_string()
-    }
 }
 
 fn timing_ms(start: Instant) -> f64 {
@@ -468,10 +487,10 @@ async fn redirect_to_index() -> impl IntoResponse {
 }
 
 // Server-Sent Events stream of re-indexed page paths. One-way server->client:
-// the browser opens `new EventSource('/events')` and live-refreshes the open
-// page when it sees its own path. This handler only SUBSCRIBES to the broadcast
-// channel filled by the background indexer; it never writes the Postgres index,
-// preserving the single-writer invariant.
+// Optional Server-Sent Events stream of re-indexed page paths. Reader mode uses
+// low-frequency conditional API checks instead, so normal reading never holds
+// this connection open. The handler only subscribes to the broadcast channel;
+// it never writes the Postgres index.
 async fn events(
     State(state): State<AppState>,
 ) -> Sse<impl Stream<Item = Result<sse::Event, std::convert::Infallible>>> {
@@ -490,7 +509,7 @@ fn safe_file_path(path: &str) -> Result<PathBuf, AppError> {
             "Invalid path: path traversal detected"
         )));
     }
-    Ok(StdPath::new("miku_docs").join(format!("{path}.md")))
+    Ok(StdPath::new("miku_docs").join(format!("{}.md", reader_page_path(path))))
 }
 
 fn validate_folder_path(path: &str) -> Result<String, AppError> {
@@ -938,9 +957,9 @@ async fn page_handler(
     State(state): State<AppState>,
 ) -> Result<impl IntoResponse, AppError> {
     if let Some(stripped_path) = path.strip_suffix("/edit") {
-        page_edit(stripped_path.to_string(), params.template, state).await
+        page_edit(reader_page_path(stripped_path), params.template, state).await
     } else {
-        page_view(path, state).await
+        page_view(reader_page_path(&path), state).await
     }
 }
 
@@ -999,11 +1018,12 @@ async fn load_slug_map(
 }
 
 async fn reader_page_payload(path: &str, state: &AppState) -> Result<ReaderPagePayload, AppError> {
-    let file_path = safe_file_path(path)?;
+    let path = reader_page_path(path);
+    let file_path = safe_file_path(&path)?;
     if !file_path.exists() {
         let title = format!("Create Page: {path}");
         let mut payload = ReaderPagePayload {
-            path: path.to_string(),
+            path: path.clone(),
             title: title.clone(),
             exists: false,
             html: String::new(),
@@ -1015,7 +1035,7 @@ async fn reader_page_payload(path: &str, state: &AppState) -> Result<ReaderPageP
             backlink_count: 0,
             updated: "Missing".to_string(),
             frontmatter: serde_json::Value::Object(serde_json::Map::new()),
-            breadcrumbs: breadcrumb_items(path, &title),
+            breadcrumbs: breadcrumb_items(&path, &title),
         };
         payload.html = render_reader_fragment(state, &payload)?;
         return Ok(payload);
@@ -1024,26 +1044,26 @@ async fn reader_page_payload(path: &str, state: &AppState) -> Result<ReaderPageP
     let raw_content = fs::read_to_string(&file_path)
         .context(format!("Failed to read file: {}", file_path.display()))?;
     let (frontmatter, body) = parse_frontmatter(&raw_content);
-    let title = extract_title(path, frontmatter.as_ref(), body);
+    let title = extract_title(&path, frontmatter.as_ref(), body);
     let word_count = body.split_whitespace().count();
     let updated = format_modified_time(&file_path);
     let slug_map = load_slug_map(&state.index).await?;
     let (content_html, toc) = render_html_with_toc(body, &|norm| slug_map.get(norm).cloned());
     let backlinks = state
         .index
-        .backlinks(path)
+        .backlinks(&path)
         .await
         .map_err(|error| anyhow::anyhow!(error))
         .context("Failed to load backlinks")?
         .into_iter()
         .map(|backlink| Backlink {
-            path: backlink.path,
+            path: reader_page_path(&backlink.path),
             title: backlink.title,
         })
         .collect::<Vec<_>>();
     let unlinked_mentions = state
         .index
-        .mentions_for_target(path)
+        .mentions_for_target(&path)
         .await
         .map_err(|error| anyhow::anyhow!(error))?
         .into_iter()
@@ -1061,7 +1081,7 @@ async fn reader_page_payload(path: &str, state: &AppState) -> Result<ReaderPageP
         frontmatter.unwrap_or_else(|| serde_json::Value::Object(serde_json::Map::new()));
 
     let mut payload = ReaderPagePayload {
-        path: path.to_string(),
+        path: path.clone(),
         title: title.clone(),
         exists: true,
         html: String::new(),
@@ -1073,7 +1093,7 @@ async fn reader_page_payload(path: &str, state: &AppState) -> Result<ReaderPageP
         word_count,
         updated,
         frontmatter,
-        breadcrumbs: breadcrumb_items(path, &title),
+        breadcrumbs: breadcrumb_items(&path, &title),
     };
     payload.html = render_reader_fragment(state, &payload)?;
     Ok(payload)
@@ -1084,9 +1104,10 @@ async fn reader_page_api(
     State(state): State<AppState>,
 ) -> Result<Response, AppError> {
     let started = Instant::now();
-    let payload = reader_page_payload(&path, &state).await?;
+    let canonical_path = reader_page_path(&path);
+    let payload = reader_page_payload(&canonical_path, &state).await?;
     let total_ms = timing_ms(started);
-    info!(path = %path, total_ms, "reader page API rendered");
+    info!(path = %canonical_path, total_ms, "reader page API rendered");
     let mut response = Json(payload).into_response();
     attach_server_timing(&mut response, "reader_page", total_ms);
     Ok(response)
@@ -1160,6 +1181,13 @@ async fn page_view(path: String, state: AppState) -> Result<Response, AppError> 
         .map_err(|error| anyhow::anyhow!(error))
         .context("Failed to load backlinks")?;
     let backlink_count = backlinks.len();
+    let backlinks = backlinks
+        .into_iter()
+        .map(|backlink| Backlink {
+            path: reader_page_path(&backlink.path),
+            title: backlink.title,
+        })
+        .collect::<Vec<_>>();
     let backlinks_ms = timing_ms(backlinks_started);
     let mentions_started = Instant::now();
     let unlinked_mentions = state
@@ -1597,11 +1625,19 @@ async fn promote_mention(Form(form): Form<PromoteMentionForm>) -> Result<Respons
     Ok(Redirect::to(&format!("/p/{}", form.return_to)).into_response())
 }
 
-// Search handler: full-text search over pages
+// Search handler: the full Markdown content-search page. Body search itself is
+// performed by the embedded ripgrep implementation in content_search.rs.
 #[derive(serde::Deserialize)]
 struct SearchParams {
     q: Option<String>,
-    scope: Option<String>,
+}
+
+#[derive(serde::Deserialize)]
+struct ContentSearchParams {
+    q: Option<String>,
+    offset: Option<usize>,
+    limit: Option<usize>,
+    regex: Option<bool>,
 }
 
 async fn quickswitch(
@@ -1610,32 +1646,39 @@ async fn quickswitch(
 ) -> Result<Response, AppError> {
     let started = Instant::now();
     let query = params.q.as_deref().unwrap_or("").trim();
-    let rows: Vec<(String, String, String)> = if query.is_empty() {
-        state
-            .index
-            .list_pages()
-            .await
-            .map_err(|error| anyhow::anyhow!(error))
-            .context("Failed to load quickswitch pages")?
-            .into_iter()
-            .take(20)
-            .map(|page| (page.path, page.title, String::new()))
-            .collect()
-    } else {
-        state
-            .index
-            .search(miku_domain::SearchRequest {
-                query: query.to_string(),
-                scope: miku_domain::SearchScope::All,
-                limit: 20,
-            })
-            .await
-            .map_err(|error| anyhow::anyhow!(error))
-            .context("Failed to execute quickswitch search")?
-            .into_iter()
-            .map(|hit| (hit.path, hit.title, hit.snippet))
-            .collect()
-    };
+    let mut pages = state
+        .index
+        .list_pages()
+        .await
+        .map_err(|error| anyhow::anyhow!(error))
+        .context("Failed to load quickswitch pages")?;
+    if !query.is_empty() {
+        let needle = query.to_ascii_lowercase();
+        pages.retain(|page| {
+            page.title.to_ascii_lowercase().contains(&needle)
+                || page.path.to_ascii_lowercase().contains(&needle)
+        });
+        pages.sort_by_key(|page| {
+            let title = page.title.to_ascii_lowercase();
+            let path = page.path.to_ascii_lowercase();
+            if title == needle {
+                0
+            } else if title.starts_with(&needle) {
+                1
+            } else if title.contains(&needle) {
+                2
+            } else if path.starts_with(&needle) {
+                3
+            } else {
+                4
+            }
+        });
+    }
+    let rows: Vec<(String, String, String)> = pages
+        .into_iter()
+        .take(20)
+        .map(|page| (page.path, page.title, String::new()))
+        .collect();
 
     let result_count = rows.len();
     let total_ms = timing_ms(started);
@@ -1654,6 +1697,23 @@ async fn quickswitch(
     Ok(response)
 }
 
+async fn content_search_api(
+    Query(params): Query<ContentSearchParams>,
+) -> Result<Json<miku::content_search::ContentSearchPage>, AppError> {
+    let query = params.q.unwrap_or_default();
+    let offset = params.offset.unwrap_or(0);
+    let limit = params.limit.unwrap_or(10);
+    let regex = params.regex.unwrap_or(false);
+    let result = tokio::task::spawn_blocking(move || {
+        miku::content_search::search(StdPath::new("miku_docs"), &query, offset, limit, regex)
+    })
+    .await
+    .map_err(|error| anyhow::anyhow!(error))?
+    .map_err(|error| anyhow::anyhow!(error))
+    .context("Failed to search Markdown content")?;
+    Ok(Json(result))
+}
+
 async fn search(
     Query(params): Query<SearchParams>,
     State(state): State<AppState>,
@@ -1662,78 +1722,16 @@ async fn search(
     let template = state.templates.get_template("search.html")?;
 
     let query_str = params.q.as_deref().unwrap_or("").trim().to_string();
-    let scope = SearchScope::from_param(params.scope.as_deref());
-
-    let results = if query_str.is_empty() {
-        Vec::new()
-    } else {
-        let db_started = Instant::now();
-        let rows = state
-            .index
-            .search(miku_domain::SearchRequest {
-                query: query_str.clone(),
-                scope: match scope {
-                    SearchScope::All => miku_domain::SearchScope::All,
-                    SearchScope::Title => miku_domain::SearchScope::Title,
-                    SearchScope::Body => miku_domain::SearchScope::Body,
-                },
-                limit: 50,
-            })
-            .await
-            .map_err(|error| anyhow::anyhow!(error))
-            .context("Failed to execute search")?;
-        let db_ms = timing_ms(db_started);
-
-        let snippet_started = Instant::now();
-        let results = rows
-            .into_iter()
-            .map(|hit| {
-                let display_path = hit
-                    .path
-                    .strip_suffix(".md")
-                    .unwrap_or(&hit.path)
-                    .to_string();
-                // The index stores only body_tsv, not the raw body, so build the
-                // snippet from the file on disk (the source of truth).
-                let snippet = safe_file_path(&display_path)
-                    .ok()
-                    .and_then(|file_path| fs::read_to_string(file_path).ok())
-                    .map(|raw| {
-                        let (_, body) = parse_frontmatter(&raw);
-                        search_snippet(body, &query_str)
-                    })
-                    .unwrap_or_else(|| "No preview available.".to_string());
-
-                SearchResult {
-                    path: display_path,
-                    title: hit.title,
-                    snippet,
-                }
-            })
-            .collect::<Vec<_>>();
-        let snippet_ms = timing_ms(snippet_started);
-        info!(
-            query = %query_str,
-            scope = scope.as_str(),
-            result_count = results.len(),
-            db_ms,
-            snippet_ms,
-            "search queried"
-        );
-        results
-    };
 
     let nav = nav_pages(&state.index, "").await?;
     let rendered = template.render(context! {
         query => query_str,
-        scope => scope.as_str(),
-        results => results,
         nav_pages => nav,
         section => "search",
     })?;
 
     let total_ms = timing_ms(started);
-    info!(scope = scope.as_str(), total_ms, "search rendered");
+    info!(total_ms, "content search page rendered");
     let mut response = Html(rendered).into_response();
     attach_server_timing(&mut response, "search", total_ms);
     Ok(response)
@@ -1741,7 +1739,10 @@ async fn search(
 
 // Tags are a secondary sidebar surface. Keep them off the page render path and
 // fetch them only when the user opens the Tags tab.
-async fn tags_api(State(state): State<AppState>) -> Result<Json<Vec<TagCount>>, AppError> {
+async fn tags_api(
+    Query(params): Query<TagsQuery>,
+    State(state): State<AppState>,
+) -> Result<Json<TagsPage>, AppError> {
     let tags = state
         .index
         .tags()
@@ -1753,8 +1754,12 @@ async fn tags_api(State(state): State<AppState>) -> Result<Json<Vec<TagCount>>, 
             tag: tag.tag,
             count: tag.count,
         })
-        .collect();
-    Ok(Json(tags))
+        .collect::<Vec<_>>();
+    Ok(Json(paginate_tags(
+        tags,
+        params.offset.unwrap_or(0),
+        params.limit.unwrap_or(TAG_PAGE_SIZE),
+    )))
 }
 
 // Tags index handler: list all tags with their counts
@@ -1762,7 +1767,7 @@ async fn tags_index(State(state): State<AppState>) -> Result<impl IntoResponse, 
     info!("Rendering tags index");
     let template = state.templates.get_template("tags.html")?;
 
-    let tags: Vec<TagCount> = state
+    let all_tags: Vec<TagCount> = state
         .index
         .tags()
         .await
@@ -1775,9 +1780,14 @@ async fn tags_index(State(state): State<AppState>) -> Result<impl IntoResponse, 
         })
         .collect();
 
+    let tags_page = paginate_tags(all_tags, 0, TAG_PAGE_SIZE);
     let nav = nav_pages(&state.index, "").await?;
     let rendered = template.render(context! {
-        tags => tags,
+        tags => tags_page.tags,
+        total_tags => tags_page.total,
+        has_more => tags_page.has_more,
+        next_offset => tags_page.next_offset,
+        tag_page_size => tags_page.limit,
         nav_pages => nav,
         section => "tags",
     })?;
@@ -1793,32 +1803,35 @@ async fn tag_filter(
     info!("Rendering tag filter for tag: {}", tag);
     let template = state.templates.get_template("tag.html")?;
 
-    let pages: Vec<PageRef> = state
-        .index
-        .pages_with_tag(&tag)
-        .await
-        .map_err(|error| anyhow::anyhow!(error))
-        .context("Failed to load pages for tag")?
-        .into_iter()
-        .map(|page| PageRef {
-            path: page
-                .path
-                .strip_suffix(".md")
-                .unwrap_or(&page.path)
-                .to_string(),
-            title: page.title,
-        })
-        .collect();
+    let pages_page =
+        paginate_page_refs(pages_for_tag(&state, &tag).await?, 0, TAG_RESULT_PAGE_SIZE);
 
     let nav = nav_pages(&state.index, "").await?;
     let rendered = template.render(context! {
         tag => tag,
-        pages => pages,
+        pages => pages_page.pages,
+        total_pages => pages_page.total,
+        has_more => pages_page.has_more,
+        next_offset => pages_page.next_offset,
+        page_size => pages_page.limit,
         nav_pages => nav,
         section => "tags",
     })?;
 
     Ok(Html(rendered).into_response())
+}
+
+async fn tag_pages_api(
+    Path(tag): Path<String>,
+    Query(params): Query<TagsQuery>,
+    State(state): State<AppState>,
+) -> Result<Json<TagPagesPage>, AppError> {
+    let pages = pages_for_tag(&state, &tag).await?;
+    Ok(Json(paginate_page_refs(
+        pages,
+        params.offset.unwrap_or(0),
+        params.limit.unwrap_or(TAG_RESULT_PAGE_SIZE),
+    )))
 }
 
 #[cfg(test)]
@@ -1869,6 +1882,12 @@ mod tests {
         assert!(rendered.contains("href=\"/folders/Notes\""));
         assert!(rendered.contains("href=\"/p/Notes&#x2f;Daily\""));
         assert!(!rendered.contains("mermaid.min.js"));
+    }
+
+    #[test]
+    fn test_reader_page_path_is_extensionless() {
+        assert_eq!(reader_page_path("Notes/Source.md"), "Notes/Source");
+        assert_eq!(reader_page_path("Notes/Source"), "Notes/Source");
     }
 
     #[test]
@@ -1932,7 +1951,53 @@ mod tests {
     }
 
     #[test]
-    fn test_template_rendering_with_mermaid() {
+    fn test_paginate_tags_returns_bounded_pages() {
+        let tags = (0..125)
+            .map(|index| TagCount {
+                tag: format!("tag-{index}"),
+                count: index,
+            })
+            .collect();
+
+        let first = paginate_tags(tags, 0, 50);
+        assert_eq!(first.tags.len(), 50);
+        assert_eq!(first.total, 125);
+        assert!(first.has_more);
+        assert_eq!(first.next_offset, 50);
+
+        let last = paginate_tags(
+            (0..125)
+                .map(|index| TagCount {
+                    tag: format!("tag-{index}"),
+                    count: index,
+                })
+                .collect(),
+            100,
+            50,
+        );
+        assert_eq!(last.tags.len(), 25);
+        assert!(!last.has_more);
+        assert_eq!(last.next_offset, 125);
+    }
+
+    #[test]
+    fn test_paginate_tag_results_returns_bounded_pages() {
+        let pages = (0..125)
+            .map(|index| PageRef {
+                path: format!("Notes/{index}"),
+                title: format!("Note {index}"),
+            })
+            .collect();
+
+        let first = paginate_page_refs(pages, 0, TAG_RESULT_PAGE_SIZE);
+        assert_eq!(first.pages.len(), TAG_RESULT_PAGE_SIZE);
+        assert_eq!(first.total, 125);
+        assert!(first.has_more);
+        assert_eq!(first.next_offset, TAG_RESULT_PAGE_SIZE);
+    }
+
+    #[test]
+    fn test_template_rendering_with_mermaid_uses_shell_lazy_loader() {
         let mut templates_env = Environment::new();
         templates_env.set_loader(minijinja::path_loader("src/templates"));
 
@@ -1960,7 +2025,9 @@ mod tests {
             })
             .expect("Failed to render template");
 
-        assert!(rendered.contains("mermaid.min.js"));
+        assert!(!rendered.contains("mermaid.min.js"));
+        let miku = std::fs::read_to_string("static/miku.js").expect("Failed to read miku.js");
+        assert!(miku.contains("cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"));
     }
 
     #[test]
@@ -2379,7 +2446,7 @@ mod tests {
     }
 
     #[test]
-    fn test_page_template_has_sse_live_preview() {
+    fn test_page_template_does_not_open_reader_event_stream() {
         let mut templates_env = Environment::new();
         templates_env.set_loader(minijinja::path_loader("src/templates"));
 
@@ -2411,10 +2478,8 @@ mod tests {
         // browser's getAttribute decodes it back to "Notes/Daily", matching the
         // unescaped path the SSE broadcast sends. Assert on the escaped form.
         assert!(rendered.contains("data-page-path=\"Notes&#x2f;Daily\""));
-        assert!(rendered.contains("new EventSource(\"/events\")"));
-        assert!(rendered.contains("__miku_bulk_index_refresh__"));
+        assert!(!rendered.contains("new EventSource(\"/events\")"));
         assert!(rendered.contains("class=\"mk-synced\""));
-        assert!(rendered.contains("data-sync-indicator"));
     }
 
     #[test]
@@ -2427,6 +2492,17 @@ mod tests {
     fn test_safe_file_path_rejects_absolute() {
         let result = safe_file_path("/abs");
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_safe_file_path_accepts_canonical_and_md_aliases() {
+        let canonical = safe_file_path("Notes/Daily")
+            .map(|path| path.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        let md_alias = safe_file_path("Notes/Daily.md")
+            .map(|path| path.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        assert_eq!(canonical, md_alias);
     }
 
     #[test]

@@ -1,16 +1,14 @@
 <main class="mk-read" data-reader-fragment>
-    <article class="mk-article" data-page-path="{{ path }}">
+    <article class="mk-article" data-page-path="{{ path }}" data-page-updated="{{ updated }}">
         <nav class="mk-breadcrumb flex items-center gap-1.5 text-xs text-muted mb-5" aria-label="Breadcrumb">
-            <a href="/p/Index" class="mk-breadcrumb-link">miku</a>
-            {% for crumb in breadcrumbs %}
-                <span class="opacity-45">/</span>
+                {% for crumb in breadcrumbs %}
+                    {% if not loop.first %}<span class="opacity-45">›</span>{% endif %}
                 {% if crumb.current %}
                     <a href="/p/{{ crumb.path }}" class="mk-breadcrumb-link here" aria-current="page">{{ crumb.label }}</a>
                 {% else %}
                     <a href="/folders/{{ crumb.path }}" class="mk-breadcrumb-link">{{ crumb.label }}</a>
                 {% endif %}
             {% endfor %}
-            <span class="mk-synced ml-2" data-sync-indicator hidden><i aria-hidden="true"></i><span>synced</span></span>
         </nav>
 
         <div class="mk-title-row flex items-start justify-between gap-5 mb-2">
@@ -107,7 +105,7 @@
             <div class="mk-card-label">PAGE INFO</div>
             <div>
                 <div class="mk-kv"><span class="k">Format</span><span class="v">Markdown</span></div>
-                <div class="mk-kv"><span class="k">Path</span><span class="v path" title="miku_docs/{{ path }}.md">{{ path }}</span></div>
+                <div class="mk-kv"><span class="k">Path</span><span class="v path" title="{{ path }}.md">{{ path }}</span></div>
                 <div class="mk-kv"><span class="k">Words</span><span class="v">{{ word_count }}</span></div>
                 <div class="mk-kv"><span class="k">Backlinks</span><span class="v teal">{{ backlink_count }}</span></div>
                 <div class="mk-kv"><span class="k">Updated</span><span class="v">{{ updated }}</span></div>

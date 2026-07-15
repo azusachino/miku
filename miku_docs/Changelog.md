@@ -1,50 +1,63 @@
 # Changelog
 
-All notable changes to Miku are documented here. See [[Index]] for an overview, and [[Features]] for detailed feature descriptions. #release
+User-facing changes to Miku Note are recorded here. See [[Index]] for the
+starting point and [[Features]] for the current product boundary. #release
 
-## v0.0.1 (2026-06-26)
+## v0.0.2 — Miku Note reader and frontend refresh (2026-07-15)
 
-### MVP: Filesystem-Owned Personal Wiki #release #feature
+### Reader performance
 
-**Initial release** ships the core vision of Miku: a browser-editable Markdown wiki with background indexing and zero lock-in.
+- Page links now swap a server-rendered reader fragment inside the persistent
+  shell; navigating between notes does not reload the document, shared CSS, or
+  shared JavaScript.
+- Reader mode no longer opens an idle `/events` stream. The active page checks
+  for freshness periodically and when the tab becomes visible again.
+- CodeMirror, Prism, Mermaid, and KaTeX are loaded only when the current page
+  needs them.
+- Replaced the separate indexed-search and content-search page modes with one
+  search model: Pages, Content, and Commands are tabs in the Cmd-K palette.
+- `/search` is now the full Markdown content-search page; embedded ripgrep is
+  the body-search source of truth, while the disposable index remains an
+  internal navigation and relationship accelerator.
 
-#### Features
+### Reading experience
 
-- **Wikilinks and Backlinks**: Link pages using `[[PageName]]` syntax; backlinks surface all references automatically. Full support for wikilink text overrides via `[[Target|Display Text]]`.
+- Rebranded the visible frontend as **Miku Note**.
+- Added Thin, Wide, and Full reading-width modes with persisted preferences.
+- Kept the right reading rail beside the article in Thin and Wide modes; it
+  collapses only at the responsive breakpoint or in Full mode.
+- Simplified breadcrumbs and hid the internal `miku_docs/` root from user-facing
+  labels.
+- Added scroll-triggered paging for `/tags` and `/tags/<tag>`; there is no
+  visible “Load more” button.
 
-- **Full-Text Search**: Index all page content with Postgres full-text search. Results are ranked by relevance and updated in the background as pages change.
+### Markdown rendering
 
-- **Tag Index**: Extract and filter pages by `#hashtags` embedded in prose. Tag view is automatically generated and updated.
+- Added lazy Mermaid rendering with diagram zoom.
+- Added lazy Prism highlighting and code-block copy actions.
+- Added dollar math parsing and lazy KaTeX rendering for inline `$...$` and
+  display `$$...$$` equations.
+- Updated [[Sandbox]] with Mermaid, code, and math fixtures for browser
+  acceptance checks.
 
-- **Atomic Saves**: Edits are written to temporary files and atomically renamed into place, guaranteeing consistency even under server crashes.
+### Scope clarification
 
-- **Background Indexer**: Single-writer model eliminates races. The indexer watches `miku/` for changes and rebuilds the index incrementally without blocking reads.
+- The content root is `miku_docs/`, not `miku/`.
+- The default local index is Turso; the supported Postgres profile remains
+  available for the scale/container path.
+- The browser editor is CodeMirror-based and opt-in from the reader; it is not
+  loaded during ordinary reading.
 
-- **Browser Editor**: Edit pages directly in your browser. Simple, plain-text Markdown with a focus on content over toolbars.
+### Brand language
 
-#### Architecture
+- Adapted the canonical light/dark Miku icon from the design preview for the
+  shell and favicon.
+- Reused the same mark in empty search and tag states as a small
+  Markdown-native brand cue; ordinary note content stays quiet and readable.
 
-- Built in Rust with axum + tokio for the HTTP server.
-- Postgres stores a disposable, fully-rebuildable index of pages, links, tags, and full-text content.
-- The `miku/` directory contains the source-of-truth Markdown files, version-controlled and owned by you.
-- No JavaScript bundler — server-rendered HTML with plain `<textarea>` for editing.
+## v0.0.1 — MVP (2026-06-26)
 
-See [[Usage]] for how to run the server, and [[Features]] for a detailed walkthrough of each capability. #docs
-
-#### Known Limitations
-
-- Single-user editing only (concurrent edits may conflict; use atomic saves and version control to manage history).
-- Browser editor is minimal (no toolbar, no preview pane — use your editor of choice and refresh).
-- Backlinks are not paginated (works well for wikis up to ~10k pages; larger wikis may see performance degradation).
-
-#### Next Steps
-
-Future releases will explore:
-- Collaborative editing with conflict resolution.
-- Markdown preview and live render pane.
-- Full-text search UI enhancements (facets, date filters, relevance tuning).
-- Backlink pagination and graph visualization.
-
----
-
-See [[Changelog]] for historical changes, or [[Index]] to navigate the wiki.
+The first release established the filesystem-owned Markdown wiki, atomic saves,
+background indexing, wikilinks, backlinks, tags, full-text search, and a basic
+browser editor. The current reader refresh above supersedes its original
+limitations and UI descriptions.

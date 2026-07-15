@@ -1,99 +1,99 @@
-# Running Miku
+# Running Miku Note
 
-This page explains how to set up and run the Miku wiki server locally, and how to manage your content directory. #guide
+This page covers local setup, the content directory, and the commands used to
+run Miku Note. #guide
 
 ## Prerequisites
 
-Miku is built in Rust and uses Postgres for indexing. You'll need:
+- Nix with flakes, which provides the pinned Rust and development tools;
+- Postgres only when using the explicit Postgres profile or the container stack;
+- Podman or Docker only when using the optional compose stack.
 
-- Rust 1.70+ (or use the Nix devShell)
-- Postgres 12+
-- Docker / Podman (optional, for the compose stack)
+## Quick start
 
-## Quick Start
-
-### Using Docker Compose
-
-The easiest way to run Miku is with the provided `compose.yml`:
+For the default local profile:
 
 ```bash
-podman compose up
+make run
 ```
 
-This starts:
-- A Postgres container for the index
-- The Miku server on `localhost:3000`
+The server starts at `http://localhost:3000` and uses the Rust-built Turso
+index at `miku_docs/.miku-index.turso`. The index is disposable; the Markdown
+files remain the source of truth.
 
-Your `miku/` content directory is automatically volume-mounted, so edits are immediately visible.
+For native Postgres development:
 
-### Manual Setup
+```bash
+make db-up
+make dev
+```
 
-If you prefer to manage Postgres separately:
+`make dev` selects the Postgres backend and uses the local cluster on port
+`55432`. To use the optional container stack instead:
 
-1. Create a Postgres database:
-   ```sql
-   CREATE DATABASE miku_index;
-   ```
+```bash
+make stack-up
+```
 
-2. Set the connection string:
-   ```bash
-   export DATABASE_URL="postgres://user:password@localhost/miku_index"
-   ```
+The compose service uses Postgres and exposes Miku Note on port `3000`.
 
-3. Run migrations:
-   ```bash
-   make validate
-   ```
+## Content directory
 
-4. Start the server:
-   ```bash
-   make run
-   ```
+Pages live under `miku_docs/` and are plain Markdown files. For example:
 
-The wiki is now live at `http://localhost:3000`.
+```text
+miku_docs/Features.md
+miku_docs/guides/Getting Started.md
+```
 
-## Content Directory
+They are available at `/p/Features` and `/p/guides/Getting%20Started`.
+Wikilink matching is case-insensitive and supports aliases:
+`[[Features|What it does]]`.
 
-All your wiki pages live in the `miku/` directory at the repo root. Files are plain `.md` (Markdown), using GitHub Flavored Markdown plus [[wikilinks]].
-
-### Creating Pages
-
-Create a new `.md` file in `miku/`. The filename (minus the extension) becomes the page name. For example, `miku/Features.md` is accessible as [[Features]].
-
-Page names are case-sensitive in the URL but case-insensitive for wikilink resolution, so `[[features]]` and `[[Features]]` both link correctly.
-
-### Deleting Pages
-
-Delete the `.md` file from `miku/`. The page is removed from the index automatically within a few seconds as the background [[Features|indexer]] picks up the change.
-
-### Organizing with Folders
-
-You can organize pages into subfolders: `miku/guides/Getting_Started.md` becomes [[guides/Getting_Started]]. The same atomic-save and background-index guarantees apply.
+The hidden `miku_docs/.trash/` directory contains soft-deleted pages until they
+are restored or purged. Assets belong in `miku_docs/assets/`.
 
 ## Writing Markdown
 
-See [[Sandbox]] for syntax examples and wikilink demonstrations. #docs
+Miku Note uses Comrak with GFM-style tables, task lists, strikethrough,
+autolinks, alerts, wikilinks, and raw HTML for trusted local files. The reader
+also supports:
 
-Miku uses [comrak](https://github.com/kivikakk/comrak), which supports:
-- GitHub Flavored Markdown (tables, strikethrough, autolinks)
-- Miku wikilinks: `[[PageName]]` or `[[PageName|Link Text]]`
-- GitHub alerts: `> [!NOTE] This is a note`
+- `#tags` and YAML frontmatter properties;
+- fenced code blocks, Mermaid diagrams, and `$...$` / `$$...$$` math;
+- `![[asset.png]]` embeds.
 
-## Rebuilding the Index
+See [[Sandbox]] for examples and [[Features]] for the complete current list.
 
-If you manually edit files outside the browser, or suspect the index is stale, trigger a full rebuild:
+## Editing and external changes
+
+Open a page at `/p/...` and choose **Edit** for the inline CodeMirror editor, or
+use `/p/<path>/edit` for the full editor. Saves are atomic and guarded by a
+content hash so an edit made elsewhere is not silently overwritten.
+
+The filesystem watcher notices changes made by git, an editor, or scripts and
+updates the index in the background. Reader mode checks for a newer indexed
+version without holding an idle event stream open.
+
+## Rebuilding the index
+
+The index can always be rebuilt from the files:
 
 ```bash
-# SQL-based rebuild (clears and repopulates from disk)
-make rebuild-index
+rm -f miku_docs/.miku-index.turso
+make run
 ```
 
-Or restart the server — it rebuilds the index on startup if the database is empty.
+For a Postgres deployment, drop or recreate the disposable database and start
+the server with `MIKU_INDEX_BACKEND=postgres`; migrations run on startup.
 
-## Architecture & Implementation
+## Checks and browser acceptance
 
-For details on how the background indexer works, how atomic saves guarantee consistency, and how wikilink resolution is implemented, see the architecture documentation. The key invariant is: **files in `miku/` are the source of truth; Postgres holds only a rebuildable index**. See [[Index]] for more context. #guide
+```bash
+make check
+make check-ux-browser
+```
 
----
-
-Questions? See [[Features]] for what Miku can do, or browse the wiki starting from [[Index]].
+The browser acceptance command requires a local Playwright browser installation
+and verifies the real reader, lazy assets, navigation, tags, editor, and narrow
+layout behavior.

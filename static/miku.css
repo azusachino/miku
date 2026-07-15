@@ -146,6 +146,7 @@ a { color: var(--teal); }
   position: relative; width: 36px; height: 36px; border-radius: 8px; background: var(--panel2);
   display: flex; align-items: center; justify-content: center; box-shadow: inset 0 0 0 1px var(--border);
 }
+.mk-logo-image { display: block; width: 100%; height: 100%; border-radius: inherit; }
 .mk-logo-mark {
   color: var(--teal);
   font-family: var(--font-display);
@@ -276,7 +277,7 @@ a { color: var(--teal); }
 }
 .mk-zen-exit-button {
   display: inline-flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 8px;
   min-height: 36px;
   padding: 7px 11px;
@@ -432,6 +433,7 @@ a { color: var(--teal); }
   background: var(--tealsoft);
   color: var(--teal);
   font-weight: 900;
+  margin-top: 2px;
 }
 .mk-pathchip { font-family: var(--font-mono); font-size: 11px; font-weight: 500; padding: 3px 9px; border-radius: 7px; background: var(--panel); border: 1px solid var(--border); color: var(--muted); }
 
@@ -481,6 +483,13 @@ a { color: var(--teal); }
 .mk-prose code { font-family: var(--font-mono); font-size: 13px; padding: 2px 6px; border-radius: 6px; background: var(--code); color: var(--code-text); }
 .mk-prose pre  { margin: 0 0 26px; padding: 18px; border-radius: 14px; background: var(--code); border: 1px solid var(--border); overflow-x: auto; }
 .mk-prose pre code { padding: 0; background: none; font-size: 13.5px; line-height: 1.7; }
+.mk-prose [data-math-style="display"] {
+  display: block;
+  overflow-x: auto;
+  margin: 1.25rem 0;
+  padding: .25rem 0;
+}
+.mk-prose [data-math-style="inline"] { white-space: normal; }
 /* Copy button injected by miku.js (window.mikuInjectCopyButtons). */
 .mk-prose pre.mk-has-copy { position: relative; }
 .mk-copy-btn {
@@ -667,8 +676,9 @@ a { color: var(--teal); }
 .mk-pagecard .desc { font-size: 13px; color: var(--muted); font-weight: 500; line-height: 1.5; }
 
 /* sidebar search field + tag rows */
-.mk-search-field { display: flex; align-items: center; gap: 10px; padding: 11px 13px; border-radius: 12px; border: 1px solid var(--teal); background: var(--panel); box-shadow: 0 0 0 3px var(--tealsoft); margin-bottom: 14px; }
-.mk-search-field input { flex: 1; min-width: 0; border: none; outline: none; background: transparent; color: var(--text); font-family: var(--font-body); font-weight: 600; font-size: 14px; }
+.mk-search-field { display: flex; align-items: center; gap: 10px; padding: 11px 13px; border-radius: 12px; border: 1px solid var(--border); background: var(--panel); box-shadow: none; margin-bottom: 14px; transition: border-color .18s, box-shadow .18s; }
+.mk-search-field:focus-within { border-color: var(--teal); box-shadow: 0 0 0 3px var(--tealsoft); }
+.mk-search-field input { flex: 1; min-width: 0; appearance: none; border: 0 !important; outline: none !important; box-shadow: none !important; background: transparent; color: var(--text); font-family: var(--font-body); font-weight: 600; font-size: 14px; }
 .mk-scope { display: flex; gap: 6px; margin-bottom: 18px; }
 .mk-scope a { font-size: 12px; font-weight: 700; padding: 6px 12px; border-radius: 9px; background: var(--panel); border: 1px solid var(--border); color: var(--muted); text-decoration: none; }
 .mk-scope a.is-active { background: var(--grad); color: #fff; border-color: transparent; }
@@ -771,15 +781,24 @@ a { color: var(--teal); }
   gap: 12px;
   padding: 14px 16px;
   border-bottom: 1px solid var(--border);
+  background: var(--panel);
 }
 .mk-command-input input {
   flex: 1;
   min-width: 0;
-  border: 0;
-  outline: 0;
+  appearance: none;
+  border:  0 !important;
+  outline: none !important;
+  box-shadow: none !important;
   background: transparent;
   color: var(--text);
   font: 700 18px/1.3 var(--font-body);
+}
+.mk-command-input input:focus,
+.mk-command-input input:focus-visible {
+  border: 0 !important;
+  outline: none !important;
+  box-shadow: none !important;
 }
 .mk-command-list {
   height: min(420px, 52vh);
@@ -791,7 +810,7 @@ a { color: var(--teal); }
   width: 100%;
   min-height: 54px;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 12px;
   padding: 9px 10px;
   border: 0;
@@ -818,6 +837,7 @@ a { color: var(--teal); }
   background: var(--tealsoft);
   color: var(--teal);
   font-weight: 900;
+  margin-top: 2px;
 }
 .mk-command-text {
   flex: 1;
@@ -828,16 +848,21 @@ a { color: var(--teal); }
   display: block;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
 }
 .mk-command-text strong {
   font-size: 14.5px;
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow-wrap: anywhere;
 }
 .mk-command-text small,
 .mk-command-empty {
   color: var(--muted);
   font-size: 12.5px;
   font-weight: 600;
+  white-space: nowrap;
 }
 
 /* ===========================================================================
@@ -847,6 +872,30 @@ a { color: var(--teal); }
 .mk-empty .badge { position: relative; width: 96px; height: 96px; border-radius: 28px; background: var(--grad); display: flex; align-items: center; justify-content: center; box-shadow: 0 16px 44px var(--tealglow); margin-bottom: 28px; }
 .mk-empty h1 { margin: 0 0 8px; font-family: var(--font-display); font-weight: 700; font-size: 34px; background: var(--grad-text); -webkit-background-clip: text; background-clip: text; color: transparent; }
 .mk-empty .sub { margin: 0 0 28px; font-size: 16px; color: var(--muted); font-weight: 600; max-width: 440px; line-height: 1.55; }
+.mk-empty-mascot { display: block; width: 72px; height: 72px; margin: 0 auto 12px; }
+.mk-content-file { padding: 16px 18px; }
+.mk-content-file-title { color: var(--text); font-family: var(--font-display); font-weight: 750; text-decoration: none; overflow-wrap: anywhere; }
+.mk-content-file-title:hover { color: var(--teal); }
+.mk-content-file-path { display: block; margin-top: 3px; color: var(--muted); font: 11px var(--font-mono); }
+.mk-content-matches { display: grid; gap: 4px; margin-top: 12px; }
+.mk-content-match { display: flex; gap: 10px; min-width: 0; padding: 5px 7px; border-radius: 7px; color: var(--muted); text-decoration: none; background: var(--panel2); }
+.mk-content-match:hover { color: var(--text); background: var(--tealsoft); }
+.mk-content-match code { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: inherit; }
+.mk-content-line { flex: 0 0 34px; color: var(--teal); font: 11px var(--font-mono); text-align: right; }
+
+/* Miku Note Markdown language: small mint/pink signals help structure long
+   notes without turning the reader into a decorated dashboard. */
+.mk-prose h2 { padding-bottom: .38em; border-bottom: 1px solid var(--border); }
+.mk-prose h3 { color: var(--teal); }
+.mk-prose hr { margin: 2.2rem 0; border: 0; border-top: 1px dashed var(--border); }
+.mk-prose blockquote {
+  border-left: 3px solid var(--teal);
+  border-radius: 0 var(--radius-card) var(--radius-card) 0;
+  background: var(--tealsoft);
+}
+.mk-prose table thead th { background: var(--tealsoft); }
+.mk-prose table code { color: var(--teal); }
+.mk-prose .mk-callout { box-shadow: inset 3px 0 0 var(--teal); }
 
 /* ---- Mermaid Diagram & Lightbox Magnifier ---- */
 pre.mermaid {
@@ -978,14 +1027,14 @@ pre.mermaid svg {
 .mk-main { background: var(--bg); }
 
 .mk-read {
-  grid-template-columns: minmax(0, 72ch) 24px minmax(220px, 260px);
+  grid-template-columns: minmax(0, 68ch) 8px minmax(220px, 240px);
   justify-content: center;
-  gap: 0;
-  width: min(100%, 1180px);
+  column-gap: 24px;
+  width: min(100%, 1120px);
   margin-inline: auto;
   padding: 48px var(--space-page) 120px;
 }
-.mk-article { width: 100%; max-width: 72ch; }
+.mk-article { width: 100%; max-width: none; }
 .mk-prose { font-size: 16px; line-height: 1.72; }
 .mk-prose p { margin: 0 0 var(--space-block); }
 .mk-prose h2 { margin-top: 2.4em; margin-bottom: .65em; line-height: 1.25; }
@@ -1005,9 +1054,63 @@ pre.mermaid svg {
 .mk-tree-item, .mk-tab, .mk-sidebar-actions button { min-height: var(--control-h); }
 .mk-tree-item.is-active { background: var(--tealsoft); box-shadow: inset 3px 0 0 var(--teal); }
 .mk-card { box-shadow: 0 8px 24px color-mix(in srgb, var(--bg) 70%, transparent); }
+.mk-infinite-sentinel {
+  min-height: 32px;
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
+}
+
+html[data-reading-width="wide"] .mk-read {
+  grid-template-columns: minmax(0, 86ch) 8px minmax(200px, 220px);
+  column-gap: 20px;
+  width: min(100%, 1240px);
+}
+
+html[data-reading-width="full"] .mk-read {
+  grid-template-columns: minmax(0, 100ch);
+  width: min(100%, 1120px);
+}
+
+html[data-reading-width="full"] .mk-rail,
+html[data-reading-width="full"] .mk-rail-resizer {
+  display: none;
+}
+
+.mk-reading-width-controls { display: flex; gap: 6px; }
+.mk-reading-width-controls .mk-modecard { min-width: 54px; padding: 7px 10px; }
+.mk-reading-width-controls .mk-modecard.is-active { border-color: var(--teal); color: var(--teal); background: var(--tealsoft); }
+
+/* Keep metadata subordinate to the document, in the spirit of Notion's
+   lightweight side panels rather than dashboard cards. */
+.mk-rail .mk-card {
+  box-shadow: none;
+  backdrop-filter: none;
+  background: color-mix(in srgb, var(--panel) 58%, transparent);
+  border-color: color-mix(in srgb, var(--border) 72%, transparent);
+  border-radius: 10px;
+}
+
+/* The app sidebar consumes part of the viewport. Preserve a readable article
+   instead of squeezing the article and rail together on medium screens. */
+@media (max-width: 1280px) {
+  .mk-read,
+  html[data-reading-width="wide"] .mk-read {
+    grid-template-columns: minmax(0, 1fr) 8px 220px;
+    column-gap: 12px;
+    width: 100%;
+    padding-inline: 24px;
+  }
+  html[data-reading-width="thin"] .mk-read {
+    grid-template-columns: minmax(0, 1fr) 8px 220px;
+  }
+  html[data-reading-width="full"] .mk-read {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
 
 @media (max-width: 1100px) {
-  .mk-read { grid-template-columns: minmax(0, 72ch); width: 100%; }
+  .mk-read { grid-template-columns: minmax(0, 1fr); width: 100%; }
   .mk-rail, .mk-rail-resizer { display: none; }
 }
 

@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 
 {% block title %}
-Miku - Edit {{ path }}
+Miku Note - Edit {{ path }}
 {% endblock %}
 
 {% block content %}
@@ -17,7 +17,7 @@ Miku - Edit {{ path }}
         <div class="mk-editing flex items-center gap-2 text-xs font-bold text-pink select-none">
             <span class="animate-pulse">●</span> Editing
         </div>
-        <span class="mk-pathchip hidden md:inline font-mono text-[11px] bg-panel border border-border px-2 py-0.75 rounded-md text-muted truncate max-w-[200px]">miku_docs/{{ path }}.md</span>
+        <span class="mk-pathchip hidden md:inline font-mono text-[11px] bg-panel border border-border px-2 py-0.75 rounded-md text-muted truncate max-w-[200px]">{{ path }}.md</span>
 
         <!-- View Mode Switcher -->
         <div class="flex items-center bg-panel/30 border border-border/25 rounded-lg p-0.5 text-xs font-semibold gap-0.5">
