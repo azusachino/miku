@@ -1,5 +1,5 @@
 use super::routes;
-use super::{AppState, StaticAssets};
+use super::{openapi, workspace_api, AppState, StaticAssets};
 use axum::{
     extract::{Path, Request},
     http::{header, StatusCode},
@@ -77,6 +77,19 @@ pub(super) fn router(state: AppState) -> Router {
         .route("/api/v1/tags/{tag}/pages", get(routes::tag_pages_api))
         .route("/api/v1/quickswitch", get(routes::quickswitch))
         .route("/api/v1/content-search", get(routes::content_search_api))
+        .route("/api/v1/workspace", get(workspace_api::workspace))
+        .route("/api/v1/tree", get(workspace_api::tree))
+        .route("/api/v1/notes/{id}", get(workspace_api::note))
+        .route(
+            "/api/v1/notes/{id}/context",
+            get(workspace_api::note_context),
+        )
+        .route(
+            "/api/v1/notes/{id}/children",
+            get(workspace_api::note_children),
+        )
+        .route("/api/v1/search", get(workspace_api::search))
+        .route("/api/openapi.json", get(openapi::json))
         .route("/static/{*path}", get(static_asset))
         .nest_service("/assets", ServeDir::new("miku_docs/assets"))
         .layer(TraceLayer::new_for_http().on_response(super::observe_http_response))

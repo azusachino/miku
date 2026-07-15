@@ -15,6 +15,7 @@ use chrono::{DateTime, Local};
 use miku::markdown::{extract_title, parse_frontmatter, render_html_with_toc, Heading};
 use miku_app::{compose_index, resolve_runtime, IndexApi};
 use miku_domain::IndexCapabilities;
+use miku_vault::Vault;
 use minijinja::{context, Environment};
 use sha2::{Digest, Sha256};
 use std::env;
@@ -32,7 +33,9 @@ use tokio_stream::{wrappers::BroadcastStream, Stream, StreamExt};
 use tracing::{info, warn};
 
 mod http;
+mod openapi;
 mod routes;
+mod workspace_api;
 
 const SERVER_TIMING: HeaderName = HeaderName::from_static("server-timing");
 
@@ -306,6 +309,7 @@ struct NavNode {
 #[derive(Clone)]
 struct AppState {
     index: IndexApi,
+    vault: Arc<Vault>,
     templates: Arc<Environment<'static>>,
     index_ready: Arc<AtomicBool>,
     // Broadcasts the relative path (`.md` stripped) of each page the background
@@ -325,6 +329,13 @@ impl AppError {
         Self {
             error: error.into(),
             status: StatusCode::BAD_REQUEST,
+        }
+    }
+
+    fn not_found(error: impl Into<anyhow::Error>) -> Self {
+        Self {
+            error: error.into(),
+            status: StatusCode::NOT_FOUND,
         }
     }
 }
@@ -396,6 +407,7 @@ async fn main() -> Result<()> {
 
     let state = AppState {
         index: index.clone(),
+        vault: Arc::new(Vault::new("miku_docs")),
         templates: Arc::new(templates_env),
         index_ready: indexer.ready_handle(),
         events: events_tx,

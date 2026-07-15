@@ -604,6 +604,7 @@ async fn test_app_router_registers_events_route() {
         index: compose_index(RuntimeConfig::Memory)
             .await
             .expect("memory index API"),
+        vault: Arc::new(miku_vault::Vault::new("miku_docs")),
         templates: Arc::new(templates_env),
         index_ready: Arc::new(AtomicBool::new(true)),
         events,
