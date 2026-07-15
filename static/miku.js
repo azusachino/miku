@@ -24,19 +24,12 @@
 
   function syncBrandAssets() {
     var suffix = root.getAttribute("data-theme") === "light" ? "light" : "dark";
-    var asset = "/static/miku-icon-" + suffix + ".svg?theme=" + suffix;
+    var asset = "/static/miku-icon-" + suffix + ".svg";
     document.querySelectorAll("[data-miku-brand-icon]").forEach(function (image) {
       if (image.getAttribute("src") !== asset) image.setAttribute("src", asset);
     });
     var favicon = document.getElementById("miku-favicon");
-    if (favicon) {
-      // Keep the tab icon local to the document. Chromium may revalidate a
-      // network favicon after history.pushState, even when the reader shell
-      // remains mounted and only the page fragment changes.
-      var fill = suffix === "light" ? "%23e6faf6" : "%23232d35";
-      var faviconAsset = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='" + fill + "'/%3E%3Ccircle cx='50' cy='48' r='28' fill='%236fdacf'/%3E%3Ccircle cx='41' cy='47' r='4' fill='%233e4e50'/%3E%3Ccircle cx='59' cy='47' r='4' fill='%233e4e50'/%3E%3Cpath d='M43 57 Q50 63 57 57' fill='none' stroke='%233e4e50' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E";
-      if (favicon.getAttribute("href") !== faviconAsset) favicon.setAttribute("href", faviconAsset);
-    }
+    if (favicon && favicon.getAttribute("href") !== asset) favicon.setAttribute("href", asset);
   }
 
   function initContentSearch() {
