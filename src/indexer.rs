@@ -49,6 +49,27 @@ pub struct IndexerQueue {
     tasks: Vec<JoinHandle<()>>,
 }
 
+#[derive(Clone)]
+pub struct ReconcileTrigger {
+    sender: mpsc::Sender<WatcherEvent>,
+    reconcile_queued: Arc<AtomicBool>,
+}
+
+impl ReconcileTrigger {
+    pub fn disabled() -> Self {
+        let (sender, receiver) = mpsc::channel(1);
+        drop(receiver);
+        Self {
+            sender,
+            reconcile_queued: Arc::new(AtomicBool::new(false)),
+        }
+    }
+
+    pub fn trigger(&self) {
+        IndexerQueue::try_queue_reconcile(&self.sender, &self.reconcile_queued);
+    }
+}
+
 async fn index_store_file(
     reader: &Arc<dyn IndexReader>,
     writer: &Arc<dyn IndexWriter>,
@@ -545,6 +566,14 @@ impl IndexerQueue {
 
     pub fn trigger_reconcile(&self) {
         Self::try_queue_reconcile(&self.sender, &self.reconcile_queued);
+    }
+
+    #[must_use]
+    pub fn reconcile_trigger(&self) -> ReconcileTrigger {
+        ReconcileTrigger {
+            sender: self.sender.clone(),
+            reconcile_queued: Arc::clone(&self.reconcile_queued),
+        }
     }
 
     #[must_use]

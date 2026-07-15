@@ -779,6 +779,10 @@
                     this.applyReadingPrefs();
                     this.applyPaneWidths();
                     window.addEventListener('miku-open-rename', event => this.openRename(event.detail.path));
+                    window.addEventListener('miku-show-trash', () => {
+                        this.sidebarTab = 'trash';
+                        if (window.Alpine.store('tree')) window.Alpine.store('tree').loadTrash(true);
+                    });
                     this.$watch('animatedAccents', value => { this.writeBool('animatedAccents', value); this.applyReadingPrefs(); });
                     this.$watch('showBacklinks', value => { this.writeBool('showBacklinks', value); this.applyReadingPrefs(); });
                     this.$watch('compactSpacing', value => { this.writeBool('compactSpacing', value); this.applyReadingPrefs(); });

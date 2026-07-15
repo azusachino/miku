@@ -57,12 +57,19 @@ pub fn parse_frontmatter(content: &str) -> (Option<serde_json::Value>, &str) {
 pub fn extract_title(path: &str, frontmatter: Option<&serde_json::Value>, body: &str) -> String {
     if let Some(fm) = frontmatter {
         if let Some(title) = fm.get("title").and_then(|t| t.as_str()) {
-            return title.to_string();
+            let title = title.trim();
+            if !title.is_empty() {
+                return title.to_string();
+            }
         }
     }
 
     let mut fenced = false;
-    for line in body.lines() {
+    let lines = body.lines().collect::<Vec<_>>();
+    for (index, line) in lines.iter().enumerate() {
+        if line.starts_with("    ") || line.starts_with('\t') {
+            continue;
+        }
         let trimmed = line.trim();
         if trimmed.starts_with("```") || trimmed.starts_with("~~~") {
             fenced = !fenced;
@@ -71,12 +78,22 @@ pub fn extract_title(path: &str, frontmatter: Option<&serde_json::Value>, body: 
         if fenced {
             continue;
         }
-        if let Some(stripped) = trimmed.strip_prefix("# ") {
+        if let Some(stripped) = trimmed
+            .strip_prefix('#')
+            .filter(|rest| rest.chars().next().is_some_and(char::is_whitespace))
+        {
             let title = stripped.trim().trim_end_matches('#').trim();
-            if title.is_empty() || title.starts_with("![") {
+            if title.is_empty() || title.starts_with("![") || looks_like_command(title) {
                 continue;
             }
             return title.to_string();
+        }
+        if index + 1 < lines.len()
+            && !trimmed.is_empty()
+            && lines[index + 1].trim().chars().all(|ch| ch == '=')
+            && lines[index + 1].trim().len() >= 3
+        {
+            return trimmed.to_string();
         }
     }
 
@@ -85,6 +102,17 @@ pub fn extract_title(path: &str, frontmatter: Option<&serde_json::Value>, body: 
         .and_then(|s| s.to_str())
         .unwrap_or(path)
         .to_string()
+}
+
+fn looks_like_command(title: &str) -> bool {
+    let lower = title.to_ascii_lowercase();
+    title.starts_with('/')
+        || title.starts_with("./")
+        || title.starts_with("../")
+        || title.starts_with("&#47;")
+        || lower.contains(" -p ")
+        || lower.contains(" -a ")
+        || lower.contains(" --")
 }
 
 /// True when a link target names a binary asset (embedded with `![[file.png]]`)
@@ -562,6 +590,29 @@ mod tests {
     fn test_extract_title_falls_back_to_filename() {
         let body = "~~~markdown\n# A code sample\n~~~\n# ![diagram](image.png)\n";
         assert_eq!(extract_title("notes/today.md", None, body), "today");
+    }
+
+    #[test]
+    fn test_extract_title_handles_setext_tabs_and_empty_frontmatter() {
+        let body = "    # code sample\n\nNot the title\n===\n\n#\tActual title\n";
+        let frontmatter = serde_json::json!({"title": "  "});
+        assert_eq!(
+            extract_title("notes/today.md", Some(&frontmatter), body),
+            "Not the title"
+        );
+    }
+
+    #[test]
+    fn test_extract_title_skips_command_like_heading() {
+        let body = "# &#47;usr&#47;share&#47;bcc&#47;tools&#47;memleak -a -p 21642\n";
+        assert_eq!(
+            extract_title(
+                "docs/18 - 案例篇：内存泄漏了，我该如何定位和处理？.md",
+                None,
+                body
+            ),
+            "18 - 案例篇：内存泄漏了，我该如何定位和处理？"
+        );
     }
 
     #[test]

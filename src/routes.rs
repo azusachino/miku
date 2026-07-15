@@ -902,7 +902,10 @@ pub(super) struct MoveForm {
 // move-into-folder (drag): the client always sends the full destination path.
 // Returns JSON so the tree controller can react without a full-page navigation;
 // expected outcomes (collision, missing source) use explicit status codes.
-pub(super) async fn page_move(Json(form): Json<MoveForm>) -> Result<Response, AppError> {
+pub(super) async fn page_move(
+    State(state): State<AppState>,
+    Json(form): Json<MoveForm>,
+) -> Result<Response, AppError> {
     info!("Moving page from: {} to: {}", form.from, form.to);
     let src = safe_file_path(&form.from)?;
     let dst = safe_file_path(&form.to)?;
@@ -936,6 +939,7 @@ pub(super) async fn page_move(Json(form): Json<MoveForm>) -> Result<Response, Ap
         dst.display()
     ))?;
 
+    state.reconcile.trigger();
     info!("Moved page from {} to {} successfully", form.from, form.to);
     Ok(Json(serde_json::json!({ "ok": true, "path": form.to })).into_response())
 }
@@ -986,7 +990,10 @@ pub(super) fn safe_trash_id(id: &str) -> Result<(), AppError> {
 // Handle trashing a page: move it into `miku_docs/.trash/<id>.md` and write a sidecar
 // `<id>.json` manifest recording its original path so it can be restored. Returns
 // JSON (no redirect) so the UI can offer an Undo without navigating away.
-pub(super) async fn page_trash(Json(form): Json<TrashForm>) -> Result<Response, AppError> {
+pub(super) async fn page_trash(
+    State(state): State<AppState>,
+    Json(form): Json<TrashForm>,
+) -> Result<Response, AppError> {
     info!("Trashing page: {}", form.path);
     let src = safe_file_path(&form.path)?;
 
@@ -1045,6 +1052,7 @@ pub(super) async fn page_trash(Json(form): Json<TrashForm>) -> Result<Response, 
             .into());
     }
 
+    state.reconcile.trigger();
     info!("Trashed page {} as {}", form.path, id);
     Ok(Json(serde_json::json!({
         "ok": true,
@@ -1077,7 +1085,10 @@ pub(super) async fn trash_list() -> Result<Response, AppError> {
 }
 
 // Restore a trashed page to its original path (409 if a live file now occupies it).
-pub(super) async fn trash_restore(Json(form): Json<TrashIdForm>) -> Result<Response, AppError> {
+pub(super) async fn trash_restore(
+    State(state): State<AppState>,
+    Json(form): Json<TrashIdForm>,
+) -> Result<Response, AppError> {
     safe_trash_id(&form.id)?;
     let dir = trash_dir();
     let manifest_path = dir.join(format!("{}.json", form.id));
@@ -1110,6 +1121,7 @@ pub(super) async fn trash_restore(Json(form): Json<TrashIdForm>) -> Result<Respo
     fs::rename(&trash_md, &dst).context("Failed to restore page from trash")?;
     fs::remove_file(&manifest_path).context("Failed to remove trash manifest after restore")?;
 
+    state.reconcile.trigger();
     info!("Restored {} from trash", manifest.original_path);
     Ok(Json(serde_json::json!({ "ok": true, "path": manifest.original_path })).into_response())
 }

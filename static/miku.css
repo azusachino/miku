@@ -673,6 +673,10 @@ a { color: var(--teal); }
 .mk-pagecard { display: flex; flex-direction: column; gap: 8px; text-align: left; border: 1px solid var(--border); background: var(--panel); border-radius: var(--radius-card); padding: 18px 20px; cursor: pointer; transition: .16s; text-decoration: none; }
 .mk-pagecard:hover { border-color: var(--teal); transform: translateY(-2px); }
 .mk-pagecard .ttl { font-family: var(--font-display); font-weight: 700; font-size: 16px; color: var(--text); }
+.mk-tag-results [data-tag-page-list] > a { min-width: 0; }
+.mk-tag-page-title-row, .mk-tag-page-title { min-width: 0; }
+.mk-tag-page-title { overflow-wrap: anywhere; word-break: break-word; }
+.mk-tag-page-path { max-width: 100%; margin: 0; overflow-wrap: anywhere; word-break: break-word; white-space: normal; }
 .mk-pagecard .desc { font-size: 13px; color: var(--muted); font-weight: 500; line-height: 1.5; }
 
 /* sidebar search field + tag rows */

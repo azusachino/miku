@@ -881,7 +881,14 @@
               try {
                 sessionStorage.setItem("miku:moveUndo", JSON.stringify({ from: to, to: from }));
               } catch (e) {}
-              window.location.reload();
+              var currentPath = window.location.pathname.indexOf("/p/") === 0
+                ? decodeURIComponent(window.location.pathname.slice(3).replace(/\/edit$/, ""))
+                : "";
+              if (currentPath === from && window.mikuNavigateReader) {
+                window.mikuNavigateReader("/p/" + to.split("/").map(encodeURIComponent).join("/"));
+              } else {
+                window.location.reload();
+              }
             }
           })
           .catch(function () {
@@ -933,6 +940,7 @@
               trashed_at: data.trashed_at || Math.floor(Date.now() / 1000)
             }].concat(self.trashItems.filter(function (item) { return item.id !== data.id; }));
             self.trashLoaded = true;
+            window.dispatchEvent(new CustomEvent("miku-show-trash"));
             var id = data.id;
             self.showToast("Moved “" + path + "” to Trash.", function () {
               postJSON("/api/v1/trash/restore", { id: id }).then(function () {
