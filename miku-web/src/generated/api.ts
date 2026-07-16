@@ -423,6 +423,7 @@ export interface operations {
       query: {
         q: string;
         limit?: number;
+        scope?: string;
       };
       header?: never;
       path?: never;

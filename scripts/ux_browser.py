@@ -44,6 +44,7 @@ def main() -> int:
             raise AssertionError("workspace tree has no clickable rows")
         page.locator(".tree-row").filter(has_text="Features").click()
         page.wait_for_url("**/p/Features.md")
+        page.locator(".note-scroll h1").filter(has_text="Features").wait_for()
         if page.locator(".note-scroll h1").first.inner_text() != "Features":
             raise AssertionError("clicking a note did not update the reader")
 
@@ -58,9 +59,29 @@ def main() -> int:
             raise AssertionError("reader remained in the loading state")
 
         theme = page.locator(".app-shell").get_attribute("data-theme")
+        dark_background = page.locator(".app-shell").evaluate(
+            "el => getComputedStyle(el).backgroundColor"
+        )
         page.get_by_role("button", name="Toggle theme").click()
         if page.locator(".app-shell").get_attribute("data-theme") == theme:
             raise AssertionError("theme toggle did not change the shell theme")
+        light_background = page.locator(".app-shell").evaluate(
+            "el => getComputedStyle(el).backgroundColor"
+        )
+        if dark_background == light_background:
+            raise AssertionError("theme toggle changed the attribute but not the shell colors")
+
+        search = page.get_by_label("Search notes")
+        search.fill("Android")
+        search.press("Enter")
+        page.get_by_role("group", name="Search scope").wait_for()
+        content_scope = page.get_by_role("button", name="Content")
+        content_scope.click()
+        if content_scope.get_attribute("aria-pressed") != "true":
+            raise AssertionError("content search scope was not selectable")
+        page.get_by_role("button", name="Title").click()
+        if page.get_by_role("button", name="Title").get_attribute("aria-pressed") != "true":
+            raise AssertionError("title search scope was not selectable")
 
         page.screenshot(path=str(ARTIFACT_DIR / "reading.png"), full_page=True)
         page.set_viewport_size({"width": 390, "height": 844})

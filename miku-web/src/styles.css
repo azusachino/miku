@@ -44,6 +44,10 @@ button {
   border: 0;
   cursor: pointer;
 }
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
 .icon {
   color: var(--muted);
   font-size: 1.15em;
@@ -53,6 +57,8 @@ button {
   min-height: 0;
   height: 100vh;
   flex-direction: column;
+  color: var(--text);
+  background: var(--bg);
 }
 .launch-bar {
   height: 58px;
@@ -120,7 +126,7 @@ button {
   padding: 0 10px;
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: #181b22;
+  background: var(--panel-2);
   color: var(--muted);
 }
 .launch-search:focus-within {
@@ -763,7 +769,7 @@ button {
   overflow: hidden;
   border: 1px solid #3a3c58;
   border-radius: 9px;
-  background: #191b25;
+  background: var(--panel);
   box-shadow: 0 22px 70px #0009;
   transform: translateX(-50%);
 }
@@ -779,6 +785,24 @@ button {
   color: var(--faint);
   background: transparent;
   font-size: 0.63rem;
+}
+.search-scopes {
+  display: flex;
+  gap: 5px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line);
+}
+.search-scope {
+  padding: 5px 9px;
+  border-radius: 5px;
+  color: var(--muted);
+  background: transparent;
+  font-size: 0.68rem;
+}
+.search-scope:hover,
+.search-scope.is-active {
+  color: var(--text);
+  background: var(--accent-soft);
 }
 .search-result {
   display: flex;
@@ -823,7 +847,7 @@ button {
   min-height: 100vh;
   padding: 64px min(10vw, 140px);
   color: var(--text);
-  background: var(--canvas);
+  background: var(--bg);
 }
 .tags-page-header {
   max-width: 720px;
@@ -896,6 +920,11 @@ button {
 }
 [data-theme="light"] .launch-bar {
   background: #ffffffe8;
+}
+[data-theme="light"] .launch-search,
+[data-theme="light"] .search-popover,
+[data-theme="light"] .workspace-menu {
+  background: var(--panel);
 }
 [data-theme="light"] .sidebar,
 [data-theme="light"] .main-stage,

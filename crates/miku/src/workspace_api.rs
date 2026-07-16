@@ -130,6 +130,8 @@ pub struct SearchQuery {
     pub q: String,
     /// Maximum result count, capped by the server.
     pub limit: Option<usize>,
+    /// Search scope: all, title, or content.
+    pub scope: Option<String>,
 }
 
 /// Search result returned by the read API.
@@ -299,11 +301,16 @@ pub async fn search(
 ) -> Result<Json<SearchResponse>, AppError> {
     let query_text = query.q.trim().to_string();
     let limit = query.limit.unwrap_or(50).clamp(1, 100);
+    let scope = match query.scope.as_deref() {
+        Some("title") => SearchScope::Title,
+        Some("content" | "body") => SearchScope::Body,
+        _ => SearchScope::All,
+    };
     let hits = state
         .application
         .search(SearchRequest {
             query: query_text.clone(),
-            scope: SearchScope::All,
+            scope,
             limit,
         })
         .await

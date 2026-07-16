@@ -47,6 +47,7 @@ export type ContextModel = {
 };
 
 export type SearchItem = { id: string; path: string; title: string; icon: string; snippet: string };
+export type SearchScope = "all" | "title" | "content";
 export type TagModel = { tag: string; count: number };
 export type TagNoteModel = { path: string; title: string; mtime: number };
 export type SaveNoteInput = { body: string; title: string; expectedRevision: NonNullable<NoteModel["revision"]> };
@@ -159,9 +160,9 @@ export function createWorkspaceClient(onSource: (source: ApiSource) => void) {
           backlinks: response.backlinks.map((backlink) => backlink.path)
         } satisfies ContextModel;
       }),
-    search: (query: string): Promise<SearchItem[]> =>
+    search: (query: string, scope: SearchScope = "all"): Promise<SearchItem[]> =>
       live(async () => {
-        const params = new URLSearchParams({ q: query, limit: "20" });
+        const params = new URLSearchParams({ q: query, limit: "20", scope });
         const response = await request<Schemas["SearchResponse"]>(`/api/v1/search?${params}`);
         return response.results.map((result) => ({ ...result, id: result.path, icon: "□" }));
       }),

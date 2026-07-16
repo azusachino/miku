@@ -2,7 +2,7 @@ import { lazy, Suspense, useEffect, useMemo, useReducer, useState } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Navigate, Route, Routes, useLocation, useNavigate, useParams } from "react-router-dom";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
-import { createWorkspaceClient, subscribeToWorkspaceEvents, type ApiSource, type NoteModel, type TreeNodeModel } from "./api";
+import { createWorkspaceClient, subscribeToWorkspaceEvents, type ApiSource, type NoteModel, type SearchScope, type TreeNodeModel } from "./api";
 import { initialWorkspaceState, workspaceReducer } from "./workspace";
 const MarkdownEditor = lazy(() => import("./MarkdownEditor"));
 const MarkdownReader = lazy(() => import("./MarkdownReader").then((module) => ({ default: module.MarkdownReader })));
@@ -43,10 +43,10 @@ function WorkspaceMenu() {
       </DropdownMenu.Trigger>
       <DropdownMenu.Portal>
         <DropdownMenu.Content className="workspace-menu" sideOffset={6} align="end">
-          <DropdownMenu.Item className="workspace-menu-item">Expand all notes</DropdownMenu.Item>
-          <DropdownMenu.Item className="workspace-menu-item">Collapse all notes</DropdownMenu.Item>
+          <DropdownMenu.Item className="workspace-menu-item" disabled>Expand all notes</DropdownMenu.Item>
+          <DropdownMenu.Item className="workspace-menu-item" disabled>Collapse all notes</DropdownMenu.Item>
           <DropdownMenu.Separator className="workspace-menu-separator" />
-          <DropdownMenu.Item className="workspace-menu-item">Workspace settings</DropdownMenu.Item>
+          <DropdownMenu.Item className="workspace-menu-item" disabled>Workspace settings</DropdownMenu.Item>
         </DropdownMenu.Content>
       </DropdownMenu.Portal>
     </DropdownMenu.Root>
@@ -135,7 +135,7 @@ function LaunchBar({
         <span className="brand-glyph">m</span>
         <span>miku</span>
       </div>
-      <button className="vault-switcher" aria-label="Switch vault">
+      <button className="vault-switcher" aria-label="Switch vault" disabled title="Multiple vaults are not enabled yet">
         <span className="status-dot" /> personal vault <Icon>⌄</Icon>
       </button>
       <div className="launch-search">
@@ -153,10 +153,10 @@ function LaunchBar({
         <button className="quiet-button" aria-label="Toggle theme" onClick={onToggleTheme}>
           {theme === "dark" ? "☼" : "☾"}
         </button>
-        <button className="quiet-button" aria-label="Quick add">
+        <button className="quiet-button" aria-label="Quick add" disabled title="Note creation is not enabled yet">
           <Icon>＋</Icon>
         </button>
-        <button className="avatar" aria-label="Account">
+        <button className="avatar" aria-label="Account" disabled title="Accounts are not enabled yet">
           A
         </button>
       </div>
@@ -198,16 +198,16 @@ function Sidebar({
       </div>
       <Tree notes={notes} nodes={nodes} activeId={activeId} onSelect={onSelect} hoisted={hoisted} client={client} />
       <div className="sidebar-bottom">
-        <button className="sidebar-link">
+        <button className="sidebar-link" disabled title="Bookmarks are not enabled yet">
           <Icon>⌁</Icon> Bookmarks <span>3</span>
         </button>
-        <button className="sidebar-link">
+        <button className="sidebar-link" disabled title="Recent notes are not enabled yet">
           <Icon>◷</Icon> Recent <span>12</span>
         </button>
         <button className="sidebar-link" onClick={onTags}>
           <Icon>#</Icon> Tags
         </button>
-        <button className="sidebar-link">
+        <button className="sidebar-link" disabled title="Settings are not enabled yet">
           <Icon>⚙</Icon> Settings
         </button>
       </div>
@@ -246,7 +246,7 @@ function Tabs({
           </div>
         );
       })}
-      <button className="new-tab" aria-label="New tab">
+      <button className="new-tab" aria-label="New tab" disabled title="New notes are not enabled yet">
         ＋
       </button>
     </div>
@@ -304,7 +304,7 @@ function NotePane({
               {editing ? "Read" : "Edit"}
             </button>
           )}
-          <button className="toolbar-button">•••</button>
+          <button className="toolbar-button" disabled title="More note actions are not enabled yet">•••</button>
         </div>
       </div>
       <div className="note-scroll">
@@ -416,6 +416,7 @@ function WorkspaceScreen() {
   const [state, dispatch] = useReducer(workspaceReducer, initialWorkspaceState);
   const [query, setQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
+  const [searchScope, setSearchScope] = useState<SearchScope>("all");
   const [noteCache, setNoteCache] = useState<Record<string, NoteModel>>({});
   const [apiSource, setApiSource] = useState<ApiSource>("connecting");
   const [theme, setTheme] = useState<"dark" | "light">(() => (localStorage.getItem("miku-theme") as "dark" | "light" | null) ?? "dark");
@@ -429,7 +430,7 @@ function WorkspaceScreen() {
   const tree = useQuery({ queryKey: ["tree"], queryFn: () => client.tree() });
   const note = useQuery({ queryKey: ["note", activeId], queryFn: () => client.note(activeId), enabled: Boolean(activeId) });
   const context = useQuery({ queryKey: ["context", activeId], queryFn: () => client.context(activeId), enabled: Boolean(activeId) });
-  const results = useQuery({ queryKey: ["search", query], queryFn: () => client.search(query), enabled: searchOpen });
+  const results = useQuery({ queryKey: ["search", query, searchScope], queryFn: () => client.search(query, searchScope), enabled: searchOpen });
   const isWorkspaceRoot = location.pathname === "/";
   const visibleTree = useMemo(() => [...(tree.data ?? []), ...(context.data?.children ?? [])], [context.data?.children, tree.data]);
   const treeNotes = useMemo(() => visibleTree.map((node) => ({ ...node.note, icon: "□", updated: "indexed", body: "", backlinks: [], tags: [] })), [visibleTree]);
@@ -513,6 +514,22 @@ function WorkspaceScreen() {
           <div className="search-popover-head">
             <span>Quick search</span>
             <button onClick={() => setSearchOpen(false)}>Esc</button>
+          </div>
+          <div className="search-scopes" role="group" aria-label="Search scope">
+            {([
+              ["all", "All"],
+              ["title", "Title"],
+              ["content", "Content"]
+            ] as const).map(([value, label]) => (
+              <button
+                key={value}
+                className={`search-scope ${searchScope === value ? "is-active" : ""}`}
+                aria-pressed={searchScope === value}
+                onClick={() => setSearchScope(value)}
+              >
+                {label}
+              </button>
+            ))}
           </div>
           {results.isLoading ? (
             <div className="search-empty">Searching…</div>
