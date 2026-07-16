@@ -7,11 +7,53 @@ import { initialWorkspaceState, workspaceReducer } from "./workspace";
 const MarkdownEditor = lazy(() => import("./MarkdownEditor"));
 const MarkdownReader = lazy(() => import("./MarkdownReader").then((module) => ({ default: module.MarkdownReader })));
 
-function Icon({ children }: { children: string }) {
+type ActionIconName = "arrow-up" | "arrow-up-right" | "chevron-down" | "chevron-left" | "chevron-right" | "close" | "hash" | "moon" | "search" | "settings" | "sun" | "tree" | "clock";
+
+function ActionIcon({ name }: { name: ActionIconName }) {
+  const paths: Record<ActionIconName, ReactNode> = {
+    "arrow-up": <path d="m5 11 3-3 3 3M8 8v8" />,
+    "arrow-up-right": <path d="M5 15 15 5m0 0H8m7 0v7" />,
+    "chevron-down": <path d="m5 7 3 3 3-3" />,
+    "chevron-left": <path d="m10 5-3 3 3 3" />,
+    "chevron-right": <path d="m6 5 3 3-3 3" />,
+    close: <path d="m5 5 6 6m0-6-6 6" />,
+    hash: <path d="M6 3 5 13M10 3 9 13M3 7h9M2 10h9" />,
+    moon: <path d="M10 3a5 5 0 1 0 3 9 5 5 0 0 1-3-9Z" />,
+    search: (
+      <>
+        <circle cx="7.5" cy="7.5" r="3.5" />
+        <path d="m10 10 3 3" />
+      </>
+    ),
+    settings: (
+      <>
+        <circle cx="8" cy="8" r="2.4" />
+        <path d="m8 2 1 .7.3 1.4 1.3.7 1.4-.3.7 1.2-.8 1.2.2 1.4 1.1.9-.5 1.3-1.4-.1-1.1.9-.1 1.4-1.4.5-.8-1.2H6.6l-.8 1.2-1.4-.5-.1-1.4-1.1-.9-1.4.1-.5-1.3 1.1-.9.2-1.4-.8-1.2.7-1.2 1.4.3 1.3-.7.3-1.4L6 2.7Z" />
+      </>
+    ),
+    sun: (
+      <>
+        <circle cx="8" cy="8" r="2.5" />
+        <path d="M8 1v2m0 10v2M1 8h2m10 0h2M3 3l1.5 1.5m7 7L13 13m0-10-1.5 1.5m-7 7L3 13" />
+      </>
+    ),
+    tree: (
+      <>
+        <path d="M8 2v12M5 5h6M4 9h8M3 13h10" />
+        <path d="M2 15h12" />
+      </>
+    ),
+    clock: (
+      <>
+        <circle cx="8" cy="8" r="5.5" />
+        <path d="M8 5v3l2 1" />
+      </>
+    )
+  };
   return (
-    <span className="icon" aria-hidden="true">
-      {children}
-    </span>
+    <svg className="action-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+      {paths[name]}
+    </svg>
   );
 }
 
@@ -117,7 +159,7 @@ function Tree({
           aria-current={activeId === note.id ? "page" : undefined}
           aria-expanded={isFolder ? isExpanded : undefined}
         >
-          <span className="tree-caret">{isFolder ? (isExpanded ? "⌄" : "›") : "·"}</span>
+          <span className="tree-caret">{isFolder ? <ActionIcon name={isExpanded ? "chevron-down" : "chevron-right"} /> : <span aria-hidden="true">·</span>}</span>
           <FileIcon kind={isFolder ? "folder" : "note"} />
           <span className="tree-label">{title}</span>
         </button>
@@ -156,7 +198,7 @@ function LaunchBar({
         <span className="status-dot" /> miku_docs
       </div>
       <div className="launch-search">
-        <Icon>⌕</Icon>
+        <ActionIcon name="search" />
         <input
           value={query}
           onChange={(event) => setQuery(event.target.value)}
@@ -168,7 +210,7 @@ function LaunchBar({
       </div>
       <div className="launch-actions">
         <button className="quiet-button" aria-label="Toggle theme" onClick={onToggleTheme}>
-          {theme === "dark" ? "☼" : "☾"}
+          <ActionIcon name={theme === "dark" ? "sun" : "moon"} />
         </button>
       </div>
     </header>
@@ -203,7 +245,7 @@ function Sidebar({
       <div className="sidebar-toolbar">
         <span className="eyebrow">Workspace</span>
         <button className={`tool-button ${hoisted ? "is-on" : ""}`} onClick={onToggleHoist} aria-label="Toggle hoisted note">
-          ⌃
+          <ActionIcon name="tree" />
         </button>
       </div>
       <div className="tree-heading">
@@ -213,13 +255,13 @@ function Sidebar({
       <Tree notes={notes} nodes={nodes} activeId={activeId} onSelect={onSelect} hoisted={hoisted} client={client} />
       <div className="sidebar-bottom">
         <button className="sidebar-link" onClick={onRecent}>
-          <Icon>◷</Icon> Recent
+          <ActionIcon name="clock" /> Recent
         </button>
         <button className="sidebar-link" onClick={onTags}>
-          <Icon>#</Icon> Tags
+          <ActionIcon name="hash" /> Tags
         </button>
         <button className="sidebar-link" onClick={onSettings}>
-          <Icon>⚙</Icon> Settings
+          <ActionIcon name="settings" /> Settings
         </button>
       </div>
     </aside>
@@ -252,7 +294,7 @@ function Tabs({
               {note.title}
             </button>
             <button className="tab-close" onClick={() => onClose(id)} aria-label={`Close ${note.title}`}>
-              ×
+              <ActionIcon name="close" />
             </button>
           </div>
         );
@@ -387,7 +429,7 @@ function ContextPanel({
   if (!open)
     return (
       <button className="context-reopen" onClick={onToggle} aria-label="Open context panel">
-        ‹
+        <ActionIcon name="chevron-left" />
       </button>
     );
   return (
@@ -395,7 +437,7 @@ function ContextPanel({
       <div className="context-header">
         <span className="eyebrow">Context</span>
         <button className="tool-button" onClick={onToggle} aria-label="Close context panel">
-          ›
+          <ActionIcon name="chevron-right" />
         </button>
       </div>
       <div className="context-section">
@@ -407,7 +449,7 @@ function ContextPanel({
             <button className="relation-row" key={backlink} onClick={() => onNavigate(backlink)}>
               <span className="relation-line" />
               <span>{backlink}</span>
-              <Icon>↗</Icon>
+              <ActionIcon name="arrow-up-right" />
             </button>
           ))
         ) : (
@@ -423,7 +465,7 @@ function ContextPanel({
             <button className="relation-row" key={parent.path} onClick={() => onNavigate(parent.path)}>
               <span className="relation-line" />
               <span>{parent.title}</span>
-              <Icon>↑</Icon>
+              <ActionIcon name="arrow-up" />
             </button>
           ))
         ) : (
