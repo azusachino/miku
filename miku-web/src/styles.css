@@ -180,6 +180,8 @@ input:focus-visible {
   border-radius: 8px;
   background: var(--panel-2);
   color: var(--muted);
+  text-align: left;
+  cursor: text;
 }
 .launch-search:focus-within {
   border-color: var(--accent);
@@ -196,6 +198,15 @@ input:focus-visible {
 }
 .launch-search input:focus-visible {
   box-shadow: none;
+}
+.launch-search-placeholder {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  color: var(--faint);
+  font-size: 0.8rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .launch-search kbd,
 .status-bar kbd {
@@ -936,6 +947,40 @@ input:focus-visible {
 .utility-row small,
 .utility-card small { margin-top: 4px; color: var(--faint); font-size: 0.68rem; }
 .utility-status { color: var(--cyan); font-size: 0.7rem; }
+.utility-list-sentinel { height: 1px; }
+.settings-overlay {
+  position: fixed;
+  z-index: 20;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: color-mix(in srgb, var(--bg) 62%, transparent);
+  backdrop-filter: blur(8px);
+}
+.settings-dialog {
+  width: min(440px, 100%);
+  overflow: hidden;
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  background: var(--panel);
+  box-shadow: 0 24px 80px color-mix(in srgb, var(--bg) 72%, transparent);
+}
+.settings-dialog-header,
+.settings-dialog-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 17px 19px;
+}
+.settings-dialog-header { border-bottom: 1px solid var(--line); }
+.settings-dialog-header h2 { margin: 6px 0 0; color: var(--text-strong); font-size: 1.1rem; }
+.settings-dialog-row + .settings-dialog-row { border-top: 1px solid var(--line); }
+.settings-dialog-row strong,
+.settings-dialog-row small { display: block; }
+.settings-dialog-row strong { color: var(--text); font-size: 0.76rem; }
+.settings-dialog-row small { margin-top: 4px; color: var(--faint); font-size: 0.68rem; }
 .search-scopes {
   display: flex;
   gap: 5px;

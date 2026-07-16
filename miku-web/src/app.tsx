@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useReducer, useState, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, useMemo, useReducer, useRef, useState, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Navigate, Route, Routes, useLocation, useNavigate, useParams } from "react-router-dom";
 import { createWorkspaceClient, sortTreeNodes, subscribeToWorkspaceEvents, type ApiSource, type NoteModel, type SearchScope, type TreeNodeModel } from "./api";
@@ -172,16 +172,12 @@ function Tree({
 }
 
 function LaunchBar({
-  query,
-  setQuery,
   onSearch,
   theme,
   onToggleTheme,
   indexPhase,
   noteCount
 }: {
-  query: string;
-  setQuery: (value: string) => void;
   onSearch: () => void;
   theme: "dark" | "light";
   onToggleTheme: () => void;
@@ -198,17 +194,11 @@ function LaunchBar({
       <div className="workspace-source" title={`${noteCount ?? 0} notes · index ${indexPhase ?? "unknown"}`}>
         <span className="status-dot" /> miku_docs
       </div>
-      <div className="launch-search">
+      <button className="launch-search" onClick={onSearch} aria-label="Open quick search">
         <ActionIcon name="search" />
-        <input
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          onKeyDown={(event) => event.key === "Enter" && onSearch()}
-          placeholder="Search notes, tags, commands"
-          aria-label="Search notes"
-        />
+        <span className="launch-search-placeholder">Search notes, tags, commands</span>
         <kbd>⌘ K</kbd>
-      </div>
+      </button>
       <div className="launch-actions">
         <button className="quiet-button" aria-label="Toggle theme" onClick={onToggleTheme}>
           <ActionIcon name={theme === "dark" ? "sun" : "moon"} />
@@ -293,7 +283,7 @@ function Tabs({
         return (
           <div key={id} className={`tab ${activeId === id ? "is-active" : ""}`} role="tab" aria-selected={activeId === id}>
             <button onClick={() => onSelect(id)}>
-              <FileIcon />
+              <span className="tab-icon" aria-hidden="true">{note.icon}</span>
               {note.title}
             </button>
             <button className="tab-close" onClick={() => onClose(id)} aria-label={`Close ${note.title}`}>
@@ -366,7 +356,7 @@ function NotePane({
       </div>
       <div className="note-scroll">
         <div className="note-header">
-          <FileIcon large />
+          <span className="note-icon-large" aria-hidden="true">{note.icon}</span>
           <div className="note-heading-copy">
             <div className="note-heading-status">
               <span className="eyebrow">Markdown note</span>
@@ -516,16 +506,18 @@ function WorkspaceScreen() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchScope, setSearchScope] = useState<SearchScope>("all");
   const [searchSelection, setSearchSelection] = useState(-1);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [noteCache, setNoteCache] = useState<Record<string, NoteModel>>({});
   const [apiSource, setApiSource] = useState<ApiSource>("connecting");
   const [theme, setTheme] = useState<Theme>(readTheme);
+  const searchPanelRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const location = useLocation();
   const routeId = useParams()["*"];
   const queryClient = useQueryClient();
   const client = useMemo(() => createWorkspaceClient(setApiSource), []);
   const isNoteRoute = location.pathname.startsWith("/p/");
-  const utilityRoute = location.pathname.startsWith("/tags") ? "tags" : location.pathname === "/recent" ? "recent" : location.pathname === "/settings" ? "settings" : undefined;
+  const utilityRoute = location.pathname.startsWith("/tags") ? "tags" : location.pathname === "/recent" ? "recent" : undefined;
   const activeId = isNoteRoute ? routeId ?? state.activeId : "";
   const workspace = useQuery({ queryKey: ["workspace"], queryFn: client.workspace });
   const tree = useQuery({ queryKey: ["tree"], queryFn: () => client.tree() });
@@ -586,10 +578,21 @@ function WorkspaceScreen() {
         setSearchOpen(true);
       } else if (event.key === "Escape" && searchOpen) {
         setSearchOpen(false);
+      } else if (event.key === "Escape" && settingsOpen) {
+        setSettingsOpen(false);
       }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
+  }, [searchOpen, settingsOpen]);
+
+  useEffect(() => {
+    if (!searchOpen) return;
+    const closeOnOutsidePointer = (event: PointerEvent) => {
+      if (!searchPanelRef.current?.contains(event.target as Node)) setSearchOpen(false);
+    };
+    document.addEventListener("pointerdown", closeOnOutsidePointer);
+    return () => document.removeEventListener("pointerdown", closeOnOutsidePointer);
   }, [searchOpen]);
 
   useEffect(() => {
@@ -625,9 +628,9 @@ function WorkspaceScreen() {
   const secondaryNote = notes.find((candidate) => candidate.id === (state.tabs.find((tab) => tab !== activeId) ?? "welcome")) ?? activeNote;
   return (
     <div className="app-shell" data-theme={theme} data-ui-state-version={UI_STATE_VERSION}>
-      <LaunchBar query={query} setQuery={setQuery} onSearch={openSearch} theme={theme} onToggleTheme={toggleTheme} indexPhase={workspace.data?.indexPhase} noteCount={workspace.data?.noteCount} />
+      <LaunchBar onSearch={openSearch} theme={theme} onToggleTheme={toggleTheme} indexPhase={workspace.data?.indexPhase} noteCount={workspace.data?.noteCount} />
       {searchOpen && (
-        <div className="search-popover" data-region="quick-open">
+        <div className="search-popover" ref={searchPanelRef} data-region="quick-open">
           <div className="search-popover-head">
             <span>Quick search</span>
             <button onClick={() => setSearchOpen(false)}>Esc</button>
@@ -710,7 +713,7 @@ function WorkspaceScreen() {
           client={client}
           onTags={() => navigate("/tags")}
           onRecent={() => navigate("/recent")}
-          onSettings={() => navigate("/settings")}
+          onSettings={() => setSettingsOpen(true)}
           noteCount={workspace.data?.noteCount ?? 0}
         />
         <main className="main-stage">
@@ -763,6 +766,7 @@ function WorkspaceScreen() {
           </footer>
         </main>
       </div>
+      {settingsOpen && <SettingsDialog theme={theme} onToggleTheme={toggleTheme} onClose={() => setSettingsOpen(false)} />}
     </div>
   );
 }
@@ -783,25 +787,27 @@ function WorkspaceUtility({
   const tag = route === "tags" && wildcard ? decodeURIComponent(wildcard) : "";
   const tags = useQuery({ queryKey: ["tags"], queryFn: client.tags, enabled: route === "tags" });
   const tagNotes = useQuery({ queryKey: ["tag-notes", tag], queryFn: () => client.tagNotes(tag), enabled: route === "tags" && Boolean(tag) });
+  const [tagLimit, setTagLimit] = useState(10);
+  const tagSentinelRef = useRef<HTMLDivElement>(null);
   const recent = route === "recent" ? (JSON.parse(localStorage.getItem("miku-recent") ?? "[]") as string[]).slice(0, 20) : [];
+  const visibleTags = tags.data?.slice(0, tagLimit) ?? [];
+  useEffect(() => setTagLimit(10), [tags.data]);
+  useEffect(() => {
+    if (route !== "tags" || tag || !tagSentinelRef.current) return;
+    const observer = new IntersectionObserver((entries) => {
+      if (entries[0]?.isIntersecting) setTagLimit((current) => Math.min(current + 10, tags.data?.length ?? current));
+    }, { rootMargin: "120px" });
+    observer.observe(tagSentinelRef.current);
+    return () => observer.disconnect();
+  }, [route, tag, tags.data]);
   return (
     <div className="workspace-utility" data-theme={theme}>
       <div className="utility-page-header">
         <div>
-          <span className="eyebrow">{route === "settings" ? "Configuration" : route === "recent" ? "History" : "Index"}</span>
-          <h1>{route === "settings" ? "Settings" : route === "recent" ? "Recent notes" : tag ? `#${tag}` : "Tags"}</h1>
-          <p>{route === "settings" ? "Workspace preferences and source information." : route === "recent" ? "Notes opened most recently in this browser." : "Browse indexed Markdown notes by tag."}</p>
+          <h1>{route === "recent" ? "Recent notes" : tag ? `#${tag}` : "Tags"}</h1>
+          <p>{route === "recent" ? "Notes opened most recently in this browser." : "Browse indexed Markdown notes by tag."}</p>
         </div>
-        <button className="toolbar-button" onClick={onToggleTheme}>
-          <ActionIcon name={theme === "dark" ? "sun" : "moon"} /> {theme === "dark" ? "Light" : "Dark"}
-        </button>
       </div>
-      {route === "settings" && (
-        <div className="utility-card-list">
-          <div className="utility-card"><div><strong>Theme</strong><small>Current appearance: {theme}</small></div><button className="toolbar-button" onClick={onToggleTheme}>Use {theme === "dark" ? "light" : "dark"} theme</button></div>
-          <div className="utility-card"><div><strong>Source</strong><small>miku_docs Markdown filesystem</small></div><span className="utility-status">authoritative</span></div>
-        </div>
-      )}
       {route === "recent" && (
         <div className="utility-list">
           {recent.length ? recent.map((path) => <button className="utility-row" key={path} onClick={() => navigate(`/p/${path}`)}><strong>{path.split("/").pop()}</strong><small>{path}</small></button>) : <p className="search-empty">No recent notes yet.</p>}
@@ -809,9 +815,22 @@ function WorkspaceUtility({
       )}
       {route === "tags" && (
         <div className="utility-list">
-          {tag ? tagNotes.isLoading ? <p>Loading notes…</p> : tagNotes.data?.map((note) => <button className="utility-row" key={note.path} onClick={() => navigate(`/p/${note.path}`)}><strong>{note.title}</strong><small>{note.path}</small></button>) : tags.isLoading ? <p>Loading tags…</p> : tags.data?.map((item) => <button className="utility-row" key={item.tag} onClick={() => navigate(`/tags/${encodeURIComponent(item.tag)}`)}><strong>#{item.tag}</strong><small>{item.count} notes</small></button>)}
+          {tag ? tagNotes.isLoading ? <p>Loading notes…</p> : tagNotes.data?.map((note) => <button className="utility-row" key={note.path} onClick={() => navigate(`/p/${note.path}`)}><strong>{note.title}</strong><small>{note.path}</small></button>) : tags.isLoading ? <p>Loading tags…</p> : visibleTags.map((item) => <button className="utility-row" key={item.tag} onClick={() => navigate(`/tags/${encodeURIComponent(item.tag)}`)}><strong>#{item.tag}</strong><small>{item.count} notes</small></button>)}
+          {!tag && <div ref={tagSentinelRef} className="utility-list-sentinel" aria-hidden="true" />}
         </div>
       )}
+    </div>
+  );
+}
+
+function SettingsDialog({ theme, onToggleTheme, onClose }: { theme: Theme; onToggleTheme: () => void; onClose: () => void }) {
+  return (
+    <div className="settings-overlay" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
+      <section className="settings-dialog" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+        <div className="settings-dialog-header"><div><span className="eyebrow">Workspace</span><h2 id="settings-title">Settings</h2></div><button className="quiet-button" onClick={onClose} aria-label="Close settings"><ActionIcon name="close" /></button></div>
+        <div className="settings-dialog-row"><div><strong>Theme</strong><small>Current appearance: {theme}</small></div><button className="toolbar-button" onClick={onToggleTheme}>Use {theme === "dark" ? "light" : "dark"} theme</button></div>
+        <div className="settings-dialog-row"><div><strong>Source</strong><small>miku_docs Markdown filesystem</small></div><span className="utility-status">authoritative</span></div>
+      </section>
     </div>
   );
 }
@@ -823,7 +842,7 @@ export function App() {
       <Route path="/n/*" element={<LegacyNoteRedirect />} />
       <Route path="/tags/*" element={<WorkspaceScreen />} />
       <Route path="/recent" element={<WorkspaceScreen />} />
-      <Route path="/settings" element={<WorkspaceScreen />} />
+      <Route path="/settings" element={<Navigate replace to="/" />} />
       <Route path="*" element={<WorkspaceScreen />} />
     </Routes>
   );
@@ -850,7 +869,7 @@ function UtilityShell({ children, theme, onToggleTheme }: { children: ReactNode;
   const [query, setQuery] = useState("");
   return (
     <div className="app-shell utility-shell" data-theme={theme} data-ui-state-version={UI_STATE_VERSION}>
-      <LaunchBar query={query} setQuery={setQuery} onSearch={() => navigate("/")} theme={theme} onToggleTheme={onToggleTheme} />
+      <LaunchBar onSearch={() => navigate("/")} theme={theme} onToggleTheme={onToggleTheme} />
       <div className="utility-shell-content" data-region={shellRegions[2]}>
         {children}
       </div>
