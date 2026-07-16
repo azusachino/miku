@@ -264,7 +264,8 @@ function NotePane({
   readonly,
   indexPhase,
   client,
-  onTagSearch
+  onTagSearch,
+  onNavigatePath
 }: {
   note: NoteModel;
   split: boolean;
@@ -273,8 +274,8 @@ function NotePane({
   indexPhase?: string;
   client: ReturnType<typeof createWorkspaceClient>;
   onTagSearch: (tag: string) => void;
+  onNavigatePath: (path: string) => void;
 }) {
-  const navigate = useNavigate();
   const [draft, setDraft] = useState(note.body);
   const [saveState, setSaveState] = useState("saved");
   const [editing, setEditing] = useState(false);
@@ -301,7 +302,7 @@ function NotePane({
           {note.path.split("/").map((part, index, parts) => (
             <span key={`${part}-${index}`}>
               {index > 0 && <span aria-hidden="true">/</span>}
-              <button className="breadcrumb-link" disabled={index === parts.length - 1} onClick={() => navigate(`/p/${parts.slice(0, index + 1).join("/")}`)} aria-current={index === parts.length - 1 ? "page" : undefined}>
+              <button className="breadcrumb-link" disabled={index === parts.length - 1} onClick={() => onNavigatePath(parts.slice(0, index + 1).join("/"))} aria-current={index === parts.length - 1 ? "page" : undefined}>
                 {index === parts.length - 1 ? note.title : part}
               </button>
             </span>
@@ -609,6 +610,19 @@ function WorkspaceScreen() {
     const recent = JSON.parse(localStorage.getItem("miku-recent") ?? "[]") as string[];
     localStorage.setItem("miku-recent", JSON.stringify([id, ...recent.filter((path) => path !== id)].slice(0, 20)));
   };
+  const openBreadcrumbPath = async (path: string) => {
+    try {
+      const children = await client.tree(path);
+      const indexNote = children.find((node) => node.kind === "markdown" && node.path === `${path}/index.md`);
+      if (indexNote) {
+        select(indexNote.path);
+        return;
+      }
+    } catch {
+      // An unavailable folder should never become a broken note route.
+    }
+    navigate("/");
+  };
   const searchTag = (tag: string) => {
     navigate(`/tags/${encodeURIComponent(tag)}`);
   };
@@ -739,6 +753,7 @@ function WorkspaceScreen() {
                   indexPhase={workspace.data?.indexPhase}
                   client={client}
                   onTagSearch={searchTag}
+                  onNavigatePath={openBreadcrumbPath}
                 />
                 {state.split && (
                   <NotePane
@@ -749,6 +764,7 @@ function WorkspaceScreen() {
                     indexPhase={workspace.data?.indexPhase}
                     client={client}
                     onTagSearch={searchTag}
+                    onNavigatePath={openBreadcrumbPath}
                   />
                 )}
                 <ContextPanel
