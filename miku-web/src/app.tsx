@@ -618,6 +618,15 @@ function WorkspaceScreen() {
     const recent = JSON.parse(localStorage.getItem("miku-recent") ?? "[]") as string[];
     localStorage.setItem("miku-recent", JSON.stringify([id, ...recent.filter((path) => path !== id)].slice(0, 20)));
   };
+  const closeTab = (id: string) => {
+    const remaining = state.tabs.filter((tab) => tab !== id);
+    dispatch({ type: "close", id });
+    if (!remaining.length) {
+      navigate("/");
+    } else if (state.activeId === id) {
+      navigate(`/p/${remaining.at(-1)}`);
+    }
+  };
   const openBreadcrumbPath = (path: string) => {
     if (!path) {
       navigate("/");
@@ -760,7 +769,7 @@ function WorkspaceScreen() {
             <WorkspaceUtility route={utilityRoute} theme={theme} onToggleTheme={toggleTheme} client={client} />
           ) : (
             <>
-              <Tabs notes={notes} tabs={state.tabs} activeId={activeId} activeNote={activeNote} onSelect={select} onClose={(id) => dispatch({ type: "close", id })} />
+              <Tabs notes={notes} tabs={state.tabs} activeId={activeId} activeNote={activeNote} onSelect={select} onClose={closeTab} />
               <div className="content-stage">
                 <NotePane
                   note={activeNote}
