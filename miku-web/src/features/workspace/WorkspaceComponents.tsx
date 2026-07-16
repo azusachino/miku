@@ -126,12 +126,12 @@ export function Tabs({
   return (
     <div className="tabs" role="tablist">
       {tabs.map((id) => {
-        const note = id === activeId ? activeNote : (notes.find((item) => item.id === id) ?? { id, title: "Loading note…", icon: "file-text" });
+        const note = id === activeId ? activeNote : (notes.find((item) => item.id === id) ?? { id, title: "Loading note…", path: id, icon: "file-text" });
         return (
           <div key={id} className={`tab ${activeId === id ? "is-active" : ""}`} role="tab" aria-selected={activeId === id}>
-            <button onClick={() => onSelect(id)}>
+            <button className="tab-label" onClick={() => onSelect(id)} title={note.path}>
               <NoteIcon value={note.icon} />
-              {note.title}
+              <span>{note.title}</span>
             </button>
             <button className="tab-close" onClick={() => onClose(id)} aria-label={`Close ${note.title}`}>
               <ActionIcon name="close" />
@@ -166,11 +166,11 @@ export function NotePane({
 }) {
   const [draft, setDraft] = useState(note.body);
   const [saveState, setSaveState] = useState("saved");
-  const [editing, setEditing] = useState(false);
+  const [sourceMode, setSourceMode] = useState(false);
   useEffect(() => {
     setDraft(note.body);
     setSaveState("saved");
-    setEditing(false);
+    setSourceMode(false);
   }, [note.id, note.body]);
   const save = async () => {
     if (readonly || !note.revision) return;
@@ -178,7 +178,7 @@ export function NotePane({
     try {
       await client.saveNote(note.id, { body: draft, title: note.title, expectedRevision: note.revision });
       setSaveState("saved");
-      setEditing(false);
+      setSourceMode(false);
     } catch (error) {
       setSaveState(error instanceof Error && error.message.startsWith("409") ? "conflict" : "save failed");
     }
@@ -206,9 +206,14 @@ export function NotePane({
             {split ? "Single pane" : "Split pane"}
           </button>
           {!readonly && (
-            <button className="toolbar-button" onClick={() => setEditing((value) => !value)}>
-              {editing ? "Read" : "Edit"}
-            </button>
+            <div className="view-switch" role="tablist" aria-label="Note view">
+              <button className={!sourceMode ? "is-active" : ""} onClick={() => setSourceMode(false)} role="tab" aria-selected={!sourceMode}>
+                Reader
+              </button>
+              <button className={sourceMode ? "is-active" : ""} onClick={() => setSourceMode(true)} role="tab" aria-selected={sourceMode}>
+                Source
+              </button>
+            </div>
           )}
         </div>
       </div>
@@ -226,7 +231,7 @@ export function NotePane({
               <li>
                 <span className="meta-label">status</span>{" "}
                 <span className="saved-state">
-                  <span className="saved-dot" /> {editing ? saveState : "reading"}
+                  <span className="saved-dot" /> {sourceMode ? saveState : "reading"}
                 </span>
               </li>
               <li>
@@ -246,12 +251,13 @@ export function NotePane({
             </ul>
           </div>
         </div>
-        {editing ? (
+        {sourceMode ? (
           <Suspense fallback={<div className="markdown-editor-loading">Loading editor…</div>}>
             <MarkdownEditor
               noteId={note.id}
               value={draft}
               readOnly={readonly}
+              theme={theme}
               onChange={(value) => {
                 setDraft(value);
                 setSaveState("unsaved");
@@ -263,9 +269,9 @@ export function NotePane({
             <MarkdownReader value={note.body} path={note.path} theme={theme} />
           </Suspense>
         )}
-        {editing && (
+        {sourceMode && (
           <div className="note-footer">
-            <span>Markdown source</span>
+            <span>Markdown source · changes stay local until saved</span>
             <button className="toolbar-button" disabled={readonly || !note.revision || saveState === "saving…"} onClick={save}>
               Save
             </button>

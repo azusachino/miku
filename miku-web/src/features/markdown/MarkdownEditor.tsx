@@ -1,22 +1,35 @@
 import { useEffect, useRef, useState } from "react";
 import { markdown } from "@codemirror/lang-markdown";
-import { EditorState } from "@codemirror/state";
-import { oneDark } from "@codemirror/theme-one-dark";
+import { EditorState, type Extension } from "@codemirror/state";
 import { minimalSetup, EditorView } from "codemirror";
+import type { Theme } from "../../shared/ui";
 
 type MarkdownEditorProps = {
   noteId: string;
   value: string;
   readOnly?: boolean;
+  theme?: Theme;
   onChange?: (value: string) => void;
 };
+
+function editorTheme(): Extension {
+  return EditorView.theme({
+    "&": { backgroundColor: "var(--surface-code)", color: "var(--text)" },
+    ".cm-content": { caretColor: "var(--accent)" },
+    ".cm-cursor, .cm-dropCursor": { borderLeftColor: "var(--accent)" },
+    ".cm-selectionBackground, ::selection": { backgroundColor: "var(--accent-soft)" },
+    ".cm-gutters": { color: "var(--faint)", backgroundColor: "var(--surface-code)" },
+    ".cm-activeLine, .cm-activeLineGutter": { backgroundColor: "var(--panel-2)" },
+    ".cm-scroller": { fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }
+  });
+}
 
 /**
  * Source-first editor boundary. CodeMirror owns the document after mount;
  * React only replaces it when the selected note changes. This avoids copying
  * the complete document through component state on every keystroke.
  */
-export function MarkdownEditor({ noteId, value, readOnly = false, onChange }: MarkdownEditorProps) {
+export function MarkdownEditor({ noteId, value, readOnly = false, theme = "dark", onChange }: MarkdownEditorProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const noteIdRef = useRef(noteId);
@@ -35,7 +48,7 @@ export function MarkdownEditor({ noteId, value, readOnly = false, onChange }: Ma
       extensions: [
         minimalSetup,
         markdown(),
-        oneDark,
+        editorTheme(),
         EditorView.editable.of(!readOnly),
         EditorState.readOnly.of(readOnly),
         EditorView.updateListener.of((update) => {
