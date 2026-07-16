@@ -891,6 +891,7 @@ input:focus-visible {
 }
 .toc-list { display: grid; gap: 3px; }
 .toc-item {
+  display: block;
   min-width: 0;
   overflow: hidden;
   padding: 4px 0;
@@ -902,6 +903,9 @@ input:focus-visible {
   font-size: 0.67rem;
 }
 .toc-item:hover { color: var(--text); }
+.markdown-reader h2,
+.markdown-reader h3,
+.markdown-reader h4 { scroll-margin-top: 18px; }
 .toc-level-3 { padding-left: 10px; }
 .toc-level-4 { padding-left: 20px; }
 .context-tag {

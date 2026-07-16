@@ -441,7 +441,7 @@ function ContextPanel({
       <div className="context-section">
         <div className="context-title">On this page <span>{noteHeadings(note.body).length}</span></div>
         {noteHeadings(note.body).length ? <nav className="toc-list" aria-label="Table of contents">
-          {noteHeadings(note.body).map((heading) => <button className={`toc-item toc-level-${heading.level}`} key={heading.id} onClick={() => document.getElementById(heading.id)?.scrollIntoView({ behavior: "smooth", block: "start" })}>{heading.text}</button>)}
+          {noteHeadings(note.body).map((heading) => <a className={`toc-item toc-level-${heading.level}`} href={`#${heading.id}`} key={heading.id}>{heading.text}</a>)}
         </nav> : <p className="context-empty">No headings in this note.</p>}
       </div>
       <div className="context-section">
