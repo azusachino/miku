@@ -85,6 +85,7 @@ def integration() -> None:
 PUBLISH_ORDER = (
     "miku-domain",
     "miku-markdown",
+    "miku-vault",
     "miku-indexer",
     "miku-index-memory",
     "miku-index-sqlite",

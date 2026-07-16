@@ -72,7 +72,7 @@ sequenceDiagram
   B->>H: PUT /api/v1/notes/Foo.md (markdown body + revision)
   H->>FS: write Foo.md.tmp + fsync (miku_docs/)
   H->>FS: rename to Foo.md (atomic, miku_docs/)
-  H-->>B: 200 note response; watcher schedules reindex
+  H-->>B: 200 note response, watcher schedules reindex
   Note over H,PG: handler does NOT touch the index
   FS-->>W: modify event (Foo.md)
   W->>W: debounce ~200ms

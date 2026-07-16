@@ -197,7 +197,7 @@ export function MarkdownReader({ value, path = "", theme = "dark" }: { value: st
             </h4>
           ),
           code: ({ className, children, node: _node, ...props }) => {
-            const source = String(children).replace(/\n$/, "");
+            const source = textContent(children).replace(/\n$/, "");
             if (/\blanguage-mermaid\b/.test(className ?? "")) return <MermaidChart source={source} theme={theme} />;
             return (
               <code className={className} {...props}>
