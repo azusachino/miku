@@ -22,7 +22,7 @@ Miku Note is a personal wiki with a deliberately small persistence model:
 - The index is derived state. Delete it and Miku can rebuild it from Markdown.
 - Reading is the primary experience: switching pages keeps the shell, styles, and JavaScript in place.
 - Editing is explicit, with atomic saves and a background filesystem watcher.
-- The server is written in Rust and the frontend is server-rendered HTML with a small amount of progressive enhancement.
+- The server is written in Rust and the frontend is a separate React/Vite project.
 
 This makes the vault easy to inspect, back up, version, or edit with another tool. Miku does not require a hosted account or a proprietary data format.
 
@@ -35,12 +35,12 @@ This makes the vault easy to inspect, back up, version, or edit with another too
 | Knowledge graph | Backlinks, linked mentions, tags, and paginated tag views                                              |
 | Search          | Metadata quick-switch plus embedded full-text content search powered by Rust's grep/ignore crates      |
 | Editing         | Browser editor, inline reader editing, preview, atomic writes, and conflict-aware saves                |
-| Runtime         | Rebuildable memory/Tantivy projection by default; optional SQLite, Postgres, and Valkey profiles       |
+| Runtime         | MemoryIndex/Tantivy hot projection by default; optional SQLite/Postgres durability and Valkey shared cache |
 | UX              | Light/dark themes, reading-width modes, lazy editor/highlighter loading, and a focused command palette |
 
 ## Quick start
 
-The default development path needs Nix with flakes. It uses the rebuildable local memory/Tantivy projection and does not need Postgres or SQLite.
+The default development path uses SQLite as the durable projection and MemoryIndex/Tantivy as the hot projection. PostgreSQL and Valkey are optional infrastructure layers; Valkey is a shared cache, not a replacement for Tantivy.
 
 ```bash
 git clone https://github.com/azusachino/miku.git
@@ -49,8 +49,7 @@ nix develop           # enter the devShell (rust, bun, uv, postgres, …)
 make run              # build the Tailwind CSS with bun, then run the server
 ```
 
-`make run` depends on the `css` target: it runs `bun install --frozen-lockfile` and `bun run css` to compile `static/tailwind.input.css` → `static/tailwind.generated.css` before `cargo run`. `bun`
-comes from the Nix devShell, so no separate Node/Bun install is needed. The generated stylesheet is committed, so a plain `cargo run` also works if you have not changed any CSS.
+The native local stack is started with `uv run python scripts/dev.py`, which launches Rust and Vite together. `bun` comes from the Nix devShell, so no separate Node/Bun install is needed.
 
 Open <http://127.0.0.1:3000>. The default content root is `miku_docs/`; put a Markdown file there and refresh the page after the watcher indexes it.
 
@@ -69,7 +68,7 @@ The useful local switches are:
 
 | Variable             | Default                        | Purpose                                                    |
 | -------------------- | ------------------------------ | ---------------------------------------------------------- |
-| `MIKU_INDEX_BACKEND` | `memory`                       | Select the rebuildable memory/Tantivy or legacy backend    |
+| `MIKU_INDEX_BACKEND` | `sqlite`                       | Select the durable SQLite/Postgres or explicit memory backend             |
 | `MIKU_INDEX_PATH`    | `miku_docs/.miku-index.sqlite` | Location of the local derived index                        |
 | `MIKU_BIND`          | `0.0.0.0:3000`                 | Address exposed by the HTTP server                         |
 | `MIKU_READONLY`      | unset                          | Deploy the reader without write operations                 |
@@ -84,7 +83,7 @@ deployment.
 ```text
 Markdown files + assets
           │
-          ├── reader/editor ──> server-rendered HTML ──> browser shell
+          ├── reader/editor ──> React/Vite browser shell
           │
           └── filesystem watcher ──> derived index
                                       ├── links and backlinks

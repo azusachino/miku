@@ -19,6 +19,9 @@ pub use workspace::{FileWorkspaceService, WorkspaceService, WorkspaceServiceErro
 pub mod application;
 pub use application::FileMikuApplication;
 
+mod composition;
+pub use composition::compose_projections;
+
 pub mod ports;
 pub use ports::{
     ApplicationError, DocumentSource, FileNode, FileNodeKind, FileTree, FileTreeRequest,
@@ -46,7 +49,7 @@ pub enum RuntimeConfig {
 
 /// Resolve the runtime selected by the process environment.
 pub fn resolve_runtime() -> StoreResult<RuntimeConfig> {
-    let backend = std::env::var("MIKU_INDEX_BACKEND").unwrap_or_else(|_| "memory".to_string());
+    let backend = std::env::var("MIKU_INDEX_BACKEND").unwrap_or_else(|_| "sqlite".to_string());
     let runtime = match backend.as_str() {
         "memory" => RuntimeConfig::Memory,
         "sqlite" => RuntimeConfig::Sqlite {
@@ -231,15 +234,16 @@ pub async fn compose_index(config: RuntimeConfig) -> StoreResult<IndexApi> {
             }
         }
         RuntimeConfig::Sqlite { path } => {
-            #[cfg(feature = "sqlite")]
+            #[cfg(all(feature = "sqlite", feature = "memory"))]
             {
-                let store = miku_index_sqlite::SqliteIndex::open(&path).await?;
-                Ok(IndexApi::from_store(Arc::new(store)))
+                let durable = Arc::new(miku_index_sqlite::SqliteIndex::open(&path).await?);
+                let hot = Arc::new(miku_index_memory::MemoryIndex::new());
+                Ok(compose_projections(durable, hot))
             }
-            #[cfg(not(feature = "sqlite"))]
+            #[cfg(not(all(feature = "sqlite", feature = "memory")))]
             {
                 let _ = path;
-                Err(missing_feature("SQLite", "sqlite"))
+                Err(missing_feature("SQLite + MemoryIndex", "memory,sqlite"))
             }
         }
         RuntimeConfig::Postgres { database_url } => {

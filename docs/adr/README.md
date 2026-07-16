@@ -48,6 +48,7 @@ this folder.
 | [0014](0014-native-local-backend.md)           | Native local backend                           | Superseded | 2026-07-14 |
 | [0015](0015-derived-unlinked-mention-index.md) | Derived unlinked-mention index                 | Accepted   | 2026-07-14 |
 | [0016](0016-sqlite-local-index.md)             | SQLite (sqlx) local index                      | Superseded | 2026-07-15 |
+| [0017](0017-composed-projections.md)           | Composed durable and hot projections           | Accepted   | 2026-07-16 |
 | [0017](0017-web-markdown-workspace.md)         | Web Markdown workspace and file-based note graph | Accepted | 2026-07-15 |
 
 Staged (proposed, not yet verified) in `docs/decisions.md`: none outstanding.

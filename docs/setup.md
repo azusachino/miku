@@ -7,7 +7,7 @@
 
 ## Native dev stack (no containers — Linux & macOS)
 
-The default path is the local memory/Tantivy projection and needs no database service:
+The default path is SQLite durability with a MemoryIndex/Tantivy hot projection:
 
 ```bash
 make run
@@ -24,7 +24,7 @@ make db-down      # stop Postgres
 make db-reset     # stop + delete .pgdata (index is rebuilt from miku_docs/**/*.md)
 ```
 
-The app defaults to the rebuildable Rust-built memory/Tantivy projection. `MIKU_INDEX_BACKEND=sqlite` remains available for the legacy local index; `make dev` selects the explicit Postgres profile and sets `DATABASE_URL=postgres://miku@localhost:55432/miku`
+The crate default features include both the rebuildable Rust-built MemoryIndex/Tantivy projection and SQLite. The runtime defaults to the composed SQLite + MemoryIndex tier. `MIKU_INDEX_BACKEND=memory` remains available for an explicit disposable run. `make dev` selects the explicit Postgres profile and sets `DATABASE_URL=postgres://miku@localhost:55432/miku`
 (trust auth, no password); migrations run on startup. Override with `MIKU_INDEX_BACKEND=…`, `MIKU_INDEX_PATH=…`, `PGPORT=…`, `PGDATA=…`, or `DATABASE_URL=…`.
 
 ## Remote access (LAN / Tailscale)
@@ -50,7 +50,7 @@ export MIKU_INDEX_BACKEND=postgres
 ```bash
 nix develop       # enter the devShell (provisions all tools)
 make css          # build static/tailwind.generated.css via bun (bun run css)
-make run          # build Tailwind CSS (bun) then run the server (default memory/Tantivy projection)
+make run          # run the native local stack (default memory/Tantivy projection)
 make check                             # default fmt + lint + tests
 make check-all-features                # all Cargo features
 make check-integration                 # optional service-backed probes
@@ -74,18 +74,19 @@ written to `.artifacts/ux/` (ignored).
 
 ## Containers (Postgres/Valkey scale profile only)
 
-Containers are only for the service-backed **scale profile** — the default `memory` runtime is a pure local binary (`make run`), so it needs no image. The image (`Containerfile`) is built
-with the `postgres,valkey` features and pairs the app with a Postgres service via `compose.yml`.
+Containers are only for the service-backed **scale profile** — the default `memory` runtime is a pure local binary (`make run`), so it needs no image. Podman and Podman Compose are intentionally host-provided tools, not Nix prerequisites.
+
+The Compose profile runs PostgreSQL 18 and Valkey 9 with the `postgres-valkey` Miku feature set. Prepare Podman (including its VM on macOS) yourself, then run the complete lifecycle experiment through uv:
 
 ```bash
-make stack-up          # podman compose up -d (Postgres + app on postgres backend)
-make stack-build       # rebuild + recreate the miku image
-make stack-logs        # follow logs
-make stack-down        # stop the stack
+make compose-experiments # build, start, smoke-test, and tear down
+# or inspect it manually:
+podman-compose up -d --build
+podman-compose logs -f
+podman-compose down
 ```
 
-`COMPOSE` defaults to `podman compose`; there is no hard Docker requirement. Override for Docker Desktop: `COMPOSE="docker compose" make stack-up` (Docker needs `-f Containerfile`, which `compose.yml`
-already sets via `dockerfile:`). The native stack above is preferred for day-to-day local development.
+The native stack above is preferred for day-to-day local development. Docker Compose can still be used when its compatibility with `compose.yml` is verified separately.
 
 ## Database
 

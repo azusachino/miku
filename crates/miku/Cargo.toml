@@ -1,0 +1,45 @@
+[package]
+name = "miku"
+version = "0.0.2"
+authors = ["azusachino <azusachino@duck.com>"]
+edition.workspace = true
+description = "A filesystem-owned personal Markdown wiki with browser editing and background indexing for backlinks, tags, and full-text search."
+readme = "../../README.md"
+license.workspace = true
+repository.workspace = true
+keywords = ["markdown", "wiki", "notes", "backlinks", "fulltext"]
+categories = ["text-processing", "web-programming"]
+include = ["src/**/*", "../../README.md", "../../LICENSE"]
+
+[dependencies]
+anyhow.workspace = true
+miku-domain = { version = "0.0.2", path = "../miku-domain" }
+miku-app = { version = "0.0.2", path = "../miku-app", default-features = false }
+miku-indexer = { version = "0.0.2", path = "../miku-indexer" }
+miku-vault = { version = "0.0.2", path = "../miku-vault" }
+axum.workspace = true
+chrono.workspace = true
+notify.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+tokio.workspace = true
+tokio-stream.workspace = true
+tower-http.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+utoipa.workspace = true
+
+[features]
+default = ["memory", "sqlite"]
+memory = ["miku-app/memory"]
+sqlite = ["miku-app/sqlite"]
+postgres = ["miku-app/postgres"]
+valkey = ["miku-app/valkey"]
+postgres-valkey = ["postgres", "valkey"]
+
+[dev-dependencies]
+miku-index-memory = { version = "0.0.2", path = "../miku-index-memory" }
+
+[lints]
+workspace = true
