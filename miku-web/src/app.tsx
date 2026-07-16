@@ -1,63 +1,16 @@
 import { lazy, Suspense, useEffect, useMemo, useReducer, useRef, useState, type ReactNode } from "react";
-import { ArrowUp } from "@phosphor-icons/react/dist/icons/ArrowUp";
-import { ArrowUpRight } from "@phosphor-icons/react/dist/icons/ArrowUpRight";
-import { BookOpen } from "@phosphor-icons/react/dist/icons/BookOpen";
-import { CaretDown } from "@phosphor-icons/react/dist/icons/CaretDown";
-import { CaretLeft } from "@phosphor-icons/react/dist/icons/CaretLeft";
-import { CaretRight } from "@phosphor-icons/react/dist/icons/CaretRight";
-import { CheckCircle } from "@phosphor-icons/react/dist/icons/CheckCircle";
-import { Clock } from "@phosphor-icons/react/dist/icons/Clock";
-import { FileText } from "@phosphor-icons/react/dist/icons/FileText";
-import { Folder } from "@phosphor-icons/react/dist/icons/Folder";
-import { GearSix } from "@phosphor-icons/react/dist/icons/GearSix";
-import { Hash } from "@phosphor-icons/react/dist/icons/Hash";
-import { MagnifyingGlass } from "@phosphor-icons/react/dist/icons/MagnifyingGlass";
-import { Moon } from "@phosphor-icons/react/dist/icons/Moon";
-import { Rocket } from "@phosphor-icons/react/dist/icons/Rocket";
-import { Sun } from "@phosphor-icons/react/dist/icons/Sun";
-import { TreeStructure } from "@phosphor-icons/react/dist/icons/TreeStructure";
-import { X } from "@phosphor-icons/react/dist/icons/X";
-import type { Icon } from "@phosphor-icons/react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Navigate, Route, Routes, useLocation, useNavigate, useParams } from "react-router-dom";
 import { createWorkspaceClient, sortTreeNodes, subscribeToWorkspaceEvents, type ApiSource, type BacklinkModel, type NoteModel, type SearchScope, type TreeNodeModel } from "./api";
-import { UI_STATE_VERSION, headingSlug, moveSearchSelection, readExpandedPaths, readTheme, shellRegions, writeExpandedPaths, writeTheme, type Theme } from "./ui";
+import { ActionIcon, NoteIcon } from "./workspaceIcons";
+import { WorkspaceTree } from "./WorkspaceTree";
+import { WorkspaceNotice } from "./WorkspaceNotice";
+import { useNoteRouteRecovery } from "./noteRoute";
+import { UI_STATE_VERSION, headingSlug, moveSearchSelection, readTheme, shellRegions, writeTheme, type Theme } from "./ui";
 import { initialWorkspaceState, workspaceReducer } from "./workspace";
 const MarkdownEditor = lazy(() => import("./MarkdownEditor"));
 const MarkdownReader = lazy(() => import("./MarkdownReader").then((module) => ({ default: module.MarkdownReader })));
 const INDEX_NOTE_PATH = "Index.md";
-
-type ActionIconName = "arrow-up" | "arrow-up-right" | "chevron-down" | "chevron-left" | "chevron-right" | "close" | "hash" | "moon" | "search" | "settings" | "sun" | "tree" | "clock";
-
-function ActionIcon({ name }: { name: ActionIconName }) {
-  const icons: Record<ActionIconName, Icon> = {
-    "arrow-up": ArrowUp,
-    "arrow-up-right": ArrowUpRight,
-    "chevron-down": CaretDown,
-    "chevron-left": CaretLeft,
-    "chevron-right": CaretRight,
-    close: X,
-    hash: Hash,
-    moon: Moon,
-    search: MagnifyingGlass,
-    settings: GearSix,
-    sun: Sun,
-    tree: TreeStructure,
-    clock: Clock
-  };
-  const IconComponent = icons[name];
-  return <IconComponent className="action-icon" size={16} weight="regular" aria-hidden="true" />;
-}
-
-function NoteIcon({ value = "file-text", large = false }: { value?: string; large?: boolean }) {
-  const icon = value.trim();
-  const isImage = /^(https?:\/\/|\/assets\/)/.test(icon);
-  if (isImage) return <img className={`note-icon-image ${large ? "is-large" : ""}`} src={icon} alt="" />;
-  const icons: Record<string, Icon> = { "file-text": FileText, note: FileText, book: BookOpen, "check-circle": CheckCircle, rocket: Rocket, folder: Folder };
-  const IconComponent = icons[icon.toLowerCase()] ?? FileText;
-  const isEmoji = !icons[icon.toLowerCase()] && !/^[a-z0-9-]+$/i.test(icon);
-  return isEmoji ? <span className={`note-icon-emoji ${large ? "is-large" : ""}`} aria-hidden="true">{icon}</span> : <IconComponent className={`note-icon-library ${large ? "is-large" : ""}`} size={large ? 25 : 16} weight="regular" aria-hidden="true" />;
-}
 
 function noteHeadings(markdown: string): { id: string; text: string; level: number }[] {
   const headings: { id: string; text: string; level: number }[] = [];
@@ -72,113 +25,6 @@ function noteHeadings(markdown: string): { id: string; text: string; level: numb
     headings.push({ id: count ? `${base}-${count}` : base, text, level: match[1].length });
   }
   return headings;
-}
-
-function Tree({
-  notes,
-  nodes,
-  activeId,
-  onSelect,
-  hoisted,
-  client
-}: {
-  notes: NoteModel[];
-  nodes: TreeNodeModel[];
-  activeId: string;
-  onSelect: (id: string) => void;
-  hoisted: boolean;
-  client: ReturnType<typeof createWorkspaceClient>;
-}) {
-  const noteMap = new Map(notes.map((note) => [note.id, note]));
-  const [expanded, setExpanded] = useState<Set<string>>(() => {
-    const persisted = readExpandedPaths();
-    return new Set(persisted.filter((path) => !persisted.some((parent) => parent !== path && path.startsWith(`${parent}/`))));
-  });
-  const [loaded, setLoaded] = useState<Record<string, TreeNodeModel[]>>({});
-  const roots = sortTreeNodes(nodes.filter((node) => node.parentId === null));
-
-  useEffect(() => {
-    if (!activeId || hoisted) return;
-    const ancestors = activeId
-      .split("/")
-      .slice(0, -1)
-      .map((_, index, parts) => parts.slice(0, index + 1).join("/"));
-    setExpanded((current) => {
-      const next = new Set(current);
-      ancestors.forEach((path) => next.add(path));
-      return next;
-    });
-  }, [activeId, hoisted]);
-
-  useEffect(() => {
-    writeExpandedPaths(expanded);
-  }, [expanded]);
-
-  useEffect(() => {
-    let cancelled = false;
-    const pending: TreeNodeModel[] = [];
-    const collect = (items: TreeNodeModel[]) => {
-      for (const node of items) {
-        if (node.kind !== "folder" || !expanded.has(node.path)) continue;
-        if (!loaded[node.path]) pending.push(node);
-        else collect(loaded[node.path]);
-      }
-    };
-    collect(roots);
-    if (!pending.length) return;
-    void Promise.all(pending.map(async (node) => [node.path, await client.tree(node.path)] as const)).then((entries) => {
-      if (cancelled) return;
-      setLoaded((current) => ({ ...current, ...Object.fromEntries(entries) }));
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [client, expanded, loaded, roots]);
-
-  const branch = (node: TreeNodeModel, depth: number) => {
-    const note = noteMap.get(node.noteId) ?? { ...node.note, icon: "file-text", updated: "unknown", body: "", backlinks: [], tags: [] };
-    const children = sortTreeNodes(loaded[node.path] ?? []);
-    const isFolder = node.kind === "folder";
-    const isExpanded = expanded.has(node.path);
-    const indexNote = children.find((child) => child.kind === "markdown" && child.path === `${node.path}/index.md`);
-    const title = isFolder ? (indexNote?.note.title ?? node.note.title) : note.title;
-    const toggleFolder = async () => {
-      if (isExpanded) {
-        setExpanded((current) => {
-          const next = new Set(current);
-          next.delete(node.path);
-          return next;
-        });
-        return;
-      }
-      if (!loaded[node.path]) {
-        const children = await client.tree(node.path);
-        setLoaded((current) => ({ ...current, [node.path]: children }));
-      }
-      setExpanded((current) => new Set(current).add(node.path));
-    };
-    return (
-      <div key={node.placementId} className="tree-branch">
-        <button
-          className={`tree-row ${activeId === note.id ? "is-active" : ""}`}
-          style={{ paddingLeft: `${14 + depth * 17}px` }}
-          onClick={() => {
-            if (isFolder) void toggleFolder();
-            else onSelect(node.path);
-          }}
-          aria-current={activeId === note.id ? "page" : undefined}
-          aria-expanded={isFolder ? isExpanded : undefined}
-        >
-          <span className="tree-caret">{isFolder ? <ActionIcon name={isExpanded ? "chevron-down" : "chevron-right"} /> : null}</span>
-          {isFolder ? <NoteIcon value="folder" /> : <NoteIcon value={note.icon} />}
-          <span className="tree-label">{title}</span>
-        </button>
-        {!hoisted && isExpanded && children.map((child) => branch(child, depth + 1))}
-      </div>
-    );
-  };
-
-  return <div className="tree-list">{roots.map((note) => branch(note, 0))}</div>;
 }
 
 function LaunchBar({
@@ -257,7 +103,7 @@ function Sidebar({
         <span>All notes</span>
         <span className="count-pill">{noteCount}</span>
       </div>
-      <Tree notes={notes} nodes={nodes} activeId={activeId} onSelect={onSelect} hoisted={hoisted} client={client} />
+      <WorkspaceTree notes={notes} nodes={nodes} activeId={activeId} onSelect={onSelect} hoisted={hoisted} client={client} />
       <div className="sidebar-bottom">
         <button className="sidebar-link" onClick={onRecent}>
           <ActionIcon name="clock" /> Recent
@@ -515,11 +361,11 @@ function WorkspaceScreen() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(() => Number(localStorage.getItem("miku-sidebar-width") ?? 244));
   const [contextWidth, setContextWidth] = useState(() => Number(localStorage.getItem("miku-context-width") ?? 235));
+  const [notice, setNotice] = useState<string | null>(null);
   const [noteCache, setNoteCache] = useState<Record<string, NoteModel>>({});
   const [apiSource, setApiSource] = useState<ApiSource>("connecting");
   const [theme, setTheme] = useState<Theme>(readTheme);
   const searchPanelRef = useRef<HTMLDivElement>(null);
-  const handledInvalidRoute = useRef<string | null>(null);
   const resizingSidebar = useRef(false);
   const resizingContext = useRef(false);
   const navigate = useNavigate();
@@ -561,22 +407,22 @@ function WorkspaceScreen() {
       tags: [],
       identityGenerated: false
     };
+  useNoteRouteRecovery({
+    activeId,
+    isNoteRoute,
+    isError: context.isError,
+    hasNote: Boolean(context.data?.note),
+    tabs: state.tabs,
+    dispatch,
+    navigate,
+    setNotice
+  });
+
   useEffect(() => {
-    if (!isNoteRoute || !activeId) {
-      handledInvalidRoute.current = null;
-      return;
-    }
-    if (context.isError) {
-      if (handledInvalidRoute.current === activeId) return;
-      handledInvalidRoute.current = activeId;
-      const fallback = state.tabs.find((tab) => tab !== activeId);
-      dispatch({ type: "close", id: activeId });
-      navigate(fallback ? `/p/${fallback}` : `/p/${INDEX_NOTE_PATH}`);
-      return;
-    }
-    handledInvalidRoute.current = null;
-    if (context.data?.note) dispatch({ type: "open", id: activeId });
-  }, [activeId, context.data?.note, context.isError, isNoteRoute, navigate, state.tabs]);
+    if (!notice) return;
+    const timeout = window.setTimeout(() => setNotice(null), 5000);
+    return () => window.clearTimeout(timeout);
+  }, [notice]);
 
   useEffect(() => {
     if (!isWorkspaceRoot || !tree.data) return;
@@ -786,6 +632,7 @@ function WorkspaceScreen() {
           )}
         </div>
       )}
+      <WorkspaceNotice message={notice} onDismiss={() => setNotice(null)} />
       <div className="workspace-layout" style={{ "--shell-sidebar-width": `${sidebarWidth}px`, "--shell-context-width": `${contextWidth}px` } as React.CSSProperties}>
         <Sidebar
           notes={notes}

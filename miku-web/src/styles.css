@@ -300,6 +300,7 @@ input:focus-visible {
   background: transparent;
   text-align: left;
   font-size: 0.76rem;
+  line-height: 1;
 }
 .tree-row:hover {
   color: var(--text);
@@ -311,11 +312,24 @@ input:focus-visible {
   box-shadow: inset 2px 0 var(--accent);
 }
 .tree-caret {
-  display: inline-grid;
-  place-items: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 12px;
   width: 12px;
+  height: 16px;
   color: var(--faint);
   font-size: 0.85rem;
+  line-height: 0;
+}
+.tree-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 16px;
+  width: 16px;
+  height: 16px;
+  line-height: 0;
 }
 .tree-label {
   overflow: hidden;
@@ -980,6 +994,32 @@ input:focus-visible {
   color: var(--faint);
   background: var(--panel);
   font-size: 0.62rem;
+}
+
+.workspace-notice {
+  position: fixed;
+  top: 70px;
+  right: 22px;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  max-width: min(420px, calc(100vw - 44px));
+  padding: 11px 12px 11px 15px;
+  border: 1px solid color-mix(in srgb, var(--folder) 55%, var(--border));
+  border-left: 3px solid var(--folder);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--text);
+  box-shadow: 0 12px 28px color-mix(in srgb, var(--ink) 18%, transparent);
+  font-size: 0.78rem;
+}
+
+.workspace-notice .quiet-button {
+  flex: 0 0 auto;
+  padding: 0 3px;
+  color: var(--muted);
+  font-size: 1rem;
 }
 .status-bar > span:first-child {
   display: flex;
