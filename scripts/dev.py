@@ -17,6 +17,8 @@ import signal
 import subprocess
 import sys
 import time
+import urllib.error
+import urllib.request
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -50,6 +52,24 @@ def stop(process: subprocess.Popen[bytes]) -> None:
         process.terminate()
 
 
+def wait_for_backend(backend: subprocess.Popen[bytes]) -> None:
+    deadline = time.monotonic() + 120
+    health_url = f"{BACKEND_URL}/healthz"
+    while time.monotonic() < deadline:
+        if backend.poll() is not None:
+            raise SystemExit(f"Miku backend exited before becoming ready: {backend.returncode}")
+        try:
+            with urllib.request.urlopen(health_url, timeout=2) as response:
+                if response.status == 200:
+                    print("Miku backend is listening; starting Vite.", flush=True)
+                    return
+        except (urllib.error.URLError, TimeoutError):
+            pass
+        time.sleep(0.25)
+    stop(backend)
+    raise SystemExit(f"Miku backend did not become reachable at {health_url}")
+
+
 def main() -> int:
     command_available("cargo")
     command_available("bun")
@@ -60,8 +80,10 @@ def main() -> int:
     environment.setdefault("MIKU_READONLY", "0")
 
     backend = spawn(["cargo", "run", "-p", "miku"], environment, ROOT)
+    processes = [backend]
+    wait_for_backend(backend)
     frontend = spawn(["bun", "run", "dev"], environment, ROOT / "miku-web")
-    processes = [backend, frontend]
+    processes.append(frontend)
 
     print(f"Miku backend:  {BACKEND_URL}", flush=True)
     print(f"Miku frontend: {FRONTEND_URL}", flush=True)
