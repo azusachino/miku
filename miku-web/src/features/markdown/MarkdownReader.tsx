@@ -9,7 +9,7 @@ import { remarkAlert } from "remark-github-blockquote-alert";
 import rehypeKatex from "rehype-katex";
 import remarkMath from "remark-math";
 import mermaid from "mermaid";
-import { headingSlug, type Theme } from "./ui";
+import { headingSlug, type Theme } from "../../shared/ui";
 import "katex/dist/katex.min.css";
 import lightSyntaxTheme from "prismjs/themes/prism.css?url";
 import darkSyntaxTheme from "prismjs/themes/prism-tomorrow.css?url";

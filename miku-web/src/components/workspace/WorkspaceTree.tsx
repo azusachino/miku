@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import { createWorkspaceClient, sortTreeNodes, type NoteModel, type TreeNodeModel } from "./api";
-import { readExpandedPaths, writeExpandedPaths } from "./ui";
-import { ActionIcon, NoteIcon } from "./workspaceIcons";
+import { createWorkspaceClient, sortTreeNodes, type NoteModel, type TreeNodeModel } from "../../features/workspace/api";
+import { readExpandedPaths, writeExpandedPaths } from "../../shared/ui";
+import { ActionIcon, NoteIcon } from "./icons";
 
 export function WorkspaceTree({ notes, nodes, activeId, onSelect, hoisted, client }: {
   notes: NoteModel[];

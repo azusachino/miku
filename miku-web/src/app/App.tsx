@@ -1,15 +1,15 @@
 import { lazy, Suspense, useEffect, useMemo, useReducer, useRef, useState, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Navigate, Route, Routes, useLocation, useNavigate, useParams } from "react-router-dom";
-import { createWorkspaceClient, sortTreeNodes, subscribeToWorkspaceEvents, type ApiSource, type BacklinkModel, type NoteModel, type SearchScope, type TreeNodeModel } from "./api";
-import { ActionIcon, NoteIcon } from "./workspaceIcons";
-import { WorkspaceTree } from "./WorkspaceTree";
-import { WorkspaceNotice } from "./WorkspaceNotice";
-import { useNoteRouteRecovery } from "./noteRoute";
-import { UI_STATE_VERSION, headingSlug, moveSearchSelection, readTheme, shellRegions, writeTheme, type Theme } from "./ui";
-import { initialWorkspaceState, workspaceReducer } from "./workspace";
-const MarkdownEditor = lazy(() => import("./MarkdownEditor"));
-const MarkdownReader = lazy(() => import("./MarkdownReader").then((module) => ({ default: module.MarkdownReader })));
+import { createWorkspaceClient, sortTreeNodes, subscribeToWorkspaceEvents, type ApiSource, type BacklinkModel, type NoteModel, type SearchScope, type TreeNodeModel } from "../features/workspace/api";
+import { ActionIcon, NoteIcon } from "../components/workspace/icons";
+import { WorkspaceTree } from "../components/workspace/WorkspaceTree";
+import { WorkspaceNotice } from "../components/workspace/WorkspaceNotice";
+import { useNoteRouteRecovery } from "../features/workspace/noteRoute";
+import { UI_STATE_VERSION, headingSlug, moveSearchSelection, readTheme, shellRegions, writeTheme, type Theme } from "../shared/ui";
+import { initialWorkspaceState, workspaceReducer } from "../features/workspace/state";
+const MarkdownEditor = lazy(() => import("../features/markdown/MarkdownEditor"));
+const MarkdownReader = lazy(() => import("../features/markdown/MarkdownReader").then((module) => ({ default: module.MarkdownReader })));
 const INDEX_NOTE_PATH = "Index.md";
 
 function noteHeadings(markdown: string): { id: string; text: string; level: number }[] {

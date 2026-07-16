@@ -1,6 +1,6 @@
 import { useEffect, useRef, type Dispatch } from "react";
 import type { NavigateFunction } from "react-router-dom";
-import type { WorkspaceAction } from "./workspace";
+import type { WorkspaceAction } from "./state";
 
 type NoteRouteRecoveryOptions = {
   activeId: string;

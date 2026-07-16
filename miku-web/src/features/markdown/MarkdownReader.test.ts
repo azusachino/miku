@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { extractInlineTags } from "./api";
+import { extractInlineTags } from "../workspace/api";
 import { expandInlineTags, expandWikiLinks, mermaidTheme, noteHref, resolveMarkdownHref } from "./MarkdownReader";
 
 describe("Markdown reader navigation", () => {

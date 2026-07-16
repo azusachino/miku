@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { initialWorkspaceState, workspaceReducer } from "./workspace";
+import { initialWorkspaceState, workspaceReducer } from "./state";
 
 describe("workspace reducer", () => {
   it("opens notes once and makes them active", () => {
