@@ -230,7 +230,18 @@ pub async fn note(
     Ok(Json(note_response(&document)))
 }
 
-#[utoipa::path(put, path = "/api/v1/notes/{id}", params(("id" = String, Path)), request_body = SaveNoteRequest, responses((status = 200, body = NoteResponse), (status = 403), (status = 404), (status = 409)))]
+#[utoipa::path(
+    put,
+    path = "/api/v1/notes/{id}",
+    params(("id" = String, Path)),
+    request_body = SaveNoteRequest,
+    responses(
+        (status = 200, body = NoteResponse),
+        (status = 403),
+        (status = 404),
+        (status = 409)
+    )
+)]
 pub async fn save_note(
     Path(id): Path<String>,
     State(state): State<AppState>,

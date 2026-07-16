@@ -273,7 +273,24 @@ pub(crate) async fn metrics(State(state): State<AppState>) -> impl IntoResponse 
         ("250000", 6),
     ];
     let mut body = format!(
-        "# HELP miku_process_uptime_seconds Process uptime.\n# TYPE miku_process_uptime_seconds gauge\nmiku_process_uptime_seconds {}\n# HELP miku_index_ready Whether the initial index reconcile has completed.\n# TYPE miku_index_ready gauge\nmiku_index_ready {}\n# HELP miku_http_requests_total Total HTTP responses.\n# TYPE miku_http_requests_total counter\nmiku_http_requests_total {}\n# HELP miku_http_request_duration_microseconds_sum Sum of HTTP response durations in microseconds.\n# TYPE miku_http_request_duration_microseconds_sum counter\nmiku_http_request_duration_microseconds_sum {}\n# HELP miku_http_request_duration_microseconds HTTP response duration distribution.\n# TYPE miku_http_request_duration_microseconds histogram\n",
+        concat!(
+            "# HELP miku_process_uptime_seconds Process uptime.\n",
+            "# TYPE miku_process_uptime_seconds gauge\n",
+            "miku_process_uptime_seconds {}\n",
+            "# HELP miku_index_ready Whether the initial index reconcile has completed.\n",
+            "# TYPE miku_index_ready gauge\n",
+            "miku_index_ready {}\n",
+            "# HELP miku_http_requests_total Total HTTP responses.\n",
+            "# TYPE miku_http_requests_total counter\n",
+            "miku_http_requests_total {}\n",
+            "# HELP miku_http_request_duration_microseconds_sum ",
+            "Sum of HTTP response durations in microseconds.\n",
+            "# TYPE miku_http_request_duration_microseconds_sum counter\n",
+            "miku_http_request_duration_microseconds_sum {}\n",
+            "# HELP miku_http_request_duration_microseconds ",
+            "HTTP response duration distribution.\n",
+            "# TYPE miku_http_request_duration_microseconds histogram\n"
+        ),
         metrics.started_at.elapsed().as_secs_f64(),
         u8::from(state.index_ready.load(Ordering::Relaxed)),
         metrics.requests_total.load(Ordering::Relaxed),
