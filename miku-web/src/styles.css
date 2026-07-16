@@ -286,14 +286,15 @@ input:focus-visible {
 }
 .tree-list {
   min-height: 0;
-  overflow-y: auto;
+  overflow: auto;
   padding: 0 7px;
 }
 .tree-row {
   display: flex;
   align-items: center;
   gap: 7px;
-  width: 100%;
+  width: max-content;
+  min-width: 100%;
   min-height: 32px;
   border-radius: 6px;
   color: var(--muted);
@@ -332,8 +333,7 @@ input:focus-visible {
   line-height: 0;
 }
 .tree-label {
-  overflow: hidden;
-  text-overflow: ellipsis;
+  overflow: visible;
   white-space: nowrap;
 }
 .sidebar-bottom {
@@ -710,6 +710,9 @@ input:focus-visible {
   background: var(--surface-code);
   font-size: 0.78rem;
   line-height: 1.65;
+}
+.markdown-reader pre code.hljs {
+  background: transparent !important;
 }
 .markdown-reader blockquote {
   padding: 3px 17px;

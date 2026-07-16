@@ -10,8 +10,9 @@ import rehypeKatex from "rehype-katex";
 import remarkMath from "remark-math";
 import mermaid from "mermaid";
 import { headingSlug, type Theme } from "./ui";
-import "highlight.js/styles/github-dark.css";
 import "katex/dist/katex.min.css";
+import lightSyntaxTheme from "highlight.js/styles/github.css?url";
+import darkSyntaxTheme from "highlight.js/styles/github-dark.css?url";
 
 const markdownSanitizeSchema = {
   ...defaultSchema,
@@ -116,10 +117,32 @@ function stripAdmonitionMarker(children: ReactNode): ReactNode {
   return Children.map(children, strip);
 }
 
+function SyntaxTheme({ theme }: { theme: Theme }) {
+  useEffect(() => {
+    const themes = [
+      { id: "miku-highlight-light", href: lightSyntaxTheme },
+      { id: "miku-highlight-dark", href: darkSyntaxTheme }
+    ];
+    for (const syntaxTheme of themes) {
+      let link = document.getElementById(syntaxTheme.id) as HTMLLinkElement | null;
+      if (!link) {
+        link = document.createElement("link");
+        link.id = syntaxTheme.id;
+        link.rel = "stylesheet";
+        link.href = syntaxTheme.href;
+        document.head.appendChild(link);
+      }
+      link.disabled = syntaxTheme.id !== `miku-highlight-${theme}`;
+    }
+  }, [theme]);
+  return null;
+}
+
 export function MarkdownReader({ value, path = "", theme = "dark" }: { value: string; path?: string; theme?: Theme }) {
   const navigate = useNavigate();
   return (
     <article className="markdown-reader">
+      <SyntaxTheme theme={theme} />
       <ReactMarkdown
         remarkPlugins={[remarkGfm, remarkMath, remarkAlert]}
         rehypePlugins={[rehypeRaw, [rehypeSanitize, markdownSanitizeSchema], rehypeHighlight, rehypeKatex]}
