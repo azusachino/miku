@@ -1,5 +1,5 @@
 ---
-id: ADR-0017
+id: ADR-0018
 title: Composed durable and hot projections
 slug: composed-projections
 status: Accepted
@@ -11,7 +11,7 @@ impacts: [crates/miku-domain, crates/miku-app, crates/miku-index-memory, crates/
 tags: [architecture, projections, tantivy, sqlite, valkey, postgres]
 ---
 
-# ADR-0017 — Composed durable and hot projections
+# ADR-0018 — Composed durable and hot projections
 
 ## Decision
 
