@@ -1,6 +1,6 @@
 [package]
 name = "miku"
-version = "0.0.2"
+version = "0.0.3"
 authors = ["azusachino <azusachino@duck.com>"]
 edition.workspace = true
 description = "A filesystem-owned personal Markdown wiki with browser editing and background indexing for backlinks, tags, and full-text search."
@@ -13,10 +13,10 @@ include = ["src/**/*", "../../README.md", "../../LICENSE"]
 
 [dependencies]
 anyhow.workspace = true
-miku-domain = { version = "0.0.2", path = "../miku-domain" }
-miku-app = { version = "0.0.2", path = "../miku-app", default-features = false }
-miku-indexer = { version = "0.0.2", path = "../miku-indexer" }
-miku-vault = { version = "0.0.2", path = "../miku-vault" }
+miku-domain = { version = "0.0.3", path = "../miku-domain" }
+miku-app = { version = "0.0.3", path = "../miku-app", default-features = false }
+miku-indexer = { version = "0.0.3", path = "../miku-indexer" }
+miku-vault = { version = "0.0.3", path = "../miku-vault" }
 axum.workspace = true
 chrono.workspace = true
 notify.workspace = true
@@ -39,7 +39,7 @@ valkey = ["miku-app/valkey"]
 postgres-valkey = ["postgres", "valkey"]
 
 [dev-dependencies]
-miku-index-memory = { version = "0.0.2", path = "../miku-index-memory" }
+miku-index-memory = { version = "0.0.3", path = "../miku-index-memory" }
 
 [lints]
 workspace = true

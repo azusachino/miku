@@ -117,7 +117,7 @@ Before opening a pull request, run `make check`. Keep user content, local indexe
 
 ## Project status
 
-Miku Note is an early, actively evolving project. The current milestone is `v0.0.2`; the user-facing changelog is [`miku_docs/Changelog.md`](miku_docs/Changelog.md). APIs, templates, and configuration
+Miku Note is an early, actively evolving project. The current milestone is `v0.0.3`; the user-facing changelog is [`miku_docs/Changelog.md`](miku_docs/Changelog.md). APIs, templates, and configuration
 may change while the core filesystem-first invariant remains stable.
 
 ## Contributing

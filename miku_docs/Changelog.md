@@ -10,6 +10,15 @@ updated: 2026-07-16
 
 User-facing changes to Miku Note are recorded here. See [[Index]] for the starting point and [[Features]] for the current product boundary. #release
 
+## v0.0.3 — file-based workspace (2026-07-16)
+
+- Added the persistent React workspace shell with a lazy file tree, scrollable tabs, breadcrumbs, quick search, tags, backlinks, context panels, and theme switching.
+- Added opt-in Markdown Source mode with CodeMirror, optimistic revision checks, direct path saves, and frontmatter-preserving body writes.
+- Added extensionless `/p/xxx` route normalization to `/p/xxx.md` and broader Prism/Refractor language support for modern documentation.
+- Added Mermaid, GitHub-style alerts, KaTeX math, table-of-contents navigation, lazy tags, and folder/file browsing to the reader surface.
+- Fixed language-less and highlighted code blocks so their contrast, padding, scrolling, and theme colors remain readable in both light and dark mode.
+- Split the Rust workspace into domain, vault, Markdown, index, cache, application, and HTTP layers with SQLite as the default durable projection.
+
 ## Unreleased — workspace cleanup (2026-07-16)
 
 - Replaced the former server-rendered/Alpine frontend description with the current React, Vite, Tailwind, Prism, Mermaid, and KaTeX architecture.

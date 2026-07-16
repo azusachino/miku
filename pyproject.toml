@@ -1,6 +1,6 @@
 [project]
 name = "miku-scripts"
-version = "0.0.1"
+version = "0.0.3"
 description = "Project automation and dev scripts for miku (run via `uv run`)."
 requires-python = ">=3.12"
 dependencies = [
