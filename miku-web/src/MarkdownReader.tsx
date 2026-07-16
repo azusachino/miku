@@ -8,14 +8,25 @@ import remarkGfm from "remark-gfm";
 import mermaid from "mermaid";
 import "highlight.js/styles/github-dark.css";
 
-function noteHref(target: string): string {
+export function noteHref(target: string): string {
   const trimmed = target.trim();
   const path = trimmed.endsWith(".md") ? trimmed : trimmed + ".md";
-  return "/p/" + encodeURIComponent(path);
+  return "/p/" + path.split("/").map(encodeURIComponent).join("/");
 }
 
-function expandWikiLinks(markdown: string): string {
-  return markdown.replace(/(?<!!)\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (_match, target: string, label?: string) => "[" + (label?.trim() || target.trim()) + "](" + noteHref(target) + ")");
+export function expandWikiLinks(markdown: string): string {
+  const withEmbeds = markdown.replace(/!\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (_match, target: string, label?: string) => `> Embedded note: [${label?.trim() || target.trim()}](${noteHref(target)})`);
+  return withEmbeds.replace(/(?<!!)\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (_match, target: string, label?: string) => "[" + (label?.trim() || target.trim()) + "](" + noteHref(target) + ")");
+}
+
+export function expandInlineTags(markdown: string): string {
+  const segments = markdown.split(/(```[\s\S]*?```|`[^`]*`)/g);
+  return segments
+    .map((segment, index) => {
+      if (index % 2 === 1) return segment;
+      return segment.replace(/(^|[\s(])#([A-Za-z][\w/-]*)/g, (_match, prefix: string, tag: string) => `${prefix}[#${tag}](/tags/${encodeURIComponent(tag)})`);
+    })
+    .join("");
 }
 
 function MermaidChart({ source }: { source: string }) {
@@ -62,7 +73,7 @@ export function MarkdownReader({ value }: { value: string }) {
         rehypePlugins={[rehypeRaw, rehypeSanitize, rehypeHighlight]}
         components={{
           a: ({ href, children, ...props }) => {
-            const internal = href?.startsWith("/p/");
+            const internal = href?.startsWith("/p/") || href?.startsWith("/tags/");
             return (
               <a
                 {...props}
@@ -97,7 +108,7 @@ export function MarkdownReader({ value }: { value: string }) {
           }
         }}
       >
-        {expandWikiLinks(value)}
+        {expandInlineTags(expandWikiLinks(value))}
       </ReactMarkdown>
     </article>
   );

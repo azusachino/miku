@@ -591,6 +591,13 @@ input:focus-visible {
 .markdown-reader a:hover {
   color: var(--text);
 }
+.markdown-reader a[href^="/tags/"] {
+  color: var(--cyan);
+  text-decoration-style: dotted;
+}
+.markdown-reader blockquote a {
+  font-weight: 600;
+}
 .markdown-reader code:not(pre code) {
   padding: 2px 5px;
   border-radius: 4px;
