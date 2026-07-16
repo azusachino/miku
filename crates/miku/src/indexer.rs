@@ -1,7 +1,10 @@
 use anyhow::Result;
 use miku_domain::{DocumentSignals, IndexReader, IndexWriter, PageIndex, PageSummary};
 use miku_indexer::{build_page_index, MentionMatcher};
-use notify::Watcher;
+use notify::{
+    event::{EventKind, ModifyKind},
+    Watcher,
+};
 use std::collections::{HashMap, HashSet};
 use std::env;
 use std::fs;
@@ -532,10 +535,20 @@ impl IndexerQueue {
         });
 
         let sender_for_watcher = sender.clone();
+        let reconcile_flag_for_watcher = Arc::clone(&reconcile_queued);
         let root_for_watcher = content_root.clone();
         let mut watcher = notify::RecommendedWatcher::new(
             move |result: Result<notify::Event, notify::Error>| match result {
                 Ok(event) => {
+                    let needs_reconcile = event.kind.is_remove()
+                        || matches!(event.kind, EventKind::Modify(ModifyKind::Name(_)))
+                        || event.paths.iter().any(|path| path.extension().is_none());
+                    if needs_reconcile {
+                        IndexerQueue::try_queue_reconcile(
+                            &sender_for_watcher,
+                            &reconcile_flag_for_watcher,
+                        );
+                    }
                     for path in event.paths {
                         if path.extension().is_some_and(|extension| extension == "md")
                             && !path.to_string_lossy().ends_with(".tmp")

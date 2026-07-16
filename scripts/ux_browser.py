@@ -42,6 +42,10 @@ def main() -> int:
         page.wait_for_timeout(700)
         if rows.count() == 0:
             raise AssertionError("workspace tree has no clickable rows")
+        if page.locator(".tree-row").filter(has_text="adr").count() != 1:
+            raise AssertionError("migrated ADR folder is missing from the vault tree")
+        if page.locator(".tree-row").filter(has_text="architecture").count() != 1:
+            raise AssertionError("migrated architecture note is missing from the vault tree")
         page.locator(".tree-row").filter(has_text="Sandbox").click()
         page.wait_for_url("**/p/Sandbox.md")
         page.locator(".note-scroll h1").filter(has_text="Sandbox").wait_for()
