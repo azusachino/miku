@@ -60,18 +60,29 @@ impl WorkspaceService for FileWorkspaceService {
         if self.readonly {
             return Err(WorkspaceServiceError::Readonly);
         }
-        let mut document = self
-            .vault
-            .scan()?
-            .into_iter()
-            .find(|document| document.note.id.as_str() == note_id)
-            .ok_or_else(|| WorkspaceServiceError::NotFound(note_id.to_string()))?;
+        let mut document = if note_id.ends_with(".md") {
+            match self.vault.read(note_id) {
+                Ok(document) => document,
+                Err(VaultError::Io(error)) if error.kind() == std::io::ErrorKind::NotFound => {
+                    return Err(WorkspaceServiceError::NotFound(note_id.to_string()));
+                }
+                Err(error) => return Err(error.into()),
+            }
+        } else {
+            self.vault
+                .scan()?
+                .into_iter()
+                .find(|document| document.note.id.as_str() == note_id)
+                .ok_or_else(|| WorkspaceServiceError::NotFound(note_id.to_string()))?
+        };
         if document.revision != expected_revision {
             return Err(WorkspaceServiceError::Conflict);
         }
         document.note.title = title.trim().to_string();
         document.body = body;
-        document.revision = self.vault.write(&document)?;
+        document.revision = self
+            .vault
+            .write_body_preserving_frontmatter(&document.note.source_path, &document.body)?;
         Ok(document)
     }
 
@@ -105,5 +116,31 @@ mod tests {
                 .await,
             Err(WorkspaceServiceError::NotFound(_))
         ));
+    }
+
+    #[tokio::test]
+    async fn path_save_reads_one_note_and_preserves_frontmatter_order() {
+        let root = tempfile::tempdir().unwrap();
+        let path = root.path().join("Notes/Today.md");
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        let frontmatter = "---\ntags: [one]\nid: note-1\ntitle: Today\n---\n";
+        std::fs::write(&path, format!("{frontmatter}body\n")).unwrap();
+        let vault = Arc::new(Vault::new(root.path()));
+        let expected_revision = vault.read("Notes/Today.md").unwrap().revision;
+        let service = FileWorkspaceService::new(vault, false);
+        let document = service
+            .save_note(
+                "Notes/Today.md",
+                "Today".into(),
+                "body\nappended\n".into(),
+                expected_revision,
+            )
+            .await;
+
+        assert!(document.is_ok());
+        assert_eq!(
+            std::fs::read_to_string(path).unwrap(),
+            format!("{frontmatter}body\nappended\n")
+        );
     }
 }

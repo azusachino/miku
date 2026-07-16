@@ -156,6 +156,28 @@ impl Vault {
         )?)
     }
 
+    /// Writes only the Markdown body while preserving the source frontmatter.
+    ///
+    /// Interactive source editing must not reorder or normalize a user's YAML
+    /// when the edit changed only the body. Structural migrations continue to
+    /// use [`Self::write`].
+    pub fn write_body_preserving_frontmatter(
+        &self,
+        path: &str,
+        body: &str,
+    ) -> Result<RevisionToken, VaultError> {
+        let path = VaultPath::new(path)?;
+        let file_path = self.file_path(&path);
+        let existing = fs::read_to_string(&file_path)?;
+        let raw = format!("{}{body}", frontmatter_prefix(&existing));
+        atomic_write(&file_path, raw.as_bytes())?;
+        let metadata = fs::metadata(file_path)?;
+        Ok(RevisionToken::new(
+            content_hash(&raw),
+            modified_seconds(&metadata)?,
+        )?)
+    }
+
     /// Creates a new document with a generated UUIDv4 identity.
     pub fn create(
         &self,
@@ -303,6 +325,28 @@ fn parse_document(path: &VaultPath, raw: &str, mtime: i64) -> Result<VaultDocume
         revision: RevisionToken::new(content_hash(raw), mtime)?,
         identity_generated,
     })
+}
+
+fn frontmatter_prefix(raw: &str) -> &str {
+    let opening_len = if raw.starts_with("---\n") {
+        4
+    } else if raw.starts_with("---\r\n") {
+        5
+    } else {
+        return "";
+    };
+    let rest = &raw[opening_len..];
+    let mut search_idx = 0;
+    while let Some(idx) = rest[search_idx..].find("\n---") {
+        let actual_idx = search_idx + idx;
+        let after = &rest[actual_idx + 4..];
+        if after.is_empty() || after.starts_with('\n') || after.starts_with('\r') {
+            let body_start = after.find('\n').map_or(after.len(), |index| index + 1);
+            return &raw[..opening_len + actual_idx + 4 + body_start];
+        }
+        search_idx = actual_idx + 4;
+    }
+    ""
 }
 
 fn serialize_document(note: &Note, body: &str) -> Result<String, VaultError> {
@@ -457,6 +501,25 @@ mod tests {
         assert!(!loaded.identity_generated);
         assert!(loaded.revision.content_hash != "pending");
         assert!(root.path().join("Notes/Today.md").exists());
+    }
+
+    #[test]
+    fn body_write_preserves_existing_frontmatter_bytes() {
+        let root = tempfile::tempdir().unwrap();
+        let path = root.path().join("Notes/Today.md");
+        let frontmatter = "---\nid: note-1\ntags: [one, two]\ntitle: Today\n---\n";
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(&path, format!("{frontmatter}original\n")).unwrap();
+        let vault = Vault::new(root.path());
+
+        vault
+            .write_body_preserving_frontmatter("Notes/Today.md", "original\nappended\n")
+            .unwrap();
+
+        assert_eq!(
+            fs::read_to_string(path).unwrap(),
+            format!("{frontmatter}original\nappended\n")
+        );
     }
 
     #[test]

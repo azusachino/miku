@@ -803,42 +803,23 @@ input:focus-visible {
   color: var(--accent-strong);
 }
 .markdown-editor {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
   overflow: hidden;
   border-top: 1px solid var(--reader-border);
   border-bottom: 1px solid var(--reader-border);
   background: var(--surface-code);
 }
-.markdown-editor-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  height: 36px;
-  padding: 0 13px;
-  border-bottom: 1px solid var(--line);
-  color: var(--muted);
-  font-size: 0.67rem;
-}
-.markdown-editor-header > span:first-child {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-}
-.editor-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 2px;
-  background: var(--accent);
-}
-.editor-state {
-  color: var(--faint);
-}
 .markdown-editor-surface {
-  min-height: 250px;
-  max-height: 60vh;
+  min-height: 0;
+  flex: 1;
   overflow: auto;
 }
 .markdown-editor-surface .cm-editor {
-  min-height: 250px;
+  height: 100%;
+  min-height: 0;
   background: var(--surface-code);
 }
 .markdown-editor-surface .cm-scroller {
@@ -860,6 +841,23 @@ input:focus-visible {
   margin-top: 14px;
   color: var(--faint);
   font-size: 0.64rem;
+}
+.note-scroll.is-source-mode {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  padding: 0 27px 20px;
+}
+.note-scroll.is-source-mode .note-header {
+  flex: 0 0 auto;
+  padding: 20px 0 16px;
+}
+.note-scroll.is-source-mode .markdown-editor {
+  width: 100%;
+  max-width: none;
+}
+.note-scroll.is-source-mode .note-footer {
+  flex: 0 0 auto;
 }
 .context-panel {
   position: relative;

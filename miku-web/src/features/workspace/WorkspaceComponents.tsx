@@ -217,7 +217,7 @@ export function NotePane({
           )}
         </div>
       </div>
-      <div className="note-scroll">
+      <div className={`note-scroll ${sourceMode ? "is-source-mode" : ""}`}>
         <div className="note-header">
           <span className="note-icon-large">
             <NoteIcon value={note.icon} large />

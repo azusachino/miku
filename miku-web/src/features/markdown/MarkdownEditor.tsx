@@ -82,12 +82,6 @@ export function MarkdownEditor({ noteId, value, readOnly = false, theme = "dark"
 
   return (
     <div className="markdown-editor" data-note-id={noteId} data-dirty={dirty || undefined}>
-      <div className="markdown-editor-header">
-        <span>
-          <span className="editor-dot" /> Markdown source
-        </span>
-        <span className="editor-state">{readOnly ? "readonly" : dirty ? "unsaved" : "saved"}</span>
-      </div>
       <div ref={hostRef} className="markdown-editor-surface" aria-label="Markdown source editor" />
     </div>
   );
