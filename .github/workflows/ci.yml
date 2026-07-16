@@ -12,5 +12,5 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: cachix/install-nix-action@v25
-      - run: make check
-      - run: make check-all-features
+      - run: nix develop --command make check
+      - run: nix develop --command make check-all-features
