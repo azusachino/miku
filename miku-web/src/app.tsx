@@ -1,7 +1,6 @@
 import { lazy, Suspense, useEffect, useMemo, useReducer, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Navigate, Route, Routes, useLocation, useNavigate, useParams } from "react-router-dom";
-import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { createWorkspaceClient, subscribeToWorkspaceEvents, type ApiSource, type NoteModel, type SearchScope, type TreeNodeModel } from "./api";
 import { initialWorkspaceState, workspaceReducer } from "./workspace";
 const MarkdownEditor = lazy(() => import("./MarkdownEditor"));
@@ -30,26 +29,6 @@ function FileIcon({ kind = "note", large = false }: { kind?: "note" | "folder"; 
         )}
       </svg>
     </span>
-  );
-}
-
-function WorkspaceMenu() {
-  return (
-    <DropdownMenu.Root>
-      <DropdownMenu.Trigger asChild>
-        <button className="tool-button" aria-label="Workspace options">
-          •••
-        </button>
-      </DropdownMenu.Trigger>
-      <DropdownMenu.Portal>
-        <DropdownMenu.Content className="workspace-menu" sideOffset={6} align="end">
-          <DropdownMenu.Item className="workspace-menu-item" disabled>Expand all notes</DropdownMenu.Item>
-          <DropdownMenu.Item className="workspace-menu-item" disabled>Collapse all notes</DropdownMenu.Item>
-          <DropdownMenu.Separator className="workspace-menu-separator" />
-          <DropdownMenu.Item className="workspace-menu-item" disabled>Workspace settings</DropdownMenu.Item>
-        </DropdownMenu.Content>
-      </DropdownMenu.Portal>
-    </DropdownMenu.Root>
   );
 }
 
@@ -121,23 +100,37 @@ function LaunchBar({
   setQuery,
   onSearch,
   theme,
-  onToggleTheme
+  onToggleTheme,
+  indexPhase,
+  noteCount
 }: {
   query: string;
   setQuery: (value: string) => void;
   onSearch: () => void;
   theme: "dark" | "light";
   onToggleTheme: () => void;
+  indexPhase?: string;
+  noteCount?: number;
 }) {
+  const [vaultOpen, setVaultOpen] = useState(false);
   return (
     <header className="launch-bar">
       <div className="brand-mark">
         <span className="brand-glyph">m</span>
         <span>miku</span>
       </div>
-      <button className="vault-switcher" aria-label="Switch vault" disabled title="Multiple vaults are not enabled yet">
-        <span className="status-dot" /> personal vault <Icon>⌄</Icon>
-      </button>
+      <div className="vault-control">
+        <button className="vault-switcher" aria-label="Open vault menu" onClick={() => setVaultOpen((open) => !open)} aria-expanded={vaultOpen}>
+          <span className="status-dot" /> personal vault <Icon>{vaultOpen ? "⌃" : "⌄"}</Icon>
+        </button>
+        {vaultOpen && (
+          <div className="vault-menu" role="menu">
+            <strong>personal vault</strong>
+            <small>miku_docs · {noteCount ?? 0} notes</small>
+            <span className={`vault-phase is-${(indexPhase ?? "indexing").toLowerCase()}`}>{indexPhase ?? "Indexing"}</span>
+          </div>
+        )}
+      </div>
       <div className="launch-search">
         <Icon>⌕</Icon>
         <input
@@ -153,12 +146,6 @@ function LaunchBar({
         <button className="quiet-button" aria-label="Toggle theme" onClick={onToggleTheme}>
           {theme === "dark" ? "☼" : "☾"}
         </button>
-        <button className="quiet-button" aria-label="Quick add" disabled title="Note creation is not enabled yet">
-          <Icon>＋</Icon>
-        </button>
-        <button className="avatar" aria-label="Account" disabled title="Accounts are not enabled yet">
-          A
-        </button>
       </div>
     </header>
   );
@@ -172,7 +159,9 @@ function Sidebar({
   hoisted,
   onToggleHoist,
   client,
-  onTags
+  onTags,
+  onRecent,
+  onSettings
 }: {
   notes: NoteModel[];
   nodes: TreeNodeModel[];
@@ -182,6 +171,8 @@ function Sidebar({
   onToggleHoist: () => void;
   client: ReturnType<typeof createWorkspaceClient>;
   onTags: () => void;
+  onRecent: () => void;
+  onSettings: () => void;
 }) {
   return (
     <aside className="sidebar">
@@ -190,7 +181,6 @@ function Sidebar({
         <button className={`tool-button ${hoisted ? "is-on" : ""}`} onClick={onToggleHoist} aria-label="Toggle hoisted note">
           ⌃
         </button>
-        <WorkspaceMenu />
       </div>
       <div className="tree-heading">
         <span>All notes</span>
@@ -198,16 +188,13 @@ function Sidebar({
       </div>
       <Tree notes={notes} nodes={nodes} activeId={activeId} onSelect={onSelect} hoisted={hoisted} client={client} />
       <div className="sidebar-bottom">
-        <button className="sidebar-link" disabled title="Bookmarks are not enabled yet">
-          <Icon>⌁</Icon> Bookmarks <span>3</span>
-        </button>
-        <button className="sidebar-link" disabled title="Recent notes are not enabled yet">
-          <Icon>◷</Icon> Recent <span>12</span>
+        <button className="sidebar-link" onClick={onRecent}>
+          <Icon>◷</Icon> Recent
         </button>
         <button className="sidebar-link" onClick={onTags}>
           <Icon>#</Icon> Tags
         </button>
-        <button className="sidebar-link" disabled title="Settings are not enabled yet">
+        <button className="sidebar-link" onClick={onSettings}>
           <Icon>⚙</Icon> Settings
         </button>
       </div>
@@ -246,9 +233,6 @@ function Tabs({
           </div>
         );
       })}
-      <button className="new-tab" aria-label="New tab" disabled title="New notes are not enabled yet">
-        ＋
-      </button>
     </div>
   );
 }
@@ -304,7 +288,6 @@ function NotePane({
               {editing ? "Read" : "Edit"}
             </button>
           )}
-          <button className="toolbar-button" disabled title="More note actions are not enabled yet">•••</button>
         </div>
       </div>
       <div className="note-scroll">
@@ -399,11 +382,11 @@ function ContextPanel({ note, open, onToggle, onNavigate }: { note: NoteModel; o
         </div>
       </div>
       <div className="context-section">
-        <div className="context-title">Activity</div>
+        <div className="context-title">Source</div>
         <div className="activity">
           <span className="activity-dot" />
           <div>
-            <strong>Saved locally</strong>
+            <strong>Markdown source</strong>
             <small>{note.updated}</small>
           </div>
         </div>
@@ -492,6 +475,8 @@ function WorkspaceScreen() {
     dispatch({ type: "open", id });
     navigate(`/p/${id}`);
     setSearchOpen(false);
+    const recent = JSON.parse(localStorage.getItem("miku-recent") ?? "[]") as string[];
+    localStorage.setItem("miku-recent", JSON.stringify([id, ...recent.filter((path) => path !== id)].slice(0, 20)));
   };
   const searchTag = (tag: string) => {
     navigate(`/tags/${encodeURIComponent(tag)}`);
@@ -508,13 +493,30 @@ function WorkspaceScreen() {
   const secondaryNote = notes.find((candidate) => candidate.id === (state.tabs.find((tab) => tab !== activeId) ?? "welcome")) ?? activeNote;
   return (
     <div className="app-shell" data-theme={theme}>
-      <LaunchBar query={query} setQuery={setQuery} onSearch={openSearch} theme={theme} onToggleTheme={toggleTheme} />
+      <LaunchBar
+        query={query}
+        setQuery={setQuery}
+        onSearch={openSearch}
+        theme={theme}
+        onToggleTheme={toggleTheme}
+        indexPhase={workspace.data?.indexPhase}
+        noteCount={workspace.data?.noteCount}
+      />
       {searchOpen && (
         <div className="search-popover">
           <div className="search-popover-head">
             <span>Quick search</span>
             <button onClick={() => setSearchOpen(false)}>Esc</button>
           </div>
+          <input
+            className="search-popover-input"
+            autoFocus
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            onKeyDown={(event) => event.key === "Escape" && setSearchOpen(false)}
+            placeholder="Search notes…"
+            aria-label="Quick search input"
+          />
           <div className="search-scopes" role="group" aria-label="Search scope">
             {([
               ["all", "All"],
@@ -559,6 +561,8 @@ function WorkspaceScreen() {
           onToggleHoist={() => dispatch({ type: "toggle-hoist" })}
           client={client}
           onTags={() => navigate("/tags")}
+          onRecent={() => navigate("/recent")}
+          onSettings={() => navigate("/settings")}
         />
         <main className="main-stage">
           <Tabs notes={notes} tabs={state.tabs} activeId={activeId} activeNote={activeNote} onSelect={select} onClose={(id) => dispatch({ type: "close", id })} />
@@ -591,6 +595,8 @@ export function App() {
       <Route path="/p/*" element={<WorkspaceScreen />} />
       <Route path="/n/*" element={<LegacyNoteRedirect />} />
       <Route path="/tags/*" element={<TagsPage />} />
+      <Route path="/recent" element={<RecentPage />} />
+      <Route path="/settings" element={<SettingsPage />} />
       <Route path="*" element={<WorkspaceScreen />} />
     </Routes>
   );
@@ -599,6 +605,48 @@ export function App() {
 function LegacyNoteRedirect() {
   const path = useParams()["*"] ?? "";
   return <Navigate replace to={`/p/${path}`} />;
+}
+
+function RecentPage() {
+  const navigate = useNavigate();
+  const recent = (JSON.parse(localStorage.getItem("miku-recent") ?? "[]") as string[]).slice(0, 20);
+  return (
+    <main className="tags-page utility-page">
+      <span className="eyebrow">Workspace</span>
+      <h1>Recent notes</h1>
+      <p>Notes opened most recently in this browser.</p>
+      <div className="tag-note-list">
+        {recent.length ? recent.map((path) => (
+          <button className="tag-note-row" key={path} onClick={() => navigate(`/p/${path}`)}>
+            <strong>{path.split("/").pop()}</strong>
+            <small>{path}</small>
+          </button>
+        )) : <p className="search-empty">No recent notes yet.</p>}
+      </div>
+    </main>
+  );
+}
+
+function SettingsPage() {
+  const navigate = useNavigate();
+  const [theme, setTheme] = useState<"dark" | "light">(() => (localStorage.getItem("miku-theme") as "dark" | "light" | null) ?? "dark");
+  const toggleTheme = () => setTheme((current) => {
+    const next = current === "dark" ? "light" : "dark";
+    localStorage.setItem("miku-theme", next);
+    return next;
+  });
+  return (
+    <main className="tags-page utility-page settings-page" data-theme={theme}>
+      <button className="toolbar-button" onClick={() => navigate("/")}>← Workspace</button>
+      <span className="eyebrow">Configuration</span>
+      <h1>Settings</h1>
+      <div className="settings-card">
+        <div><strong>Theme</strong><small>Current appearance: {theme}</small></div>
+        <button className="toolbar-button" onClick={toggleTheme}>Use {theme === "dark" ? "light" : "dark"} theme</button>
+      </div>
+      <div className="settings-card"><div><strong>Source</strong><small>miku_docs Markdown filesystem</small></div><span>authoritative</span></div>
+    </main>
+  );
 }
 
 function TagsPage() {

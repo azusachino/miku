@@ -74,6 +74,11 @@ def main() -> int:
         search = page.get_by_label("Search notes")
         search.fill("Android")
         search.press("Enter")
+        quick_search = page.get_by_label("Quick search input")
+        quick_search.wait_for()
+        quick_search.fill("JVM")
+        if quick_search.input_value() != "JVM":
+            raise AssertionError("quick search panel input did not accept text")
         page.get_by_role("group", name="Search scope").wait_for()
         content_scope = page.get_by_role("button", name="Content")
         content_scope.click()
@@ -83,6 +88,20 @@ def main() -> int:
         if page.get_by_role("button", name="Title").get_attribute("aria-pressed") != "true":
             raise AssertionError("title search scope was not selectable")
 
+        page.get_by_role("button", name="Open vault menu").click()
+        if page.get_by_role("menu").count() != 1:
+            raise AssertionError("personal vault menu did not open")
+        page.get_by_role("button", name="Open vault menu").click()
+        page.goto(f"{BASE_URL}/", wait_until="domcontentloaded")
+        page.get_by_role("button", name="Recent").click()
+        page.wait_for_url("**/recent")
+        page.get_by_role("heading", name="Recent notes").wait_for()
+        page.goto(f"{BASE_URL}/", wait_until="domcontentloaded")
+        page.get_by_role("button", name="Settings").click()
+        page.wait_for_url("**/settings")
+        page.get_by_role("heading", name="Settings").wait_for()
+
+        page.goto(f"{BASE_URL}/", wait_until="domcontentloaded")
         page.screenshot(path=str(ARTIFACT_DIR / "reading.png"), full_page=True)
         page.set_viewport_size({"width": 390, "height": 844})
         page.reload(wait_until="domcontentloaded")
