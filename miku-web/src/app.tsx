@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, useMemo, useReducer, useRef, useState, type ReactNode } from "react";
+import { ArrowUp, ArrowUpRight, BookOpen, CaretDown, CaretLeft, CaretRight, CheckCircle, Clock, FileText, Folder, GearSix, Hash, MagnifyingGlass, Moon, Rocket, Sun, TreeStructure, X, type Icon } from "@phosphor-icons/react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Navigate, Route, Routes, useLocation, useNavigate, useParams } from "react-router-dom";
 import { createWorkspaceClient, sortTreeNodes, subscribeToWorkspaceEvents, type ApiSource, type NoteModel, type SearchScope, type TreeNodeModel } from "./api";
@@ -10,69 +11,33 @@ const MarkdownReader = lazy(() => import("./MarkdownReader").then((module) => ({
 type ActionIconName = "arrow-up" | "arrow-up-right" | "chevron-down" | "chevron-left" | "chevron-right" | "close" | "hash" | "moon" | "search" | "settings" | "sun" | "tree" | "clock";
 
 function ActionIcon({ name }: { name: ActionIconName }) {
-  const paths: Record<ActionIconName, ReactNode> = {
-    "arrow-up": <path d="m5 11 3-3 3 3M8 8v8" />,
-    "arrow-up-right": <path d="M5 15 15 5m0 0H8m7 0v7" />,
-    "chevron-down": <path d="m5 7 3 3 3-3" />,
-    "chevron-left": <path d="m10 5-3 3 3 3" />,
-    "chevron-right": <path d="m6 5 3 3-3 3" />,
-    close: <path d="m5 5 6 6m0-6-6 6" />,
-    hash: <path d="M6 3 5 13M10 3 9 13M3 7h9M2 10h9" />,
-    moon: <path d="M10 3a5 5 0 1 0 3 9 5 5 0 0 1-3-9Z" />,
-    search: (
-      <>
-        <circle cx="7.5" cy="7.5" r="3.5" />
-        <path d="m10 10 3 3" />
-      </>
-    ),
-    settings: (
-      <>
-        <circle cx="8" cy="8" r="2.4" />
-        <path d="m8 2 1 .7.3 1.4 1.3.7 1.4-.3.7 1.2-.8 1.2.2 1.4 1.1.9-.5 1.3-1.4-.1-1.1.9-.1 1.4-1.4.5-.8-1.2H6.6l-.8 1.2-1.4-.5-.1-1.4-1.1-.9-1.4.1-.5-1.3 1.1-.9.2-1.4-.8-1.2.7-1.2 1.4.3 1.3-.7.3-1.4L6 2.7Z" />
-      </>
-    ),
-    sun: (
-      <>
-        <circle cx="8" cy="8" r="2.5" />
-        <path d="M8 1v2m0 10v2M1 8h2m10 0h2M3 3l1.5 1.5m7 7L13 13m0-10-1.5 1.5m-7 7L3 13" />
-      </>
-    ),
-    tree: (
-      <>
-        <path d="M8 2v12M5 5h6M4 9h8M3 13h10" />
-        <path d="M2 15h12" />
-      </>
-    ),
-    clock: (
-      <>
-        <circle cx="8" cy="8" r="5.5" />
-        <path d="M8 5v3l2 1" />
-      </>
-    )
+  const icons: Record<ActionIconName, Icon> = {
+    "arrow-up": ArrowUp,
+    "arrow-up-right": ArrowUpRight,
+    "chevron-down": CaretDown,
+    "chevron-left": CaretLeft,
+    "chevron-right": CaretRight,
+    close: X,
+    hash: Hash,
+    moon: Moon,
+    search: MagnifyingGlass,
+    settings: GearSix,
+    sun: Sun,
+    tree: TreeStructure,
+    clock: Clock
   };
-  return (
-    <svg className="action-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
-      {paths[name]}
-    </svg>
-  );
+  const IconComponent = icons[name];
+  return <IconComponent className="action-icon" size={16} weight="regular" aria-hidden="true" />;
 }
 
-function FileIcon({ kind = "note", large = false }: { kind?: "note" | "folder"; large?: boolean }) {
-  return (
-    <span className={`file-icon file-icon-${kind} ${large ? "file-icon-large" : ""}`} aria-hidden="true">
-      <svg viewBox="0 0 20 20" focusable="false">
-        {kind === "folder" ? (
-          <path d="M2.5 5.5h5l1.6 1.8h8.4v8.3H2.5z" />
-        ) : (
-          <>
-            <path d="M5 2.5h6.1l3.9 3.9v11.1H5z" />
-            <path d="M11 2.7v4h3.8" />
-            <path d="M7.3 11.2h5.4M7.3 14h4.2" />
-          </>
-        )}
-      </svg>
-    </span>
-  );
+function NoteIcon({ value = "file-text", large = false }: { value?: string; large?: boolean }) {
+  const icon = value.trim();
+  const isImage = /^(https?:\/\/|\/assets\/)/.test(icon);
+  if (isImage) return <img className={`note-icon-image ${large ? "is-large" : ""}`} src={icon} alt="" />;
+  const icons: Record<string, Icon> = { "file-text": FileText, note: FileText, book: BookOpen, "check-circle": CheckCircle, rocket: Rocket, folder: Folder };
+  const IconComponent = icons[icon.toLowerCase()] ?? FileText;
+  const isEmoji = !icons[icon.toLowerCase()] && !/^[a-z0-9-]+$/i.test(icon);
+  return isEmoji ? <span className={`note-icon-emoji ${large ? "is-large" : ""}`} aria-hidden="true">{icon}</span> : <IconComponent className={`note-icon-library ${large ? "is-large" : ""}`} size={large ? 25 : 16} weight="regular" aria-hidden="true" />;
 }
 
 function Tree({
@@ -126,7 +91,7 @@ function Tree({
   }, [client, expanded, loaded, roots]);
 
   const branch = (node: TreeNodeModel, depth: number) => {
-    const note = noteMap.get(node.noteId) ?? { ...node.note, icon: "□", updated: "unknown", body: "", backlinks: [], tags: [] };
+    const note = noteMap.get(node.noteId) ?? { ...node.note, icon: "file-text", updated: "unknown", body: "", backlinks: [], tags: [] };
     const children = sortTreeNodes(loaded[node.path] ?? []);
     const isFolder = node.kind === "folder";
     const isExpanded = expanded.has(node.path);
@@ -160,7 +125,7 @@ function Tree({
           aria-expanded={isFolder ? isExpanded : undefined}
         >
           <span className="tree-caret">{isFolder ? <ActionIcon name={isExpanded ? "chevron-down" : "chevron-right"} /> : <span aria-hidden="true">·</span>}</span>
-          <FileIcon kind={isFolder ? "folder" : "note"} />
+          {isFolder ? <NoteIcon value="folder" /> : <NoteIcon value={note.icon} />}
           <span className="tree-label">{title}</span>
         </button>
         {!hoisted && isExpanded && children.map((child) => branch(child, depth + 1))}
@@ -174,26 +139,19 @@ function Tree({
 function LaunchBar({
   onSearch,
   theme,
-  onToggleTheme,
-  indexPhase,
-  noteCount
+  onToggleTheme
 }: {
   onSearch: () => void;
   theme: "dark" | "light";
   onToggleTheme: () => void;
-  indexPhase?: string;
-  noteCount?: number;
 }) {
   const navigate = useNavigate();
   return (
     <header className="launch-bar" data-region={shellRegions[0]}>
       <button className="brand-mark" onClick={() => navigate("/")} aria-label="Go to workspace home">
-        <span className="brand-glyph">m</span>
-        <span>miku</span>
+        <span className="brand-note-icon"><NoteIcon value="file-text" large /></span>
+        <span>miku note</span>
       </button>
-      <div className="workspace-source" title={`${noteCount ?? 0} notes · index ${indexPhase ?? "unknown"}`}>
-        <span className="status-dot" /> miku_docs
-      </div>
       <button className="launch-search" onClick={onSearch} aria-label="Open quick search">
         <ActionIcon name="search" />
         <span className="launch-search-placeholder">Search notes, tags, commands</span>
@@ -279,11 +237,11 @@ function Tabs({
   return (
     <div className="tabs" role="tablist">
       {tabs.map((id) => {
-        const note = id === activeId ? activeNote : (notes.find((item) => item.id === id) ?? { id, title: "Loading note…", icon: "□" });
+        const note = id === activeId ? activeNote : (notes.find((item) => item.id === id) ?? { id, title: "Loading note…", icon: "file-text" });
         return (
           <div key={id} className={`tab ${activeId === id ? "is-active" : ""}`} role="tab" aria-selected={activeId === id}>
             <button onClick={() => onSelect(id)}>
-              <span className="tab-icon" aria-hidden="true">{note.icon}</span>
+              <NoteIcon value={note.icon} />
               {note.title}
             </button>
             <button className="tab-close" onClick={() => onClose(id)} aria-label={`Close ${note.title}`}>
@@ -356,7 +314,7 @@ function NotePane({
       </div>
       <div className="note-scroll">
         <div className="note-header">
-          <span className="note-icon-large" aria-hidden="true">{note.icon}</span>
+          <span className="note-icon-large"><NoteIcon value={note.icon} large /></span>
           <div className="note-heading-copy">
             <div className="note-heading-status">
               <span className="eyebrow">Markdown note</span>
@@ -526,7 +484,7 @@ function WorkspaceScreen() {
   const results = useQuery({ queryKey: ["search", query, searchScope], queryFn: () => client.search(query, searchScope), enabled: searchOpen });
   const isWorkspaceRoot = location.pathname === "/";
   const visibleTree = useMemo(() => [...(tree.data ?? []), ...(context.data?.children ?? [])], [context.data?.children, tree.data]);
-  const treeNotes = useMemo(() => visibleTree.map((node) => ({ ...node.note, icon: "□", updated: "indexed", body: "", backlinks: [], tags: [] })), [visibleTree]);
+  const treeNotes = useMemo(() => visibleTree.map((node) => ({ ...node.note, icon: "file-text", updated: "indexed", body: "", backlinks: [], tags: [] })), [visibleTree]);
   const contextualNote = useMemo(() => (context.data ? { ...context.data.note, backlinks: context.data.backlinks } : undefined), [context.data]);
   useEffect(() => {
     const loadedNote = contextualNote ?? note.data;
@@ -542,7 +500,7 @@ function WorkspaceScreen() {
       id: activeId,
       path: "",
       title: note.isLoading ? "Loading note…" : "Note unavailable",
-      icon: "□",
+      icon: "file-text",
       parents: [],
       updated: "",
       body: "",
@@ -628,7 +586,7 @@ function WorkspaceScreen() {
   const secondaryNote = notes.find((candidate) => candidate.id === (state.tabs.find((tab) => tab !== activeId) ?? "welcome")) ?? activeNote;
   return (
     <div className="app-shell" data-theme={theme} data-ui-state-version={UI_STATE_VERSION}>
-      <LaunchBar onSearch={openSearch} theme={theme} onToggleTheme={toggleTheme} indexPhase={workspace.data?.indexPhase} noteCount={workspace.data?.noteCount} />
+      <LaunchBar onSearch={openSearch} theme={theme} onToggleTheme={toggleTheme} />
       {searchOpen && (
         <div className="search-popover" ref={searchPanelRef} data-region="quick-open">
           <div className="search-popover-head">
@@ -687,7 +645,7 @@ function WorkspaceScreen() {
                   onMouseEnter={() => setSearchSelection(index)}
                   onClick={() => select(result.id)}
                 >
-                  <span className="search-result-icon">{result.icon}</span>
+                  <span className="search-result-icon"><NoteIcon value={result.icon} /></span>
                   <span>
                     <strong>{result.title}</strong>
                     <small>{result.path}</small>
@@ -829,7 +787,7 @@ function SettingsDialog({ theme, onToggleTheme, onClose }: { theme: Theme; onTog
       <section className="settings-dialog" role="dialog" aria-modal="true" aria-labelledby="settings-title">
         <div className="settings-dialog-header"><div><span className="eyebrow">Workspace</span><h2 id="settings-title">Settings</h2></div><button className="quiet-button" onClick={onClose} aria-label="Close settings"><ActionIcon name="close" /></button></div>
         <div className="settings-dialog-row"><div><strong>Theme</strong><small>Current appearance: {theme}</small></div><button className="toolbar-button" onClick={onToggleTheme}>Use {theme === "dark" ? "light" : "dark"} theme</button></div>
-        <div className="settings-dialog-row"><div><strong>Source</strong><small>miku_docs Markdown filesystem</small></div><span className="utility-status">authoritative</span></div>
+        <div className="settings-dialog-row"><div><strong>Source</strong><small>Local Markdown files</small></div><span className="utility-status">authoritative</span></div>
       </section>
     </div>
   );
@@ -927,7 +885,7 @@ function SettingsPage() {
         <div className="settings-card">
           <div>
             <strong>Source</strong>
-            <small>miku_docs Markdown filesystem</small>
+            <small>Local Markdown files</small>
           </div>
           <span>authoritative</span>
         </div>

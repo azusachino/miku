@@ -78,11 +78,6 @@ input:focus-visible {
   width: 16px;
   height: 16px;
   flex: 0 0 16px;
-  fill: none;
-  stroke: currentColor;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-width: 1.4;
   vertical-align: middle;
 }
 .icon {
@@ -124,17 +119,10 @@ input:focus-visible {
   padding: 0;
 }
 .brand-mark:hover { color: var(--text); }
-.brand-glyph {
-  display: grid;
-  place-items: center;
+.brand-note-icon {
+  display: block;
   width: 25px;
   height: 25px;
-  border-radius: 8px;
-  color: var(--on-accent);
-  background: linear-gradient(135deg, var(--accent), var(--accent-strong));
-  box-shadow: 0 4px 18px color-mix(in srgb, var(--accent) 35%, transparent);
-  font-family: Georgia, serif;
-  font-size: 1.2rem;
 }
 .vault-switcher {
   display: flex;
@@ -323,36 +311,6 @@ input:focus-visible {
   color: var(--faint);
   font-size: 0.85rem;
 }
-.file-icon {
-  display: inline-grid;
-  flex: 0 0 16px;
-  place-items: center;
-  width: 16px;
-  height: 16px;
-  color: var(--accent-strong);
-}
-.file-icon svg {
-  width: 15px;
-  height: 15px;
-  fill: none;
-  stroke: currentColor;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-width: 1.45;
-}
-.file-icon-folder svg {
-  color: var(--folder);
-  fill: color-mix(in srgb, var(--folder) 12%, transparent);
-}
-.file-icon-large {
-  flex-basis: 43px;
-  width: 43px;
-  height: 43px;
-}
-.file-icon-large svg {
-  width: 25px;
-  height: 25px;
-}
 .tree-label {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -436,6 +394,22 @@ input:focus-visible {
 .tab-icon {
   color: var(--accent-strong);
 }
+.note-icon-library,
+.note-icon-image,
+.note-icon-emoji {
+  display: inline-grid;
+  flex: 0 0 16px;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  color: var(--accent-strong);
+}
+.note-icon-library { color: var(--accent-strong); }
+.note-icon-image { object-fit: contain; border-radius: 3px; }
+.note-icon-emoji { font-size: 0.9rem; line-height: 1; }
+.note-icon-library.is-large,
+.note-icon-image.is-large,
+.note-icon-emoji.is-large { width: 25px; height: 25px; flex-basis: 25px; }
 .tab-close {
   display: grid;
   place-items: center;

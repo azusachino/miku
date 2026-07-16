@@ -87,7 +87,7 @@ function normalizeNote(note: Schemas["NoteResponse"]): NoteModel {
     id: note.path,
     path: note.path,
     title: note.title,
-    icon: typeof frontmatter.icon === "string" ? frontmatter.icon : "□",
+    icon: typeof frontmatter.icon === "string" ? frontmatter.icon : "file-text",
     parents: Array.isArray(frontmatter.parents) ? frontmatter.parents.filter((parent): parent is string => typeof parent === "string") : [],
     updated: note.revision.mtime ? new Date(note.revision.mtime * 1000).toLocaleString() : "unknown",
     body: note.body,
@@ -177,7 +177,7 @@ export function createWorkspaceClient(onSource: (source: ApiSource) => void) {
       live(async () => {
         const params = new URLSearchParams({ q: query, limit: "20", scope });
         const response = await request<Schemas["SearchResponse"]>(`/api/v1/search?${params}`);
-        return response.results.map((result) => ({ ...result, id: result.path, icon: "□" }));
+        return response.results.map((result) => ({ ...result, id: result.path, icon: "file-text" }));
       }),
     tags: (): Promise<TagModel[]> => live(() => request<Schemas["TagResponse"][]>("/api/v1/tags")),
     tagNotes: (tag: string): Promise<TagNoteModel[]> => live(() => request<Schemas["TagNoteResponse"][]>(`/api/v1/tags/${encodeURIComponent(tag)}/notes`))

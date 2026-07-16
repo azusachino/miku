@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="miku-note" x1="8" y1="8" x2="56" y2="56" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#9B8CFF"/>
+      <stop offset="1" stop-color="#6256D9"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="18" fill="#151820"/>
+  <path d="M17 16h18l12 12v20H17z" fill="url(#miku-note)"/>
+  <path d="M35 16v12h12" fill="#BEB7FF" opacity=".9"/>
+  <path d="M23 37h18M23 44h12" stroke="#151820" stroke-width="4" stroke-linecap="round"/>
+</svg>
