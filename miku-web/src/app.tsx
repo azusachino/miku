@@ -550,7 +550,7 @@ function WorkspaceScreen() {
     notes.find((candidate) => candidate.id === activeId) ?? {
       id: activeId,
       path: "",
-      title: context.isLoading ? "Loading note…" : "Note unavailable",
+      title: context.isPending || context.isFetching ? "Loading note…" : "Note unavailable",
       icon: "file-text",
       parents: [],
       updated: "",

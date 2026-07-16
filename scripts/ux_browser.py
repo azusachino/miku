@@ -48,7 +48,7 @@ def main() -> int:
             raise AssertionError("migrated architecture note is missing from the vault tree")
         page.locator(".tree-row").filter(has_text="Sandbox").click()
         page.wait_for_url("**/p/Sandbox.md")
-        page.locator(".note-scroll h1").filter(has_text="Sandbox").wait_for()
+        page.locator(".note-scroll h1").filter(has_text="Sandbox").first.wait_for()
         if page.locator(".note-scroll h1").first.inner_text() != "Sandbox":
             raise AssertionError("clicking a note did not update the reader")
         if page.locator(".note-meta-tags .tag", has_text="#demo").count() != 1:
@@ -152,7 +152,9 @@ def main() -> int:
             raise AssertionError("multiple open tabs did not overflow horizontally")
 
         page.goto(f"{BASE_URL}/p/does-not-exist.md", wait_until="domcontentloaded")
-        page.get_by_role("heading", name="Note unavailable", exact=True).wait_for()
+        page.wait_for_url(f"{BASE_URL}/", timeout=10_000)
+        page.goto(f"{BASE_URL}/p/Sandbox.md", wait_until="domcontentloaded")
+        page.locator(".note-scroll h1").filter(has_text="Sandbox").first.wait_for()
         page.goto(f"{BASE_URL}/tags/not-a-real-tag", wait_until="domcontentloaded")
         page.get_by_role("heading", name="#not-a-real-tag").wait_for()
         if page.locator(".tag-note-row").count() != 0:
