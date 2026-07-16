@@ -36,5 +36,7 @@ Keeps custom grammar work to the two things comrak does not provide natively. Re
 
 ## Trade-offs / Rejected
 
-No MDX/JSX — needs a JS runtime, breaks plain-Markdown portability (`miku:decision:no-mdx`). CM6 is a _separate axis_: a client-side editor that does not render the read view or feed the index (server
+No MDX/JSX — needs a JS runtime, breaks plain-Markdown portability
+(`miku:decision:no-mdx`). CM6 is a _separate axis_: a client-side editor that does not
+render the read view or feed the index (server-side rendering remains authoritative).
 still parses via comrak) — roadmap, orthogonal to this ADR.

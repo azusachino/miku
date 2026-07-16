@@ -28,19 +28,20 @@ This makes the vault easy to inspect, back up, version, or edit with another too
 
 ## Features
 
-| Area            | What is included                                                                                       |
-| --------------- | ------------------------------------------------------------------------------------------------------ |
-| Markdown        | CommonMark rendering, fenced code blocks, math, Mermaid, callouts, and wikilinks                       |
-| Navigation      | Folder tree, breadcrumbs, page quick-switch, hash links, and a page-local table of contents            |
-| Knowledge graph | Backlinks, linked mentions, tags, and paginated tag views                                              |
-| Search          | Metadata quick-switch plus embedded full-text content search powered by Rust's grep/ignore crates      |
-| Editing         | Browser editor, inline reader editing, preview, atomic writes, and conflict-aware saves                |
+| Area            | What is included                                                                                           |
+| --------------- | ---------------------------------------------------------------------------------------------------------- |
+| Markdown        | CommonMark rendering, fenced code blocks, math, Mermaid, callouts, and wikilinks                           |
+| Navigation      | Folder tree, breadcrumbs, page quick-switch, hash links, and a page-local table of contents                |
+| Knowledge graph | Backlinks, linked mentions, tags, and paginated tag views                                                  |
+| Search          | Metadata quick-switch plus embedded full-text content search powered by Rust's grep/ignore crates          |
+| Editing         | Browser editor, inline reader editing, preview, atomic writes, and conflict-aware saves                    |
 | Runtime         | MemoryIndex/Tantivy hot projection by default; optional SQLite/Postgres durability and Valkey shared cache |
-| UX              | Light/dark themes, reading-width modes, lazy editor/highlighter loading, and a focused command palette |
+| UX              | Light/dark themes, reading-width modes, lazy editor/highlighter loading, and a focused command palette     |
 
 ## Quick start
 
-The default development path uses SQLite as the durable projection and MemoryIndex/Tantivy as the hot projection. PostgreSQL and Valkey are optional infrastructure layers; Valkey is a shared cache, not a replacement for Tantivy.
+The default development path uses SQLite as the durable projection and MemoryIndex/Tantivy as the hot projection. PostgreSQL and Valkey are optional infrastructure layers; Valkey is a shared cache,
+not a replacement for Tantivy.
 
 ```bash
 git clone https://github.com/azusachino/miku.git
@@ -59,14 +60,14 @@ See [`miku_docs/setup.md`](miku_docs/setup.md) for external Postgres, Tailscale/
 
 The useful local switches are:
 
-| Variable             | Default                        | Purpose                                                    |
-| -------------------- | ------------------------------ | ---------------------------------------------------------- |
-| `MIKU_INDEX_BACKEND` | `sqlite`                       | Select the durable SQLite/Postgres or explicit memory backend             |
-| `MIKU_INDEX_PATH`    | `miku_docs/.miku-index.sqlite` | Location of the local derived index                        |
-| `MIKU_BIND`          | `0.0.0.0:3000`                 | Address exposed by the HTTP server                         |
-| `MIKU_READONLY`      | unset                          | Deploy the reader without write operations                 |
-| `DATABASE_URL`       | unset                          | Postgres connection string when using the Postgres profile |
-| `VALKEY_URL`         | unset                          | Optional Valkey endpoint for the scale profile             |
+| Variable             | Default                        | Purpose                                                       |
+| -------------------- | ------------------------------ | ------------------------------------------------------------- |
+| `MIKU_INDEX_BACKEND` | `sqlite`                       | Select the durable SQLite/Postgres or explicit memory backend |
+| `MIKU_INDEX_PATH`    | `miku_docs/.miku-index.sqlite` | Location of the local derived index                           |
+| `MIKU_BIND`          | `0.0.0.0:3000`                 | Address exposed by the HTTP server                            |
+| `MIKU_READONLY`      | unset                          | Deploy the reader without write operations                    |
+| `DATABASE_URL`       | unset                          | Postgres connection string when using the Postgres profile    |
+| `VALKEY_URL`         | unset                          | Optional Valkey endpoint for the scale profile                |
 
 The vault is intentionally single-user and login-less at this stage. If the server is reachable beyond a trusted machine, put it behind the network or identity boundary appropriate for your
 deployment.
@@ -94,7 +95,8 @@ The main browser routes are:
 - `/tags` and `/tags/{tag}` — browse tags with incremental loading.
 - `/healthz`, `/readyz`, and `/metrics` — local/runtime probes.
 
-More detail lives in [`miku_docs/architecture.md`](miku_docs/architecture.md), [`miku_docs/runtime-workflow.md`](miku_docs/runtime-workflow.md), and the decision records under [`miku_docs/adr/`](miku_docs/adr/).
+More detail lives in [`miku_docs/architecture.md`](miku_docs/architecture.md), [`miku_docs/runtime-workflow.md`](miku_docs/runtime-workflow.md), and the decision records under
+[`miku_docs/adr/`](miku_docs/adr/).
 
 ## Development
 

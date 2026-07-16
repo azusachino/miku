@@ -86,9 +86,9 @@ make check-blackbox              # waits for /readyz index_ready=true
 MIKU_BLACKBOX_URL=... make check-blackbox
 ```
 
-The live blackbox sequence must exercise `/healthz`, `/readyz`, `/metrics`, `/`, `/p/{path}.md`, `/tags`, and folder routes when the fixture has them. Once derived mentions
-are implemented, it must also verify a visible mention, a false-positive exclusion, source/target changes, restart recovery, and page access while mention indexing is running. The blackbox must be run
-against a real process and corpus; helper-only tests are not sufficient proof of this workflow.
+The live blackbox sequence must exercise `/healthz`, `/readyz`, `/metrics`, `/`, `/p/{path}.md`, `/tags`, and folder routes when the fixture has them. Once derived mentions are implemented, it must
+also verify a visible mention, a false-positive exclusion, source/target changes, restart recovery, and page access while mention indexing is running. The blackbox must be run against a real process
+and corpus; helper-only tests are not sufficient proof of this workflow.
 
 When diagnosing startup behavior, inspect both signals:
 

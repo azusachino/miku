@@ -29,5 +29,7 @@ name (ミク) is branding, not a content-language requirement. This was the only
 
 ## Trade-offs / Rejected
 
-Deferred, not rejected: if meaningful CJK content ever shows up, revisit with app-side `lindera` tokenization or `pgroonga`. Switching is just a reindex — cheap, because the index is fully rebuildable
+Deferred, not rejected: if meaningful CJK content ever shows up, revisit with app-side
+`lindera` tokenization or `pgroonga`. Switching is just a reindex — cheap, because the
+index is fully rebuildable.
 from files.

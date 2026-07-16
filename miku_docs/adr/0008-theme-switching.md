@@ -13,9 +13,8 @@ impacts: [miku-web/src/styles.css, miku-web/src/shared/ui.ts]
 
 ## Decision
 
-Miku provides light and dark themes as semantic roles rather than component
-specific colors. Theme choice is persisted per browser and applied to the
-workspace shell, reader, editor, syntax highlighting, Mermaid, and dialogs.
+Miku provides light and dark themes as semantic roles rather than component specific colors. Theme choice is persisted per browser and applied to the workspace shell, reader, editor, syntax
+highlighting, Mermaid, and dialogs.
 
 ## Mechanics
 
@@ -27,5 +26,4 @@ workspace shell, reader, editor, syntax highlighting, Mermaid, and dialogs.
 
 ## Consequences
 
-Reader content remains legible when the theme changes, and the frontend does
-not depend on a server-side theme or a global user account.
+Reader content remains legible when the theme changes, and the frontend does not depend on a server-side theme or a global user account.

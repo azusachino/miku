@@ -33,7 +33,9 @@ The startup mtime+hash reconcile sweeps anything missed across the new-subdir re
 ## Why
 
 The 100k-file watch limit was **misdiagnosed**. inotify watches are **per-directory**, and `notify`'s recursive mode adds one watch per subdirectory, so a wiki with shallow foldering never approaches
-the limit (100k files across ~200 folders ≈ 200 watches; default cap 65k–524k; macOS FSEvents has no per-file limit at all). The watcher's only irreplaceable job is **live pickup of external edits**
+the limit (100k files across ~200 folders ≈ 200 watches; default cap 65k–524k; macOS
+FSEvents has no per-file limit at all). The watcher's only irreplaceable job is **live
+pickup of external edits**
 (git pull, another editor) — exactly the files-are-truth payoff.
 
 ## Trade-offs / Rejected

@@ -11,11 +11,9 @@ tags: [frontend, navigation, workspace, historical]
 
 ## Status
 
-Superseded by ADR-0017. The original server-rendered explorer concept is kept
-as historical context; the current explorer is the React workspace tree.
+Superseded by ADR-0017. The original server-rendered explorer concept is kept as historical context; the current explorer is the React workspace tree.
 
 ## Historical decision
 
-Miku should expose a filesystem-shaped explorer with lazy folder expansion,
-stable paths, and an active-note focus. The current implementation preserves
-those semantics through the workspace API and browser tree.
+Miku should expose a filesystem-shaped explorer with lazy folder expansion, stable paths, and an active-note focus. The current implementation preserves those semantics through the workspace API and
+browser tree.

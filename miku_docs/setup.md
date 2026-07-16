@@ -21,8 +21,7 @@ The default path is SQLite durability with a MemoryIndex/Tantivy hot projection:
 make dev
 ```
 
-The default runtime uses SQLite plus the in-memory/Tantivy projection. Postgres
-and Valkey are optional service-backed profiles.
+The default runtime uses SQLite plus the in-memory/Tantivy projection. Postgres and Valkey are optional service-backed profiles.
 
 Override the backend with MIKU_INDEX_BACKEND, DATABASE_URL, or VALKEY_URL.
 
@@ -73,11 +72,11 @@ written to `.artifacts/ux/` (ignored).
 
 ## Containers (Postgres/Valkey scale profile only)
 
-Containers are only for the service-backed scale profile. The default local
-runtime is a native Rust binary and Vite frontend. Podman and Podman Compose
-are intentionally host-provided tools, not Nix prerequisites.
+Containers are only for the service-backed scale profile. The default local runtime is a native Rust binary and Vite frontend. Podman and Podman Compose are intentionally host-provided tools, not Nix
+prerequisites.
 
-The Compose profile runs PostgreSQL 18 and Valkey 9 with the `postgres-valkey` Miku feature set. Prepare Podman (including its VM on macOS) yourself, then run the complete lifecycle experiment through uv:
+The Compose profile runs PostgreSQL 18 and Valkey 9 with the `postgres-valkey` Miku feature set. Prepare Podman (including its VM on macOS) yourself, then run the complete lifecycle experiment through
+uv:
 
 ```bash
 make compose-experiments # build, start, smoke-test, and tear down
@@ -91,5 +90,5 @@ The native stack above is preferred for day-to-day local development. Docker Com
 
 ## Database
 
-The legacy SQLite index is stored at `miku_docs/.miku-index.sqlite` when `MIKU_INDEX_BACKEND=sqlite` is selected. Postgres migrations live under `crates/miku-index-postgres/migrations/` and are used only for the explicit Postgres profile.
-Both indexes are fully rebuildable from `miku_docs/**/*.md`; dropping and recreating either loses no user data.
+The legacy SQLite index is stored at `miku_docs/.miku-index.sqlite` when `MIKU_INDEX_BACKEND=sqlite` is selected. Postgres migrations live under `crates/miku-index-postgres/migrations/` and are used
+only for the explicit Postgres profile. Both indexes are fully rebuildable from `miku_docs/**/*.md`; dropping and recreating either loses no user data.

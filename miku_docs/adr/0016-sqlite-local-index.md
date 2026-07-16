@@ -56,8 +56,10 @@ serde_json.workspace = true
 sqlx = { version = "0.8.6", default-features = false, features = ["sqlite", "runtime-tokio", "migrate", "macros"] }
 ```
 
-- **SQLite-only runtime features** (SQLite needs no TLS → leaner default). The `macros` feature is used only by `sqlx::migrate!`; all application queries use runtime `query`/`query_as` calls, keeping
-  compile-time database access out of the application path.
+- **SQLite-only runtime features** (SQLite needs no TLS → leaner default). The `macros`
+  feature is used only by `sqlx::migrate!`; all application queries use runtime
+  `query`/`query_as` calls, keeping compile-time database access out of the application
+  path.
 - `pub async fn open(path: &str) -> StoreResult<Self>`:
   ```rust
   let opts = SqliteConnectOptions::from_str(&format!("sqlite://{path}"))?
@@ -95,8 +97,9 @@ Same tables as Postgres (`tb_pages`, `tb_links`, `tb_tags`, `tb_page_aliases`, `
 | `COUNT(*)::BIGINT` | cast                                               | plain `COUNT(*)` → `i64`                                                                                  |
 | snippet            | empty (`SearchHit.snippet=""`)                     | keep **empty** — the search page builds snippets from disk (unchanged)                                    |
 
-- `replace_page`: after upserting `tb_pages`, keep FTS in sync — `DELETE FROM tb_pages_fts WHERE path=?; INSERT INTO tb_pages_fts(path,title,body) VALUES(?,?,?)`. The links/tags/aliases delete+insert
-  and the two `UPDATE tb_links` resolve passes translate 1:1.
+- `replace_page`: after upserting `tb_pages`, keep FTS in sync with a delete followed by
+  an insert. The links/tags/aliases delete+insert and the two `UPDATE tb_links` resolve
+  passes translate 1:1.
 - `delete_page`: also `DELETE FROM tb_pages_fts WHERE path=?`.
 - `rebuild_search_index`: no-op (FTS rows written per page) — keep the trait default.
 - Consider overriding `replace_pages` to wrap the batch in one transaction.

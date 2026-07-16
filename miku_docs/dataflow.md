@@ -12,8 +12,8 @@ All diagrams are Mermaid. See `miku_docs/architecture.md` for the prose design a
 
 ## 1. System overview
 
-Files are the source of truth; the memory graph plus Tantivy are the default disposable projections, with SQLite and Postgres available as explicit profiles. HTTP handlers only **read** the index; the background indexer is the **only**
-writer.
+Files are the source of truth; the memory graph plus Tantivy are the default disposable projections, with SQLite and Postgres available as explicit profiles. HTTP handlers only **read** the index; the
+background indexer is the **only** writer.
 
 ```mermaid
 flowchart LR

@@ -74,7 +74,8 @@ grep, your editor, your backup) can't touch the data.
 
 - **You own the files.** Plain `.md` in one folder. Delete Miku tomorrow; your knowledge is untouched.
 - **Connections, found for you.** `[[links]]` → backlinks, tags, FTS built in the background. The valuable graph, without hand-maintenance.
-- **The projections are disposable, on purpose.** Memory/Tantivy is the local default and SQLite/Postgres are optional; nuke any projection and Miku rebuilds from files. Nothing important lives anywhere but your disk.
+- **The projections are disposable, on purpose.** Memory/Tantivy is the local default and SQLite/Postgres are optional; nuke any projection and Miku rebuilds from files. Nothing important lives
+  anywhere but your disk.
 - **Self-host or run local.** No account, no telemetry, no cloud.
 - **It gets out of your way.** Browser editor over a textarea. No bundler, no app to learn, no migration the day you need it most.
 
@@ -82,8 +83,11 @@ grep, your editor, your backup) can't touch the data.
 
 ## Product name — Miku
 
-The project is named **Miku** (初音ミク) — Hatsune Miku, the iconic Vocaloid voice bank and cultural figure in music/tech. Like the Vocaloid engine itself, Miku lets you compose and shape knowledge
-without vendor lock-in: the _content_ (Markdown files) is the source of truth, and Miku is the tool layer that renders, links, and searches — ephemeral and replaceable.
+The project is named **Miku** (初音ミク) — Hatsune Miku, the iconic Vocaloid voice
+bank and cultural figure in music/tech. Like the Vocaloid engine itself, Miku lets you
+compose and shape knowledge without vendor lock-in: the _content_ (Markdown files) is
+the source of truth, and Miku is the tool layer that renders, links, and searches —
+ephemeral and replaceable.
 
 ## What we learn from Notion and Obsidian
 
@@ -91,7 +95,9 @@ without vendor lock-in: the _content_ (Markdown files) is the source of truth, a
 
 - **The empty state is the product.** Notion never shows a blank page — it shows templates and a "/" menu that teaches the tool. Miku's first run should seed a welcome page that _demonstrates_
   `[[links]]` and `#tags`, not an empty textarea.
-- **The "/" command palette** turns a blank box into a discoverable surface. A Miku command bar (`Ctrl-K`: quick-open, new page, search) is the single highest-leverage UI affordance — it serves Mei's
+- **The "/" command palette** turns a blank box into a discoverable surface. A Miku
+  command bar (`Ctrl-K`: quick-open, new page, search) is the single highest-leverage UI
+  affordance — it serves Mei's
   capture and Priya's navigation at once.
 - **Bidirectional context is shown, not summoned.** Notion surfaces related content inline. Miku's backlink panel should always be visible, not a click away.
 - **What NOT to copy:** the proprietary block model and DB-as-truth. That's exactly the lock-in Miku exists to refuse. Notion's data is the cage; ours is files.
@@ -112,15 +118,15 @@ without vendor lock-in: the _content_ (Markdown files) is the source of truth, a
 ### The synthesis
 
 Notion teaches **discoverability** (command palette, never-blank states, inline context). Obsidian teaches **ownership** (files as truth, frictionless `[[linking]]`, backlinks as the daily payoff).
-Miku's wedge is taking Obsidian's ownership story and moving the _indexing_ server-side — so linking, backlinks, tags, and search are computed for you in the background instead of by a pile of client
-plugins, while the files stay plainly, provably yours.
+Miku's wedge is taking Obsidian's ownership story and moving the _indexing_ server-side
+— so linking, backlinks, tags, and search are computed for you in the background instead
+of by a pile of client plugins, while the files stay plainly, provably yours.
 
 ## Feature stance vs Obsidian (decided)
 
 **Adopted as native server features (no plugin system):**
 
-- **Themes** — a calm light/dark palette owned by the React/Vite frontend and
-  persisted per browser.
+- **Themes** — a calm light/dark palette owned by the React/Vite frontend and persisted per browser.
 - **Homepage** — a `home` config key naming the landing note.
 - **Admonitions / Callouts** — post-process blockquotes starting with `[!type]` into styled callouts (render + CSS only).
 
@@ -128,15 +134,21 @@ plugins, while the files stay plainly, provably yours.
 (display name). Everything else is indexed as opaque `key → value` properties (`frontmatter JSONB` on `pages`) — searchable and the groundwork for a future Dataview-lite query, with no hardcoded
 schema.
 
-### Rendering: "no JS bundler / server-first" ≠ "zero JS"
+### Rendering: a thin React reader with established Markdown libraries
 
-> **Latest decision: ADR-7** (`miku_docs/adr/0007-frontend-rendering.md`) — see there. Highlights uses **client-side Prism.js** for the MVP; **`syntect` is deferred** as a post-MVP swap. The server-side
-> stance below is the _target_, not the MVP.
+> **Current decision: ADR-0017** (`miku_docs/adr/0017-web-markdown-workspace.md`) —
+> the browser workspace is the shipped v0.0.3 surface.
 
-- **Code highlighting → server-side `syntect`.** Highlight at render time into classed spans, colored by CSS; themeable via the Themes mechanism. No client JS, works with JS disabled.
-- **Prism.js → not as an engine.** Reuse only its CSS _class-name convention_ so existing Prism themes drop into the themes folder. No Prism JS dependency.
-- **Mermaid → the one deliberate client-JS exception.** No pure-Rust renderer; server-rendering needs node/headless-browser (worse than a script tag). Vendor `mermaid.js`, no bundler, and **inject it
-  only on pages the index says contain a mermaid block** — every other page stays JS-free. This reframes the v0 invariant: no _bundler_, not dogmatic zero-JS.
+- **Markdown → `react-markdown` with GFM, raw HTML sanitization, GitHub alerts,
+  math, and KaTeX.** The reader keeps Markdown files authoritative while using
+  maintained plugins for the syntax users expect.
+- **Code highlighting → Prism.js.** `rehype-prism-plus` supplies token classes and
+  the frontend selects a readable light or dark Prism theme.
+- **Mermaid → Mermaid.js.** Mermaid blocks render in the browser and inherit the
+  active light/dark theme. This is a deliberate client-side library, not a custom
+  Markdown parser or a server-rendered browser dependency.
+- **No plugin runtime.** React/Vite is the application shell; the supported reader
+  surface is explicit and testable rather than an open-ended JavaScript plugin system.
 
 **Deferred:** Dataview-style queries (our Postgres index is the right home for it later), templates (lightweight `templates/` seed files), daily-notes/calendar (a date-named-note convention).
 **Rejected:** a general JS plugin system — that is the Electron-weight tax Miku exists to avoid.
