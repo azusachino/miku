@@ -58,7 +58,7 @@ function Tree({
   const noteMap = new Map(notes.map((note) => [note.id, note]));
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set(readExpandedPaths()));
   const [loaded, setLoaded] = useState<Record<string, TreeNodeModel[]>>({});
-  const roots = sortTreeNodes(nodes.filter((node) => (hoisted ? node.path === activeId || activeId.startsWith(`${node.path}/`) : node.parentId === null)));
+  const roots = sortTreeNodes(nodes.filter((node) => node.parentId === null));
 
   useEffect(() => {
     if (!activeId) return;
@@ -198,7 +198,13 @@ function Sidebar({
       <button className="sidebar-resizer" onPointerDown={onResizeStart} aria-label="Resize workspace navigation" />
       <div className="sidebar-toolbar">
         <span className="eyebrow">Workspace</span>
-        <button className={`tool-button ${hoisted ? "is-on" : ""}`} onClick={onToggleHoist} aria-label="Toggle hoisted note">
+        <button
+          className={`tool-button ${hoisted ? "is-on" : ""}`}
+          onClick={onToggleHoist}
+          aria-label={hoisted ? "Expand workspace tree" : "Collapse workspace tree"}
+          aria-pressed={hoisted}
+          title={hoisted ? "Expand workspace tree" : "Collapse workspace tree"}
+        >
           <ActionIcon name="tree" />
         </button>
       </div>
@@ -495,10 +501,13 @@ function WorkspaceScreen() {
   const queryClient = useQueryClient();
   const client = useMemo(() => createWorkspaceClient(setApiSource), []);
   const isNoteRoute = location.pathname.startsWith("/p/");
+  const isFolderRoute = location.pathname.startsWith("/folder/");
+  const folderPath = isFolderRoute ? location.pathname.slice("/folder/".length).split("/").map((part) => decodeURIComponent(part)).join("/") : "";
   const utilityRoute = location.pathname.startsWith("/tags") ? "tags" : location.pathname === "/recent" ? "recent" : undefined;
   const activeId = isNoteRoute ? routeId ?? state.activeId : "";
   const workspace = useQuery({ queryKey: ["workspace"], queryFn: client.workspace });
   const tree = useQuery({ queryKey: ["tree"], queryFn: () => client.tree() });
+  const folder = useQuery({ queryKey: ["folder", folderPath], queryFn: () => client.tree(folderPath), enabled: Boolean(folderPath) });
   const note = useQuery({ queryKey: ["note", activeId], queryFn: () => client.note(activeId), enabled: Boolean(activeId) });
   const context = useQuery({ queryKey: ["context", activeId], queryFn: () => client.context(activeId), enabled: Boolean(activeId) });
   const results = useQuery({ queryKey: ["search", query, searchScope], queryFn: () => client.search(query, searchScope), enabled: searchOpen });
@@ -567,7 +576,7 @@ function WorkspaceScreen() {
   useEffect(() => {
     const onPointerMove = (event: PointerEvent) => {
       if (resizingSidebar.current) {
-        setSidebarWidth(Math.min(380, Math.max(200, event.clientX)));
+        setSidebarWidth(Math.min(480, Math.max(200, event.clientX)));
       } else if (resizingContext.current) {
         setContextWidth(Math.min(420, Math.max(190, window.innerWidth - event.clientX)));
       }
@@ -612,18 +621,15 @@ function WorkspaceScreen() {
     const recent = JSON.parse(localStorage.getItem("miku-recent") ?? "[]") as string[];
     localStorage.setItem("miku-recent", JSON.stringify([id, ...recent.filter((path) => path !== id)].slice(0, 20)));
   };
-  const openBreadcrumbPath = async (path: string) => {
-    try {
-      const children = await client.tree(path);
-      const indexNote = children.find((node) => node.kind === "markdown" && node.path === `${path}/index.md`);
-      if (indexNote) {
-        select(indexNote.path);
-        return;
-      }
-    } catch {
-      // An unavailable folder should never become a broken note route.
+  const openBreadcrumbPath = (path: string) => navigate(`/folder/${path.split("/").map(encodeURIComponent).join("/")}`);
+  const toggleWorkspaceTree = () => {
+    const expanding = state.hoisted;
+    dispatch({ type: "toggle-hoist" });
+    if (expanding) {
+      requestAnimationFrame(() => {
+        document.querySelector<HTMLElement>('.tab[aria-selected="true"] > button:first-child')?.focus();
+      });
     }
-    navigate("/");
   };
   const searchTag = (tag: string) => {
     navigate(`/tags/${encodeURIComponent(tag)}`);
@@ -728,7 +734,7 @@ function WorkspaceScreen() {
           activeId={activeId}
           onSelect={select}
           hoisted={state.hoisted}
-          onToggleHoist={() => dispatch({ type: "toggle-hoist" })}
+          onToggleHoist={toggleWorkspaceTree}
           client={client}
           onTags={() => navigate("/tags")}
           onRecent={() => navigate("/recent")}
@@ -741,7 +747,9 @@ function WorkspaceScreen() {
           }}
         />
         <main className="main-stage">
-          {utilityRoute ? (
+          {folderPath ? (
+            <FolderBrowser path={folderPath} nodes={folder.data ?? []} isLoading={folder.isLoading} isError={folder.isError} onSelect={select} onOpenFolder={(path) => navigate(`/folder/${path.split("/").map(encodeURIComponent).join("/")}`)} />
+          ) : utilityRoute ? (
             <WorkspaceUtility route={utilityRoute} theme={theme} onToggleTheme={toggleTheme} client={client} />
           ) : (
             <>
@@ -871,12 +879,54 @@ export function App() {
   return (
     <Routes>
       <Route path="/p/*" element={<WorkspaceScreen />} />
+      <Route path="/folder/*" element={<WorkspaceScreen />} />
       <Route path="/n/*" element={<LegacyNoteRedirect />} />
       <Route path="/tags/*" element={<WorkspaceScreen />} />
       <Route path="/recent" element={<WorkspaceScreen />} />
       <Route path="/settings" element={<Navigate replace to="/" />} />
       <Route path="*" element={<WorkspaceScreen />} />
     </Routes>
+  );
+}
+
+function FolderBrowser({
+  path,
+  nodes,
+  isLoading,
+  isError,
+  onSelect,
+  onOpenFolder
+}: {
+  path: string;
+  nodes: TreeNodeModel[];
+  isLoading: boolean;
+  isError: boolean;
+  onSelect: (id: string) => void;
+  onOpenFolder: (path: string) => void;
+}) {
+  const title = path.split("/").at(-1) || path;
+  return (
+    <section className="folder-browser" aria-labelledby="folder-browser-title">
+      <div className="folder-browser-header">
+        <div>
+          <span className="eyebrow">Folder</span>
+          <h1 id="folder-browser-title">{title}</h1>
+          <p>{path}</p>
+        </div>
+        <span className="folder-browser-count">{nodes.length} items</span>
+      </div>
+      {isLoading ? <p className="search-empty">Loading folder…</p> : isError ? <p className="search-empty">Unable to load this folder.</p> : nodes.length ? (
+        <div className="folder-card-grid">
+          {sortTreeNodes(nodes).map((node) => (
+            <button className="folder-card" key={node.placementId} onClick={() => node.kind === "folder" ? onOpenFolder(node.path) : onSelect(node.path)}>
+              <span className="folder-card-icon"><NoteIcon value={node.kind === "folder" ? "folder" : "file-text"} /></span>
+              <span className="folder-card-copy"><strong>{node.note.title}</strong><small>{node.kind === "folder" ? "Folder" : node.path}</small></span>
+              <ActionIcon name="chevron-right" />
+            </button>
+          ))}
+        </div>
+      ) : <p className="search-empty">This folder is empty.</p>}
+    </section>
   );
 }
 
