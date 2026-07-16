@@ -13,6 +13,19 @@ use std::sync::Arc;
 #[cfg(feature = "valkey")]
 use tokio::sync::Mutex;
 
+pub mod workspace;
+pub use workspace::{FileWorkspaceService, WorkspaceService, WorkspaceServiceError};
+
+pub mod application;
+pub use application::FileMikuApplication;
+
+pub mod ports;
+pub use ports::{
+    ApplicationError, DocumentSource, FileNode, FileNodeKind, FileTree, FileTreeRequest,
+    IndexPhase, MikuApplication, NoteContext, NotePath, NoteRef, RelativePath, SaveNoteCommand,
+    SearchReader, TagReader, VaultInfo, VaultReader, VaultWriter,
+};
+
 /// Explicitly selected deployment tier and primary index.
 #[derive(Debug, Clone)]
 pub enum RuntimeConfig {

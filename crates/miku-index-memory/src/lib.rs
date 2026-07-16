@@ -5,8 +5,9 @@
 
 use async_trait::async_trait;
 use miku_domain::{
-    Backlink, IndexCapabilities, IndexEvent, IndexReader, IndexWriter, MentionRecord, PageIndex,
-    PageSummary, SearchHit, SearchRequest, StoreError, StoreResult, TagCount,
+    Backlink, HotProjection, IndexCapabilities, IndexEvent, IndexReader, IndexWriter,
+    MentionRecord, PageIndex, PageSummary, SearchHit, SearchRequest, StoreError, StoreResult,
+    TagCount,
 };
 use std::collections::BTreeMap;
 use std::sync::{Arc, RwLock};
@@ -25,6 +26,8 @@ pub struct MemoryIndex {
     mentions: Arc<RwLock<MentionMap>>,
     search: Arc<RwLock<SearchProjection>>,
 }
+
+impl HotProjection for MemoryIndex {}
 
 impl Default for MemoryIndex {
     fn default() -> Self {
@@ -191,7 +194,9 @@ impl IndexWriter for MemoryIndex {
             indexed.insert(page.summary.path.clone(), page);
         }
         drop(indexed);
-        self.rebuild_search()?;
+        // Bulk callers rebuild the search projection once after all batches
+        // have been loaded. Rebuilding here would make a full reconcile
+        // quadratic in the number of batches.
         Ok(events)
     }
 

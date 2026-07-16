@@ -2,9 +2,9 @@
 
 use async_trait::async_trait;
 use miku_domain::{
-    Backlink, IndexCapabilities, IndexEvent, IndexReader, IndexWriter, LinkKind, MentionRecord,
-    PageIndex, PageSummary, SearchHit, SearchRequest, SearchScope, StoreError, StoreResult,
-    TagCount,
+    Backlink, DurableProjection, IndexCapabilities, IndexEvent, IndexReader, IndexWriter, LinkKind,
+    MentionRecord, PageIndex, PageSummary, SearchHit, SearchRequest, SearchScope, StoreError,
+    StoreResult, TagCount,
 };
 use miku_indexer::page_slug;
 use sqlx::PgPool;
@@ -16,6 +16,8 @@ const MENTIONS_READY_VERSION: &str = "2";
 pub struct PostgresIndex {
     pool: PgPool,
 }
+
+impl DurableProjection for PostgresIndex {}
 
 impl PostgresIndex {
     /// Wrap an already migrated connection pool.

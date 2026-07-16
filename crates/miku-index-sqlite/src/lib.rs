@@ -7,9 +7,9 @@ use std::str::FromStr;
 use std::time::Duration;
 
 use miku_domain::{
-    Backlink, IndexCapabilities, IndexEvent, IndexReader, IndexWriter, LinkKind, MentionRecord,
-    PageIndex, PageSummary, SearchHit, SearchRequest, SearchScope, StoreError, StoreResult,
-    TagCount,
+    Backlink, DurableProjection, IndexCapabilities, IndexEvent, IndexReader, IndexWriter, LinkKind,
+    MentionRecord, PageIndex, PageSummary, SearchHit, SearchRequest, SearchScope, StoreError,
+    StoreResult, TagCount,
 };
 use miku_indexer::page_slug;
 
@@ -20,6 +20,8 @@ const MENTIONS_READY_VERSION: &str = "2";
 pub struct SqliteIndex {
     pool: SqlitePool,
 }
+
+impl DurableProjection for SqliteIndex {}
 
 impl SqliteIndex {
     /// Open a new SQLite-backed index at the given path.
