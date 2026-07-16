@@ -276,6 +276,7 @@ function NotePane({
   split,
   onSplit,
   readonly,
+  indexPhase,
   client,
   onTagSearch
 }: {
@@ -283,6 +284,7 @@ function NotePane({
   split: boolean;
   onSplit: () => void;
   readonly: boolean;
+  indexPhase?: string;
   client: ReturnType<typeof createWorkspaceClient>;
   onTagSearch: (tag: string) => void;
 }) {
@@ -308,11 +310,14 @@ function NotePane({
   return (
     <section className={`note-pane ${split ? "is-split" : ""}`} data-region={shellRegions[2]}>
       <div className="note-toolbar">
-        <div className="breadcrumbs">
-          <span>{note.path.split("/")[0]}</span>
-          <span>/</span>
-          <strong>{note.title}</strong>
-        </div>
+        <nav className="breadcrumbs" aria-label="Note location">
+          {note.path.split("/").map((part, index, parts) => (
+            <span key={`${part}-${index}`}>
+              {index > 0 && <span aria-hidden="true">/</span>}
+              <strong>{index === parts.length - 1 ? note.title : part}</strong>
+            </span>
+          ))}
+        </nav>
         <div className="note-actions">
           <button className="toolbar-button" onClick={onSplit}>
             {split ? "Single pane" : "Split pane"}
@@ -367,13 +372,28 @@ function NotePane({
             </button>
           )}
           <span>{readonly ? "Readonly" : editing ? "Edit mode" : "Reader mode"}</span>
+          <span>index: {indexPhase ?? "unknown"}</span>
         </div>
       </div>
     </section>
   );
 }
 
-function ContextPanel({ note, open, onToggle, onNavigate }: { note: NoteModel; open: boolean; onToggle: () => void; onNavigate: (path: string) => void }) {
+function ContextPanel({
+  note,
+  parents,
+  indexPhase,
+  open,
+  onToggle,
+  onNavigate
+}: {
+  note: NoteModel;
+  parents: TreeNodeModel["note"][];
+  indexPhase?: string;
+  open: boolean;
+  onToggle: () => void;
+  onNavigate: (path: string) => void;
+}) {
   if (!open)
     return (
       <button className="context-reopen" onClick={onToggle} aria-label="Open context panel">
@@ -392,13 +412,33 @@ function ContextPanel({ note, open, onToggle, onNavigate }: { note: NoteModel; o
         <div className="context-title">
           Relations <span>{note.backlinks.length}</span>
         </div>
-        {note.backlinks.map((backlink) => (
-          <button className="relation-row" key={backlink} onClick={() => onNavigate(backlink)}>
-            <span className="relation-line" />
-            <span>{backlink}</span>
-            <Icon>↗</Icon>
-          </button>
-        ))}
+        {note.backlinks.length ? (
+          note.backlinks.map((backlink) => (
+            <button className="relation-row" key={backlink} onClick={() => onNavigate(backlink)}>
+              <span className="relation-line" />
+              <span>{backlink}</span>
+              <Icon>↗</Icon>
+            </button>
+          ))
+        ) : (
+          <p className="context-empty">No backlinks indexed yet.</p>
+        )}
+      </div>
+      <div className="context-section">
+        <div className="context-title">
+          Parents <span>{parents.length}</span>
+        </div>
+        {parents.length ? (
+          parents.map((parent) => (
+            <button className="relation-row" key={parent.path} onClick={() => onNavigate(parent.path)}>
+              <span className="relation-line" />
+              <span>{parent.title}</span>
+              <Icon>↑</Icon>
+            </button>
+          ))
+        ) : (
+          <p className="context-empty">This note is at the vault root.</p>
+        )}
       </div>
       <div className="context-section">
         <div className="context-title">Properties</div>
@@ -408,7 +448,7 @@ function ContextPanel({ note, open, onToggle, onNavigate }: { note: NoteModel; o
         </div>
         <div className="property-row">
           <span>revision</span>
-          <strong>clean</strong>
+          <strong>{note.revision ? note.revision.content_hash.slice(0, 8) : "unavailable"}</strong>
         </div>
         <div className="property-row">
           <span>placements</span>
@@ -417,12 +457,13 @@ function ContextPanel({ note, open, onToggle, onNavigate }: { note: NoteModel; o
       </div>
       <div className="context-section">
         <div className="context-title">Source</div>
-        <div className="activity">
-          <span className="activity-dot" />
-          <div>
-            <strong>Markdown source</strong>
-            <small>{note.updated}</small>
-          </div>
+        <div className="property-row">
+          <span>file</span>
+          <strong title={note.path}>{note.path.split("/").pop()}</strong>
+        </div>
+        <div className="property-row">
+          <span>index</span>
+          <strong>{indexPhase ?? "unknown"}</strong>
         </div>
       </div>
     </aside>
@@ -632,11 +673,34 @@ function WorkspaceScreen() {
         <main className="main-stage">
           <Tabs notes={notes} tabs={state.tabs} activeId={activeId} activeNote={activeNote} onSelect={select} onClose={(id) => dispatch({ type: "close", id })} />
           <div className="content-stage">
-            <NotePane note={activeNote} split={state.split} onSplit={() => dispatch({ type: "toggle-split" })} readonly={workspace.data?.readonly ?? true} client={client} onTagSearch={searchTag} />
+            <NotePane
+              note={activeNote}
+              split={state.split}
+              onSplit={() => dispatch({ type: "toggle-split" })}
+              readonly={workspace.data?.readonly ?? true}
+              indexPhase={workspace.data?.indexPhase}
+              client={client}
+              onTagSearch={searchTag}
+            />
             {state.split && (
-              <NotePane note={secondaryNote} split={false} onSplit={() => dispatch({ type: "toggle-split" })} readonly={workspace.data?.readonly ?? true} client={client} onTagSearch={searchTag} />
+              <NotePane
+                note={secondaryNote}
+                split={false}
+                onSplit={() => dispatch({ type: "toggle-split" })}
+                readonly={workspace.data?.readonly ?? true}
+                indexPhase={workspace.data?.indexPhase}
+                client={client}
+                onTagSearch={searchTag}
+              />
             )}
-            <ContextPanel note={activeNote} open={state.contextOpen} onToggle={() => dispatch({ type: "toggle-context" })} onNavigate={select} />
+            <ContextPanel
+              note={activeNote}
+              parents={context.data?.parents ?? []}
+              indexPhase={workspace.data?.indexPhase}
+              open={state.contextOpen}
+              onToggle={() => dispatch({ type: "toggle-context" })}
+              onNavigate={select}
+            />
           </div>
           <footer className="status-bar" data-region={shellRegions[4]}>
             <span>

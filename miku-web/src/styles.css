@@ -370,6 +370,12 @@ input:focus-visible {
   border-bottom: 1px solid var(--line);
   background: #111318;
 }
+.tabs:empty::after {
+  padding: 13px 10px;
+  color: var(--faint);
+  content: "No open notes";
+  font-size: 0.68rem;
+}
 .tab {
   display: flex;
   align-items: center;
@@ -425,6 +431,7 @@ input:focus-visible {
 }
 .note-pane.is-split {
   flex: 1;
+  min-width: 320px;
 }
 .note-toolbar {
   display: flex;
@@ -440,6 +447,11 @@ input:focus-visible {
   gap: 9px;
   color: var(--faint);
   font-size: 0.68rem;
+}
+.breadcrumbs > span {
+  display: inline-flex;
+  gap: 9px;
+  min-width: 0;
 }
 .breadcrumbs strong {
   color: var(--muted);
@@ -740,8 +752,18 @@ input:focus-visible {
   font-size: 0.67rem;
 }
 .property-row strong {
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   color: #aeb4c1;
   font-weight: 500;
+}
+.context-empty {
+  margin: 0;
+  color: var(--faint);
+  font-size: 0.67rem;
+  line-height: 1.5;
 }
 .activity {
   display: flex;
