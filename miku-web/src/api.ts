@@ -87,6 +87,14 @@ class ApiRequestError extends Error {
   }
 }
 
+export function shouldRetryApiQuery(failureCount: number, error: unknown): boolean {
+  const status = error instanceof ApiRequestError ? error.status : (error as { status?: unknown })?.status;
+  if (typeof status === "number" && status >= 400 && status < 500) {
+    return false;
+  }
+  return failureCount < 2;
+}
+
 async function request<T>(path: string): Promise<T> {
   try {
     const response = await fetch(path, { headers: { Accept: "application/json" } });

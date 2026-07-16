@@ -110,7 +110,14 @@ impl FileMikuApplication {
 
     async fn resolve_document(&self, note: NoteRef) -> Result<VaultDocument, ApplicationError> {
         match note {
-            NoteRef::Path(path) => self.read_document_path(path.as_str()).await,
+            NoteRef::Path(path) => {
+                if self.index_ready.load(Ordering::Acquire)
+                    && self.index.page(path.as_str()).await?.is_none()
+                {
+                    return Err(ApplicationError::NotFound(path.as_str().to_string()));
+                }
+                self.read_document_path(path.as_str()).await
+            }
             NoteRef::Id(id) => {
                 let pages = self.index.list_pages().await?;
                 let path = pages
@@ -437,10 +444,11 @@ mod tests {
         }
         let workspace: Arc<dyn WorkspaceService> =
             Arc::new(FileWorkspaceService::new(Arc::clone(&vault), false));
-        let application = FileMikuApplication::new(
+        let application = FileMikuApplication::with_index_readiness(
             vault,
             workspace,
             IndexApi::from_store(Arc::new(MemoryIndex::new())),
+            Arc::new(AtomicBool::new(false)),
         );
 
         for index in 0..=DOCUMENT_CACHE_CAPACITY {
@@ -452,9 +460,29 @@ mod tests {
                 .expect("read note");
         }
 
+        application
+            .read_note(NoteRef::Path(crate::NotePath::new("Note-0.md").unwrap()))
+            .await
+            .expect("promote note");
+        application
+            .read_note(NoteRef::Path(crate::NotePath::new("Note-128.md").unwrap()))
+            .await
+            .expect("read note beyond cache bound");
         assert_eq!(
             application.documents_cache.read().await.entries.len(),
             DOCUMENT_CACHE_CAPACITY
         );
+        assert!(application
+            .documents_cache
+            .read()
+            .await
+            .entries
+            .contains_key("Note-0.md"));
+        assert!(!application
+            .documents_cache
+            .read()
+            .await
+            .entries
+            .contains_key("Note-1.md"));
     }
 }

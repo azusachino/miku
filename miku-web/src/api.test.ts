@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { TreeNodeModel } from "./api";
-import { formatUpdatedAt, sortTreeNodes } from "./api";
+import { formatUpdatedAt, shouldRetryApiQuery, sortTreeNodes } from "./api";
 
 const node = (kind: TreeNodeModel["kind"], path: string, title = path): TreeNodeModel => ({
   kind,
@@ -28,5 +28,12 @@ describe("updated timestamp formatting", () => {
   it("falls back when the revision timestamp is unavailable", () => {
     expect(formatUpdatedAt(null)).toBe("unknown");
     expect(formatUpdatedAt(Number.NaN)).toBe("unknown");
+  });
+});
+
+describe("API retry policy", () => {
+  it("does not retry client errors", () => {
+    expect(shouldRetryApiQuery(0, { status: 404 })).toBe(false);
+    expect(shouldRetryApiQuery(0, { status: 503 })).toBe(true);
   });
 });
