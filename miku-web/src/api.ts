@@ -145,6 +145,7 @@ function normalizeTreeNode(node: ApiTreeNode): TreeNodeModel {
 }
 
 export function createWorkspaceClient(onSource: (source: ApiSource) => void) {
+  const treeCache = new Map<string, TreeNodeModel[]>();
   const treeInFlight = new Map<string, Promise<TreeNodeModel[]>>();
   const live = async <T>(requestLive: () => Promise<T>): Promise<T> => {
     try {
@@ -169,9 +170,14 @@ export function createWorkspaceClient(onSource: (source: ApiSource) => void) {
 
   const liveTreeOnce = (folder?: string): Promise<TreeNodeModel[]> => {
     const key = folder ?? "";
+    const cached = treeCache.get(key);
+    if (cached) return Promise.resolve(cached);
     const existing = treeInFlight.get(key);
     if (existing) return existing;
-    const pending = live(() => liveTree(folder)).finally(() => treeInFlight.delete(key));
+    const pending = live(() => liveTree(folder)).then((nodes) => {
+      treeCache.set(key, nodes);
+      return nodes;
+    }).finally(() => treeInFlight.delete(key));
     treeInFlight.set(key, pending);
     return pending;
   };
@@ -189,6 +195,7 @@ export function createWorkspaceClient(onSource: (source: ApiSource) => void) {
         };
       }),
     tree: (folder?: string) => liveTreeOnce(folder),
+    invalidateTree: () => treeCache.clear(),
     note: (id: string) => live(() => request<Schemas["NoteResponse"]>(`/api/v1/notes/${encodeURIComponent(id)}`).then(normalizeNote)),
     saveNote: async (id: string, input: SaveNoteInput): Promise<NoteModel> => {
       const response = await fetch(`/api/v1/notes/${encodeURIComponent(id)}`, {

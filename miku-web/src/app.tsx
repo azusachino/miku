@@ -581,12 +581,13 @@ function WorkspaceScreen() {
   useEffect(
     () =>
       subscribeToWorkspaceEvents(() => {
+        client.invalidateTree();
         void queryClient.invalidateQueries({ queryKey: ["workspace"] });
         void queryClient.invalidateQueries({ queryKey: ["tree"] });
         void queryClient.invalidateQueries({ queryKey: ["context"] });
         void queryClient.invalidateQueries({ queryKey: ["search"] });
       }),
-    [queryClient]
+    [client, queryClient]
   );
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
