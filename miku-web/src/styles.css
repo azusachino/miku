@@ -542,12 +542,6 @@ input:focus-visible {
   padding-bottom: 32px;
 }
 .note-heading-copy { min-width: 0; flex: 1; }
-.note-heading-status {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-}
 .note-icon-large {
   display: grid;
   place-items: center;
@@ -573,19 +567,35 @@ input:focus-visible {
   letter-spacing: -0.04em;
   line-height: 1.1;
 }
-.note-subtitle {
+.note-meta-list {
   margin: 0;
-  color: var(--faint);
+  padding-left: 18px;
+  list-style: disc;
+  color: var(--muted);
   font-size: 0.72rem;
+  line-height: 1.8;
 }
-.note-subtitle span {
-  padding: 0 5px;
+.note-meta-list li::marker { color: var(--accent); }
+.note-meta-list code {
   color: var(--faint);
+  font: inherit;
+  overflow-wrap: anywhere;
 }
+.meta-label {
+  display: inline-block;
+  min-width: 54px;
+  margin-right: 5px;
+  color: var(--faint);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.66rem;
+}
+.note-meta-list .saved-state { display: inline-flex; }
 .tag-row {
   display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   gap: 6px;
-  margin: 19px 0 0;
+  margin: 0;
 }
 .tag {
   cursor: pointer;
