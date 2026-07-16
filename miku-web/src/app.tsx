@@ -188,12 +188,13 @@ function LaunchBar({
   indexPhase?: string;
   noteCount?: number;
 }) {
+  const navigate = useNavigate();
   return (
     <header className="launch-bar" data-region={shellRegions[0]}>
-      <div className="brand-mark">
+      <button className="brand-mark" onClick={() => navigate("/")} aria-label="Go to workspace home">
         <span className="brand-glyph">m</span>
         <span>miku</span>
-      </div>
+      </button>
       <div className="workspace-source" title={`${noteCount ?? 0} notes · index ${indexPhase ?? "unknown"}`}>
         <span className="status-dot" /> miku_docs
       </div>
@@ -227,7 +228,8 @@ function Sidebar({
   client,
   onTags,
   onRecent,
-  onSettings
+  onSettings,
+  noteCount
 }: {
   notes: NoteModel[];
   nodes: TreeNodeModel[];
@@ -239,6 +241,7 @@ function Sidebar({
   onTags: () => void;
   onRecent: () => void;
   onSettings: () => void;
+  noteCount: number;
 }) {
   return (
     <aside className="sidebar" data-region={shellRegions[1]}>
@@ -250,7 +253,7 @@ function Sidebar({
       </div>
       <div className="tree-heading">
         <span>All notes</span>
-        <span className="count-pill">{notes.length}</span>
+        <span className="count-pill">{noteCount}</span>
       </div>
       <Tree notes={notes} nodes={nodes} activeId={activeId} onSelect={onSelect} hoisted={hoisted} client={client} />
       <div className="sidebar-bottom">
@@ -362,22 +365,27 @@ function NotePane({
         </div>
       </div>
       <div className="note-scroll">
-        <div className="note-kicker">
+        <div className="note-header">
           <FileIcon large />
-          <span className="saved-state">
-            <span className="saved-dot" /> {editing ? saveState : "reading"}
-          </span>
-        </div>
-        <h1>{note.title}</h1>
-        <p className="note-subtitle">
-          {note.path} <span>·</span> updated {note.updated}
-        </p>
-        <div className="tag-row">
-          {note.tags.map((tag) => (
-            <button className="tag" key={tag} onClick={() => onTagSearch(tag)}>
-              #{tag}
-            </button>
-          ))}
+          <div className="note-heading-copy">
+            <div className="note-heading-status">
+              <span className="eyebrow">Markdown note</span>
+              <span className="saved-state">
+                <span className="saved-dot" /> {editing ? saveState : "reading"}
+              </span>
+            </div>
+            <h1>{note.title}</h1>
+            <p className="note-subtitle">
+              {note.path} <span>·</span> updated {note.updated}
+            </p>
+            <div className="tag-row">
+              {note.tags.map((tag) => (
+                <button className="tag" key={tag} onClick={() => onTagSearch(tag)}>
+                  #{tag}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
         {editing ? (
           <Suspense fallback={<div className="markdown-editor-loading">Loading editor…</div>}>
@@ -516,7 +524,9 @@ function WorkspaceScreen() {
   const routeId = useParams()["*"];
   const queryClient = useQueryClient();
   const client = useMemo(() => createWorkspaceClient(setApiSource), []);
-  const activeId = routeId ?? state.activeId;
+  const isNoteRoute = location.pathname.startsWith("/p/");
+  const utilityRoute = location.pathname.startsWith("/tags") ? "tags" : location.pathname === "/recent" ? "recent" : location.pathname === "/settings" ? "settings" : undefined;
+  const activeId = isNoteRoute ? routeId ?? state.activeId : "";
   const workspace = useQuery({ queryKey: ["workspace"], queryFn: client.workspace });
   const tree = useQuery({ queryKey: ["tree"], queryFn: () => client.tree() });
   const note = useQuery({ queryKey: ["note", activeId], queryFn: () => client.note(activeId), enabled: Boolean(activeId) });
@@ -701,39 +711,46 @@ function WorkspaceScreen() {
           onTags={() => navigate("/tags")}
           onRecent={() => navigate("/recent")}
           onSettings={() => navigate("/settings")}
+          noteCount={workspace.data?.noteCount ?? 0}
         />
         <main className="main-stage">
-          <Tabs notes={notes} tabs={state.tabs} activeId={activeId} activeNote={activeNote} onSelect={select} onClose={(id) => dispatch({ type: "close", id })} />
-          <div className="content-stage">
-            <NotePane
-              note={activeNote}
-              split={state.split}
-              onSplit={() => dispatch({ type: "toggle-split" })}
-              readonly={workspace.data?.readonly ?? true}
-              indexPhase={workspace.data?.indexPhase}
-              client={client}
-              onTagSearch={searchTag}
-            />
-            {state.split && (
-              <NotePane
-                note={secondaryNote}
-                split={false}
-                onSplit={() => dispatch({ type: "toggle-split" })}
-                readonly={workspace.data?.readonly ?? true}
-                indexPhase={workspace.data?.indexPhase}
-                client={client}
-                onTagSearch={searchTag}
-              />
-            )}
-            <ContextPanel
-              note={activeNote}
-              parents={context.data?.parents ?? []}
-              indexPhase={workspace.data?.indexPhase}
-              open={state.contextOpen}
-              onToggle={() => dispatch({ type: "toggle-context" })}
-              onNavigate={select}
-            />
-          </div>
+          {utilityRoute ? (
+            <WorkspaceUtility route={utilityRoute} theme={theme} onToggleTheme={toggleTheme} client={client} />
+          ) : (
+            <>
+              <Tabs notes={notes} tabs={state.tabs} activeId={activeId} activeNote={activeNote} onSelect={select} onClose={(id) => dispatch({ type: "close", id })} />
+              <div className="content-stage">
+                <NotePane
+                  note={activeNote}
+                  split={state.split}
+                  onSplit={() => dispatch({ type: "toggle-split" })}
+                  readonly={workspace.data?.readonly ?? true}
+                  indexPhase={workspace.data?.indexPhase}
+                  client={client}
+                  onTagSearch={searchTag}
+                />
+                {state.split && (
+                  <NotePane
+                    note={secondaryNote}
+                    split={false}
+                    onSplit={() => dispatch({ type: "toggle-split" })}
+                    readonly={workspace.data?.readonly ?? true}
+                    indexPhase={workspace.data?.indexPhase}
+                    client={client}
+                    onTagSearch={searchTag}
+                  />
+                )}
+                <ContextPanel
+                  note={activeNote}
+                  parents={context.data?.parents ?? []}
+                  indexPhase={workspace.data?.indexPhase}
+                  open={state.contextOpen}
+                  onToggle={() => dispatch({ type: "toggle-context" })}
+                  onNavigate={select}
+                />
+              </div>
+            </>
+          )}
           <footer className="status-bar" data-region={shellRegions[4]}>
             <span>
               <span className="online-dot" /> {apiSource === "live" ? "live vault" : apiSource === "offline" ? "offline" : "connecting"}
@@ -750,14 +767,63 @@ function WorkspaceScreen() {
   );
 }
 
+function WorkspaceUtility({
+  route,
+  theme,
+  onToggleTheme,
+  client
+}: {
+  route: "recent" | "tags" | "settings";
+  theme: Theme;
+  onToggleTheme: () => void;
+  client: ReturnType<typeof createWorkspaceClient>;
+}) {
+  const navigate = useNavigate();
+  const wildcard = useParams()["*"] ?? "";
+  const tag = route === "tags" && wildcard ? decodeURIComponent(wildcard) : "";
+  const tags = useQuery({ queryKey: ["tags"], queryFn: client.tags, enabled: route === "tags" });
+  const tagNotes = useQuery({ queryKey: ["tag-notes", tag], queryFn: () => client.tagNotes(tag), enabled: route === "tags" && Boolean(tag) });
+  const recent = route === "recent" ? (JSON.parse(localStorage.getItem("miku-recent") ?? "[]") as string[]).slice(0, 20) : [];
+  return (
+    <div className="workspace-utility" data-theme={theme}>
+      <div className="utility-page-header">
+        <div>
+          <span className="eyebrow">{route === "settings" ? "Configuration" : route === "recent" ? "History" : "Index"}</span>
+          <h1>{route === "settings" ? "Settings" : route === "recent" ? "Recent notes" : tag ? `#${tag}` : "Tags"}</h1>
+          <p>{route === "settings" ? "Workspace preferences and source information." : route === "recent" ? "Notes opened most recently in this browser." : "Browse indexed Markdown notes by tag."}</p>
+        </div>
+        <button className="toolbar-button" onClick={onToggleTheme}>
+          <ActionIcon name={theme === "dark" ? "sun" : "moon"} /> {theme === "dark" ? "Light" : "Dark"}
+        </button>
+      </div>
+      {route === "settings" && (
+        <div className="utility-card-list">
+          <div className="utility-card"><div><strong>Theme</strong><small>Current appearance: {theme}</small></div><button className="toolbar-button" onClick={onToggleTheme}>Use {theme === "dark" ? "light" : "dark"} theme</button></div>
+          <div className="utility-card"><div><strong>Source</strong><small>miku_docs Markdown filesystem</small></div><span className="utility-status">authoritative</span></div>
+        </div>
+      )}
+      {route === "recent" && (
+        <div className="utility-list">
+          {recent.length ? recent.map((path) => <button className="utility-row" key={path} onClick={() => navigate(`/p/${path}`)}><strong>{path.split("/").pop()}</strong><small>{path}</small></button>) : <p className="search-empty">No recent notes yet.</p>}
+        </div>
+      )}
+      {route === "tags" && (
+        <div className="utility-list">
+          {tag ? tagNotes.isLoading ? <p>Loading notes…</p> : tagNotes.data?.map((note) => <button className="utility-row" key={note.path} onClick={() => navigate(`/p/${note.path}`)}><strong>{note.title}</strong><small>{note.path}</small></button>) : tags.isLoading ? <p>Loading tags…</p> : tags.data?.map((item) => <button className="utility-row" key={item.tag} onClick={() => navigate(`/tags/${encodeURIComponent(item.tag)}`)}><strong>#{item.tag}</strong><small>{item.count} notes</small></button>)}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function App() {
   return (
     <Routes>
       <Route path="/p/*" element={<WorkspaceScreen />} />
       <Route path="/n/*" element={<LegacyNoteRedirect />} />
-      <Route path="/tags/*" element={<TagsPage />} />
-      <Route path="/recent" element={<RecentPage />} />
-      <Route path="/settings" element={<SettingsPage />} />
+      <Route path="/tags/*" element={<WorkspaceScreen />} />
+      <Route path="/recent" element={<WorkspaceScreen />} />
+      <Route path="/settings" element={<WorkspaceScreen />} />
       <Route path="*" element={<WorkspaceScreen />} />
     </Routes>
   );
