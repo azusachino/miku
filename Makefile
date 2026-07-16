@@ -51,6 +51,9 @@ check-ux-browser:
 benchmark:
 	uv run python scripts/orchestrate.py benchmark
 
+benchmark-api:
+	uv run python scripts/api_benchmark.py
+
 benchmark-real-vault:
 	MIKU_BENCHMARK_VAULT="$(CURDIR)/miku_docs" cargo test -p miku --release --lib -- --ignored --nocapture benchmark_real_vault_reconcile
 

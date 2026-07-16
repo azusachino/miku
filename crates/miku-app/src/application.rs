@@ -9,13 +9,55 @@ use async_trait::async_trait;
 use miku_domain::{workspace::NoteId, PageSummary, SearchHit, SearchRequest};
 use miku_vault::{Vault, VaultDocument};
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, HashMap, VecDeque},
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc,
     },
 };
 use tokio::sync::RwLock;
+
+const DOCUMENT_CACHE_CAPACITY: usize = 128;
+
+struct DocumentCache {
+    entries: HashMap<String, VaultDocument>,
+    order: VecDeque<String>,
+}
+
+impl DocumentCache {
+    fn new() -> Self {
+        Self {
+            entries: HashMap::new(),
+            order: VecDeque::new(),
+        }
+    }
+
+    fn get(&mut self, path: &str) -> Option<VaultDocument> {
+        let document = self.entries.get(path).cloned()?;
+        self.touch(path);
+        Some(document)
+    }
+
+    fn insert(&mut self, path: String, document: VaultDocument) {
+        self.entries.insert(path.clone(), document);
+        self.touch(&path);
+        while self.order.len() > DOCUMENT_CACHE_CAPACITY {
+            if let Some(evicted) = self.order.pop_front() {
+                self.entries.remove(&evicted);
+            }
+        }
+    }
+
+    fn clear(&mut self) {
+        self.entries.clear();
+        self.order.clear();
+    }
+
+    fn touch(&mut self, path: &str) {
+        self.order.retain(|entry| entry != path);
+        self.order.push_back(path.to_string());
+    }
+}
 
 /// File-backed application service composed from the vault, workspace policy,
 /// and rebuildable index. It is the only concrete service transports need.
@@ -24,7 +66,7 @@ pub struct FileMikuApplication {
     vault: Arc<Vault>,
     workspace: Arc<dyn WorkspaceService>,
     index: IndexApi,
-    documents_cache: Arc<RwLock<Option<Vec<VaultDocument>>>>,
+    documents_cache: Arc<RwLock<DocumentCache>>,
     index_ready: Arc<AtomicBool>,
 }
 
@@ -44,45 +86,45 @@ impl FileMikuApplication {
             vault,
             workspace,
             index,
-            documents_cache: Arc::new(RwLock::new(None)),
+            documents_cache: Arc::new(RwLock::new(DocumentCache::new())),
             index_ready,
         }
     }
 
     /// Discard the parsed projection after an external filesystem change.
     pub async fn invalidate_documents(&self) {
-        *self.documents_cache.write().await = None;
+        self.documents_cache.write().await.clear();
     }
 
-    async fn documents(&self) -> Result<Vec<VaultDocument>, ApplicationError> {
-        if let Some(documents) = self.documents_cache.read().await.clone() {
-            return Ok(documents);
+    async fn read_document_path(&self, path: &str) -> Result<VaultDocument, ApplicationError> {
+        if let Some(document) = self.documents_cache.write().await.get(path) {
+            return Ok(document);
         }
-        let documents = self
-            .workspace
-            .workspace()
+        let document = self.vault.read(path).map_err(ApplicationError::from)?;
+        self.documents_cache
+            .write()
             .await
-            .map_err(application_error)?;
-        let mut cache = self.documents_cache.write().await;
-        if let Some(existing) = cache.as_ref() {
-            return Ok(existing.clone());
-        }
-        *cache = Some(documents.clone());
-        Ok(documents)
+            .insert(path.to_string(), document.clone());
+        Ok(document)
     }
 
     async fn resolve_document(&self, note: NoteRef) -> Result<VaultDocument, ApplicationError> {
         match note {
-            NoteRef::Path(path) => self
-                .vault
-                .read(path.as_str())
-                .map_err(ApplicationError::from),
-            NoteRef::Id(id) => self
-                .documents()
-                .await?
-                .into_iter()
-                .find(|document| document.note.id == id)
-                .ok_or_else(|| ApplicationError::NotFound(id.as_str().to_string())),
+            NoteRef::Path(path) => self.read_document_path(path.as_str()).await,
+            NoteRef::Id(id) => {
+                let pages = self.index.list_pages().await?;
+                let path = pages
+                    .into_iter()
+                    .find(|page| {
+                        page.frontmatter
+                            .get("id")
+                            .and_then(serde_json::Value::as_str)
+                            == Some(id.as_str())
+                    })
+                    .map(|page| page.path)
+                    .ok_or_else(|| ApplicationError::NotFound(id.as_str().to_string()))?;
+                self.read_document_path(&path).await
+            }
         }
     }
 
@@ -260,15 +302,10 @@ impl VaultWriter for FileMikuApplication {
             )
             .await
             .map_err(application_error)?;
-        let mut cache = self.documents_cache.write().await;
-        if let Some(documents) = cache.as_mut() {
-            if let Some(existing) = documents
-                .iter_mut()
-                .find(|existing| existing.note.id == saved.note.id)
-            {
-                *existing = saved.clone();
-            }
-        }
+        self.documents_cache
+            .write()
+            .await
+            .insert(saved.note.source_path.clone(), saved.clone());
         Ok(saved)
     }
 }
@@ -378,5 +415,46 @@ mod tests {
             .await
             .expect("path note");
         assert_eq!(note.note.title, "Alpha");
+        assert_eq!(application.documents_cache.read().await.entries.len(), 1);
+
+        application.invalidate_documents().await;
+        assert!(application.documents_cache.read().await.entries.is_empty());
+    }
+
+    #[tokio::test]
+    async fn document_cache_is_bounded() {
+        let root = tempdir().expect("temporary vault");
+        let vault = Arc::new(Vault::new(root.path()));
+        for index in 0..=DOCUMENT_CACHE_CAPACITY {
+            vault
+                .create(
+                    &format!("Note-{index}.md"),
+                    format!("Note {index}"),
+                    "body",
+                    Default::default(),
+                )
+                .expect("create note");
+        }
+        let workspace: Arc<dyn WorkspaceService> =
+            Arc::new(FileWorkspaceService::new(Arc::clone(&vault), false));
+        let application = FileMikuApplication::new(
+            vault,
+            workspace,
+            IndexApi::from_store(Arc::new(MemoryIndex::new())),
+        );
+
+        for index in 0..=DOCUMENT_CACHE_CAPACITY {
+            application
+                .read_note(NoteRef::Path(
+                    crate::NotePath::new(format!("Note-{index}.md")).unwrap(),
+                ))
+                .await
+                .expect("read note");
+        }
+
+        assert_eq!(
+            application.documents_cache.read().await.entries.len(),
+            DOCUMENT_CACHE_CAPACITY
+        );
     }
 }
