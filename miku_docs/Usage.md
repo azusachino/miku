@@ -61,8 +61,7 @@ See [[Sandbox]] for examples and [[Features]] for the complete current list.
 
 Open a page at `/p/...` and choose **Edit** for the inline CodeMirror editor. Saves are atomic and guarded by a content hash so an edit made elsewhere is not silently overwritten.
 
-The filesystem watcher notices changes made by git, an editor, or scripts and updates the index in the background. Reader mode checks for a newer indexed version without holding an idle event stream
-open.
+The filesystem watcher notices changes made by git, an editor, or scripts and updates the index in the background. The browser workspace refreshes affected queries when filesystem events arrive.
 
 ## Rebuilding the index
 

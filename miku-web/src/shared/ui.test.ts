@@ -1,11 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { EXPLORER_STATE_KEY, UI_STATE_KEY, keyboardShortcuts, moveSearchSelection, readExpandedPaths, readTheme, shellRegions, writeExpandedPaths, writeTheme, workspaceRoutes } from "./ui";
+import { EXPLORER_STATE_KEY, UI_STATE_KEY, moveSearchSelection, readExpandedPaths, readTheme, shellRegions, writeExpandedPaths, writeTheme } from "./ui";
 
 describe("shared UI contract", () => {
-  it("keeps shell regions and route ownership explicit", () => {
+  it("keeps shell regions explicit", () => {
     expect(shellRegions).toEqual(["launch", "explorer", "content", "context", "status"]);
-    expect(workspaceRoutes.note).toBe("/p/*");
-    expect(workspaceRoutes.settings).toBe("/settings");
   });
 
   it("uses one versioned storage key for theme state", () => {
@@ -41,11 +39,6 @@ describe("shared UI contract", () => {
     expect(readTheme(adapter)).toBe("light");
     writeTheme("dark", adapter);
     expect(adapter.getItem("miku-theme")).toBeNull();
-  });
-
-  it("keeps keyboard shortcuts discoverable and platform-neutral", () => {
-    expect(keyboardShortcuts.quickOpen).toBe("Mod+K");
-    expect(keyboardShortcuts.commandPalette).toBe("Mod+P");
   });
 
   it("round-trips bounded explorer disclosure state", () => {

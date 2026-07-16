@@ -13,24 +13,8 @@ export function headingSlug(value: string): string {
 }
 export type ShellRegion = (typeof shellRegions)[number];
 
-export const workspaceRoutes = {
-  root: "/",
-  note: "/p/*",
-  tags: "/tags/*",
-  recent: "/recent",
-  settings: "/settings"
-} as const;
-
 export const focusTargets = ["tree", "note", "context"] as const;
 export type FocusTarget = (typeof focusTargets)[number];
-
-export const keyboardShortcuts = {
-  quickOpen: "Mod+K",
-  commandPalette: "Mod+P",
-  focusTree: "Alt+Shift+1",
-  focusNote: "Alt+Shift+2",
-  toggleContext: "Alt+Shift+3"
-} as const;
 
 export type Theme = "dark" | "light";
 
