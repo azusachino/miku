@@ -25,8 +25,8 @@ use std::time::{Duration, Instant};
 use tracing::{info, warn};
 
 mod http;
+mod http_api;
 mod openapi;
-mod workspace_api;
 
 const SERVER_TIMING: axum::http::header::HeaderName =
     axum::http::header::HeaderName::from_static("server-timing");

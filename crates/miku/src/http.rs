@@ -1,4 +1,4 @@
-use super::{healthz, metrics, openapi, readyz, workspace_api, AppState};
+use super::{healthz, http_api, metrics, openapi, readyz, AppState};
 use axum::{
     extract::{Request, State},
     middleware,
@@ -62,23 +62,17 @@ pub(super) fn router(state: AppState) -> Router {
         .route("/healthz", get(healthz))
         .route("/readyz", get(readyz))
         .route("/metrics", get(metrics))
-        .route("/api/v1/workspace", get(workspace_api::workspace))
-        .route("/api/v1/tree", get(workspace_api::tree))
+        .route("/api/v1/workspace", get(http_api::workspace))
+        .route("/api/v1/tree", get(http_api::tree))
         .route(
             "/api/v1/notes/{*id}",
-            get(workspace_api::note).put(workspace_api::save_note),
+            get(http_api::note).put(http_api::save_note),
         )
-        .route(
-            "/api/v1/note-context/{*id}",
-            get(workspace_api::note_context),
-        )
-        .route(
-            "/api/v1/note-children/{*id}",
-            get(workspace_api::note_children),
-        )
-        .route("/api/v1/search", get(workspace_api::search))
-        .route("/api/v1/tags", get(workspace_api::tags))
-        .route("/api/v1/tags/{tag}/notes", get(workspace_api::tag_notes))
+        .route("/api/v1/note-context/{*id}", get(http_api::note_context))
+        .route("/api/v1/note-children/{*id}", get(http_api::note_children))
+        .route("/api/v1/search", get(http_api::search))
+        .route("/api/v1/tags", get(http_api::tags))
+        .route("/api/v1/tags/{tag}/notes", get(http_api::tag_notes))
         .route("/api/openapi.json", get(openapi::json))
         .layer(TraceLayer::new_for_http().on_response(super::observe_http_response))
         .layer(middleware::from_fn(request_context))

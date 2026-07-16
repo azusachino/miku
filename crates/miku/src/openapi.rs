@@ -2,7 +2,7 @@
 
 use utoipa::OpenApi;
 
-use crate::workspace_api;
+use crate::http_api;
 
 /// `OpenAPI` document consumed by `miku-web` type generation.
 #[derive(OpenApi)]
@@ -13,32 +13,32 @@ use crate::workspace_api;
         description = "Read-only workspace contract for the file-backed Markdown UI"
     ),
     paths(
-        workspace_api::workspace,
-        workspace_api::tree,
-        workspace_api::note,
-        workspace_api::save_note,
-        workspace_api::note_context,
-        workspace_api::note_children,
-        workspace_api::search,
-        workspace_api::tags,
-        workspace_api::tag_notes
+        http_api::workspace,
+        http_api::tree,
+        http_api::note,
+        http_api::save_note,
+        http_api::note_context,
+        http_api::note_children,
+        http_api::search,
+        http_api::tags,
+        http_api::tag_notes
     ),
     components(schemas(
-        workspace_api::WorkspaceResponse,
-        workspace_api::NoteSummary,
-        workspace_api::TreeNode,
-        workspace_api::TreeResponse,
-        workspace_api::NoteResponse,
-        workspace_api::RevisionResponse,
-        workspace_api::SaveNoteRequest,
-        workspace_api::ContextResponse,
-        workspace_api::BacklinkResponse,
-        workspace_api::SearchQuery,
-        workspace_api::SearchResult,
-        workspace_api::SearchResponse,
-        workspace_api::TagResponse,
-        workspace_api::TagNoteResponse,
-        workspace_api::TreeQuery
+        http_api::WorkspaceResponse,
+        http_api::NoteSummary,
+        http_api::TreeNode,
+        http_api::TreeResponse,
+        http_api::NoteResponse,
+        http_api::RevisionResponse,
+        http_api::SaveNoteRequest,
+        http_api::ContextResponse,
+        http_api::BacklinkResponse,
+        http_api::SearchQuery,
+        http_api::SearchResult,
+        http_api::SearchResponse,
+        http_api::TagResponse,
+        http_api::TagNoteResponse,
+        http_api::TreeQuery
     ))
 )]
 pub struct ApiDoc;
