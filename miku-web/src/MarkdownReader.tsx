@@ -5,6 +5,7 @@ import rehypeHighlight from "rehype-highlight";
 import rehypeRaw from "rehype-raw";
 import rehypeSanitize from "rehype-sanitize";
 import remarkGfm from "remark-gfm";
+import { remarkAlert } from "remark-github-blockquote-alert";
 import rehypeKatex from "rehype-katex";
 import remarkMath from "remark-math";
 import mermaid from "mermaid";
@@ -107,7 +108,7 @@ export function MarkdownReader({ value, path = "" }: { value: string; path?: str
   return (
     <article className="markdown-reader">
       <ReactMarkdown
-        remarkPlugins={[remarkGfm, remarkMath]}
+        remarkPlugins={[remarkGfm, remarkMath, remarkAlert]}
         rehypePlugins={[rehypeRaw, rehypeSanitize, rehypeHighlight, rehypeKatex]}
         components={{
           a: ({ href, children, ...props }) => {
