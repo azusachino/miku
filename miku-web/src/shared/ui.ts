@@ -5,7 +5,11 @@ export const EXPLORER_STATE_KEY = "miku:explorer:v1" as const;
 export const shellRegions = ["launch", "explorer", "content", "context", "status"] as const;
 
 export function headingSlug(value: string): string {
-  return value.toLowerCase().trim().replace(/[^\p{L}\p{N}\s-]/gu, "").replace(/[\s-]+/g, "-");
+  return value
+    .toLowerCase()
+    .trim()
+    .replace(/[^\p{L}\p{N}\s-]/gu, "")
+    .replace(/[\s-]+/g, "-");
 }
 export type ShellRegion = (typeof shellRegions)[number];
 

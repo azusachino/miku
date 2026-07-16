@@ -8,7 +8,9 @@ export function WorkspaceNotice({ message, onDismiss }: WorkspaceNoticeProps) {
   return (
     <div className="workspace-notice" role="alert">
       <span>{message}</span>
-      <button className="quiet-button" onClick={onDismiss} aria-label="Dismiss notice">×</button>
+      <button className="quiet-button" onClick={onDismiss} aria-label="Dismiss notice">
+        ×
+      </button>
     </div>
   );
 }

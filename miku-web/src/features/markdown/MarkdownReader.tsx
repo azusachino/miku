@@ -145,12 +145,7 @@ export function MarkdownReader({ value, path = "", theme = "dark" }: { value: st
       <SyntaxTheme theme={theme} />
       <ReactMarkdown
         remarkPlugins={[remarkGfm, remarkMath, remarkAlert]}
-        rehypePlugins={[
-          rehypeRaw,
-          [rehypeSanitize, markdownSanitizeSchema],
-          [rehypePrism, { ignoreMissing: true }],
-          rehypeKatex
-        ]}
+        rehypePlugins={[rehypeRaw, [rehypeSanitize, markdownSanitizeSchema], [rehypePrism, { ignoreMissing: true }], rehypeKatex]}
         components={{
           a: ({ href, children, node: _node, ...props }) => {
             const resolvedHref = href && path ? (resolveMarkdownHref(href, path) ?? href) : href;

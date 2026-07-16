@@ -13,16 +13,7 @@ type NoteRouteRecoveryOptions = {
   setNotice: (notice: string) => void;
 };
 
-export function useNoteRouteRecovery({
-  activeId,
-  isNoteRoute,
-  isError,
-  hasNote,
-  tabs,
-  dispatch,
-  navigate,
-  setNotice
-}: NoteRouteRecoveryOptions): void {
+export function useNoteRouteRecovery({ activeId, isNoteRoute, isError, hasNote, tabs, dispatch, navigate, setNotice }: NoteRouteRecoveryOptions): void {
   const handledInvalidRoute = useRef<string | null>(null);
 
   useEffect(() => {

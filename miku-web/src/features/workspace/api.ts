@@ -174,10 +174,12 @@ export function createWorkspaceClient(onSource: (source: ApiSource) => void) {
     if (cached) return Promise.resolve(cached);
     const existing = treeInFlight.get(key);
     if (existing) return existing;
-    const pending = live(() => liveTree(folder)).then((nodes) => {
-      treeCache.set(key, nodes);
-      return nodes;
-    }).finally(() => treeInFlight.delete(key));
+    const pending = live(() => liveTree(folder))
+      .then((nodes) => {
+        treeCache.set(key, nodes);
+        return nodes;
+      })
+      .finally(() => treeInFlight.delete(key));
     treeInFlight.set(key, pending);
     return pending;
   };

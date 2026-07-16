@@ -3,7 +3,14 @@ import { createWorkspaceClient, sortTreeNodes, type NoteModel, type TreeNodeMode
 import { readExpandedPaths, writeExpandedPaths } from "../../shared/ui";
 import { ActionIcon, NoteIcon } from "./icons";
 
-export function WorkspaceTree({ notes, nodes, activeId, onSelect, hoisted, client }: {
+export function WorkspaceTree({
+  notes,
+  nodes,
+  activeId,
+  onSelect,
+  hoisted,
+  client
+}: {
   notes: NoteModel[];
   nodes: TreeNodeModel[];
   activeId: string;
@@ -21,7 +28,10 @@ export function WorkspaceTree({ notes, nodes, activeId, onSelect, hoisted, clien
 
   useEffect(() => {
     if (!activeId || hoisted) return;
-    const ancestors = activeId.split("/").slice(0, -1).map((_, index, parts) => parts.slice(0, index + 1).join("/"));
+    const ancestors = activeId
+      .split("/")
+      .slice(0, -1)
+      .map((_, index, parts) => parts.slice(0, index + 1).join("/"));
     setExpanded((current) => {
       const next = new Set(current);
       ancestors.forEach((path) => next.add(path));
@@ -46,7 +56,9 @@ export function WorkspaceTree({ notes, nodes, activeId, onSelect, hoisted, clien
     void Promise.all(pending.map(async (node) => [node.path, await client.tree(node.path)] as const)).then((entries) => {
       if (!cancelled) setLoaded((current) => ({ ...current, ...Object.fromEntries(entries) }));
     });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [client, expanded, loaded, roots]);
 
   const branch = (node: TreeNodeModel, depth: number) => {
@@ -67,14 +79,22 @@ export function WorkspaceTree({ notes, nodes, activeId, onSelect, hoisted, clien
       }
       setExpanded((current) => new Set(current).add(node.path));
     };
-    return <div key={node.placementId} className="tree-branch">
-      <button className={`tree-row ${activeId === note.id ? "is-active" : ""}`} style={{ paddingLeft: `${14 + depth * 17}px` }} onClick={() => isFolder ? void toggleFolder() : onSelect(node.path)} aria-current={activeId === note.id ? "page" : undefined} aria-expanded={isFolder ? isExpanded : undefined}>
-        <span className="tree-caret">{isFolder ? <ActionIcon name={isExpanded ? "chevron-down" : "chevron-right"} /> : null}</span>
-        <span className="tree-icon">{isFolder ? <NoteIcon value="folder" /> : <NoteIcon value={note.icon} />}</span>
-        <span className="tree-label">{title}</span>
-      </button>
-      {!hoisted && isExpanded && children.map((child) => branch(child, depth + 1))}
-    </div>;
+    return (
+      <div key={node.placementId} className="tree-branch">
+        <button
+          className={`tree-row ${activeId === note.id ? "is-active" : ""}`}
+          style={{ paddingLeft: `${14 + depth * 17}px` }}
+          onClick={() => (isFolder ? void toggleFolder() : onSelect(node.path))}
+          aria-current={activeId === note.id ? "page" : undefined}
+          aria-expanded={isFolder ? isExpanded : undefined}
+        >
+          <span className="tree-caret">{isFolder ? <ActionIcon name={isExpanded ? "chevron-down" : "chevron-right"} /> : null}</span>
+          <span className="tree-icon">{isFolder ? <NoteIcon value="folder" /> : <NoteIcon value={note.icon} />}</span>
+          <span className="tree-label">{title}</span>
+        </button>
+        {!hoisted && isExpanded && children.map((child) => branch(child, depth + 1))}
+      </div>
+    );
   };
   return <div className="tree-list">{roots.map((node) => branch(node, 0))}</div>;
 }

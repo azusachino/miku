@@ -17,7 +17,6 @@ describe("tree ordering", () => {
     const sorted = sortTreeNodes([node("markdown", "z.md", "zeta"), node("folder", "b"), node("folder", "A"), node("markdown", "a.md", "Alpha")]);
     expect(sorted.map((item) => item.path)).toEqual(["A", "b", "a.md", "z.md"]);
   });
-
 });
 
 describe("updated timestamp formatting", () => {

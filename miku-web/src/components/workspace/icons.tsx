@@ -47,5 +47,11 @@ export function NoteIcon({ value = "file-text", large = false }: { value?: strin
   const icons: Record<string, Icon> = { "file-text": FileText, note: FileText, book: BookOpen, "check-circle": CheckCircle, rocket: Rocket, folder: Folder };
   const IconComponent = icons[icon.toLowerCase()] ?? FileText;
   const isEmoji = !icons[icon.toLowerCase()] && !/^[a-z0-9-]+$/i.test(icon);
-  return isEmoji ? <span className={`note-icon-emoji ${large ? "is-large" : ""}`} aria-hidden="true">{icon}</span> : <IconComponent className={`note-icon-library ${large ? "is-large" : ""}`} size={large ? 25 : 16} weight="regular" aria-hidden="true" />;
+  return isEmoji ? (
+    <span className={`note-icon-emoji ${large ? "is-large" : ""}`} aria-hidden="true">
+      {icon}
+    </span>
+  ) : (
+    <IconComponent className={`note-icon-library ${large ? "is-large" : ""}`} size={large ? 25 : 16} weight="regular" aria-hidden="true" />
+  );
 }

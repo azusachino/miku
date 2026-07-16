@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useReducer, useRef, useState, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { createWorkspaceClient, sortTreeNodes, subscribeToWorkspaceEvents, type ApiSource, type BacklinkModel, type NoteModel, type SearchScope, type TreeNodeModel } from "./api";
@@ -27,15 +27,7 @@ function noteHeadings(markdown: string): { id: string; text: string; level: numb
   return headings;
 }
 
-function LaunchBar({
-  onSearch,
-  theme,
-  onToggleTheme
-}: {
-  onSearch: () => void;
-  theme: "dark" | "light";
-  onToggleTheme: () => void;
-}) {
+function LaunchBar({ onSearch, theme, onToggleTheme }: { onSearch: () => void; theme: "dark" | "light"; onToggleTheme: () => void }) {
   const navigate = useNavigate();
   return (
     <header className="launch-bar" data-region={shellRegions[0]}>
@@ -201,7 +193,12 @@ function NotePane({
           {note.path.split("/").map((part, index, parts) => (
             <span key={`${part}-${index}`}>
               {index > 0 && <span aria-hidden="true">/</span>}
-              <button className="breadcrumb-link" disabled={index === parts.length - 1} onClick={() => onNavigatePath(parts.slice(0, index + 1).join("/"))} aria-current={index === parts.length - 1 ? "page" : undefined}>
+              <button
+                className="breadcrumb-link"
+                disabled={index === parts.length - 1}
+                onClick={() => onNavigatePath(parts.slice(0, index + 1).join("/"))}
+                aria-current={index === parts.length - 1 ? "page" : undefined}
+              >
                 {index === parts.length - 1 ? note.title : part}
               </button>
             </span>
@@ -220,14 +217,35 @@ function NotePane({
       </div>
       <div className="note-scroll">
         <div className="note-header">
-          <span className="note-icon-large"><NoteIcon value={note.icon} large /></span>
+          <span className="note-icon-large">
+            <NoteIcon value={note.icon} large />
+          </span>
           <div className="note-heading-copy">
             <h1>{note.title}</h1>
             <ul className="note-meta-list">
-              <li><span className="meta-label">type</span> Markdown note</li>
-              <li><span className="meta-label">status</span> <span className="saved-state"><span className="saved-dot" /> {editing ? saveState : "reading"}</span></li>
-              <li><span className="meta-label">updated</span> {note.updated}</li>
-              {note.tags.length > 0 && <li className="note-meta-tags"><span className="tag-row">{note.tags.map((tag) => <button className="tag" key={tag} onClick={() => onTagSearch(tag)}>#{tag}</button>)}</span></li>}
+              <li>
+                <span className="meta-label">type</span> Markdown note
+              </li>
+              <li>
+                <span className="meta-label">status</span>{" "}
+                <span className="saved-state">
+                  <span className="saved-dot" /> {editing ? saveState : "reading"}
+                </span>
+              </li>
+              <li>
+                <span className="meta-label">updated</span> {note.updated}
+              </li>
+              {note.tags.length > 0 && (
+                <li className="note-meta-tags">
+                  <span className="tag-row">
+                    {note.tags.map((tag) => (
+                      <button className="tag" key={tag} onClick={() => onTagSearch(tag)}>
+                        #{tag}
+                      </button>
+                    ))}
+                  </span>
+                </li>
+              )}
             </ul>
           </div>
         </div>
@@ -251,7 +269,9 @@ function NotePane({
         {editing && (
           <div className="note-footer">
             <span>Markdown source</span>
-            <button className="toolbar-button" disabled={readonly || !note.revision || saveState === "saving…"} onClick={save}>Save</button>
+            <button className="toolbar-button" disabled={readonly || !note.revision || saveState === "saving…"} onClick={save}>
+              Save
+            </button>
           </div>
         )}
       </div>
@@ -299,7 +319,10 @@ function ContextPanel({
           backlinks.map((backlink) => (
             <button className="relation-row backlink-row" key={backlink.path} onClick={() => onNavigate(backlink.path)}>
               <span className="relation-line" />
-              <span className="relation-copy"><strong>{backlink.title}</strong><small>{backlink.path}</small></span>
+              <span className="relation-copy">
+                <strong>{backlink.title}</strong>
+                <small>{backlink.path}</small>
+              </span>
               <ActionIcon name="arrow-up-right" />
             </button>
           ))
@@ -308,19 +331,29 @@ function ContextPanel({
         )}
       </div>
       <div className="context-section">
-        <div className="context-title">On this page <span>{noteHeadings(note.body).length}</span></div>
-        {noteHeadings(note.body).length ? <nav className="toc-list" aria-label="Table of contents">
-          {noteHeadings(note.body).map((heading) => <a
-            className={`toc-item toc-level-${heading.level}`}
-            href={`#${heading.id}`}
-            key={heading.id}
-            onClick={(event) => {
-              event.preventDefault();
-              window.history.replaceState(window.history.state, "", `${window.location.pathname}${window.location.search}#${heading.id}`);
-              document.getElementById(heading.id)?.scrollIntoView({ behavior: "smooth", block: "start" });
-            }}
-          >{heading.text}</a>)}
-        </nav> : <p className="context-empty">No headings in this note.</p>}
+        <div className="context-title">
+          On this page <span>{noteHeadings(note.body).length}</span>
+        </div>
+        {noteHeadings(note.body).length ? (
+          <nav className="toc-list" aria-label="Table of contents">
+            {noteHeadings(note.body).map((heading) => (
+              <a
+                className={`toc-item toc-level-${heading.level}`}
+                href={`#${heading.id}`}
+                key={heading.id}
+                onClick={(event) => {
+                  event.preventDefault();
+                  window.history.replaceState(window.history.state, "", `${window.location.pathname}${window.location.search}#${heading.id}`);
+                  document.getElementById(heading.id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+                }}
+              >
+                {heading.text}
+              </a>
+            ))}
+          </nav>
+        ) : (
+          <p className="context-empty">No headings in this note.</p>
+        )}
       </div>
       <div className="context-section">
         <div className="context-title">Properties</div>
@@ -375,9 +408,15 @@ export function WorkspaceScreen() {
   const client = useMemo(() => createWorkspaceClient(setApiSource), []);
   const isNoteRoute = location.pathname.startsWith("/p/");
   const isFolderRoute = location.pathname.startsWith("/folder/");
-  const folderPath = isFolderRoute ? location.pathname.slice("/folder/".length).split("/").map((part) => decodeURIComponent(part)).join("/") : "";
+  const folderPath = isFolderRoute
+    ? location.pathname
+        .slice("/folder/".length)
+        .split("/")
+        .map((part) => decodeURIComponent(part))
+        .join("/")
+    : "";
   const utilityRoute = location.pathname.startsWith("/tags") ? "tags" : location.pathname === "/recent" ? "recent" : undefined;
-  const activeId = isNoteRoute ? routeId ?? state.activeId : "";
+  const activeId = isNoteRoute ? (routeId ?? state.activeId) : "";
   const workspace = useQuery({ queryKey: ["workspace"], queryFn: client.workspace });
   const tree = useQuery({ queryKey: ["tree"], queryFn: () => client.tree() });
   const folder = useQuery({ queryKey: ["folder", folderPath], queryFn: () => client.tree(folderPath), enabled: Boolean(folderPath) });
@@ -617,7 +656,9 @@ export function WorkspaceScreen() {
                   onMouseEnter={() => setSearchSelection(index)}
                   onClick={() => select(result.id)}
                 >
-                  <span className="search-result-icon"><NoteIcon value={result.icon} /></span>
+                  <span className="search-result-icon">
+                    <NoteIcon value={result.icon} />
+                  </span>
                   <span>
                     <strong>{result.title}</strong>
                     <small>{result.path}</small>
@@ -633,7 +674,10 @@ export function WorkspaceScreen() {
         </div>
       )}
       <WorkspaceNotice message={notice} onDismiss={() => setNotice(null)} />
-      <div className="workspace-layout flex h-[calc(100vh-var(--shell-topbar-height))] min-h-0 overflow-hidden" style={{ "--shell-sidebar-width": `${sidebarWidth}px`, "--shell-context-width": `${contextWidth}px` } as React.CSSProperties}>
+      <div
+        className="workspace-layout flex h-[calc(100vh-var(--shell-topbar-height))] min-h-0 overflow-hidden"
+        style={{ "--shell-sidebar-width": `${sidebarWidth}px`, "--shell-context-width": `${contextWidth}px` } as React.CSSProperties}
+      >
         <Sidebar
           notes={notes}
           nodes={visibleTree}
@@ -654,7 +698,15 @@ export function WorkspaceScreen() {
         />
         <main className="main-stage flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
           {folderPath ? (
-            <FolderBrowser path={folderPath} nodes={folder.data ?? []} isLoading={folder.isLoading} isError={folder.isError} onSelect={select} onOpenFolder={(path) => navigate(`/folder/${path.split("/").map(encodeURIComponent).join("/")}`)} onNavigatePath={openBreadcrumbPath} />
+            <FolderBrowser
+              path={folderPath}
+              nodes={folder.data ?? []}
+              isLoading={folder.isLoading}
+              isError={folder.isError}
+              onSelect={select}
+              onOpenFolder={(path) => navigate(`/folder/${path.split("/").map(encodeURIComponent).join("/")}`)}
+              onNavigatePath={openBreadcrumbPath}
+            />
           ) : utilityRoute ? (
             <WorkspaceUtility route={utilityRoute} theme={theme} onToggleTheme={toggleTheme} client={client} />
           ) : (
@@ -740,9 +792,12 @@ function WorkspaceUtility({
   useEffect(() => setTagLimit(10), [tags.data]);
   useEffect(() => {
     if (route !== "tags" || tag || !tagSentinelRef.current) return;
-    const observer = new IntersectionObserver((entries) => {
-      if (entries[0]?.isIntersecting) setTagLimit((current) => Math.min(current + 10, tags.data?.length ?? current));
-    }, { rootMargin: "120px" });
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) setTagLimit((current) => Math.min(current + 10, tags.data?.length ?? current));
+      },
+      { rootMargin: "120px" }
+    );
     observer.observe(tagSentinelRef.current);
     return () => observer.disconnect();
   }, [route, tag, tags.data]);
@@ -756,12 +811,41 @@ function WorkspaceUtility({
       </div>
       {route === "recent" && (
         <div className="utility-list">
-          {recent.length ? recent.map((path) => <button className="utility-row" key={path} onClick={() => navigate(`/p/${path}`)}><strong>{path.split("/").pop()}</strong><small>{path}</small></button>) : <p className="search-empty">No recent notes yet.</p>}
+          {recent.length ? (
+            recent.map((path) => (
+              <button className="utility-row" key={path} onClick={() => navigate(`/p/${path}`)}>
+                <strong>{path.split("/").pop()}</strong>
+                <small>{path}</small>
+              </button>
+            ))
+          ) : (
+            <p className="search-empty">No recent notes yet.</p>
+          )}
         </div>
       )}
       {route === "tags" && (
         <div className="utility-list">
-          {tag ? tagNotes.isLoading ? <p>Loading notes…</p> : tagNotes.data?.map((note) => <button className="utility-row" key={note.path} onClick={() => navigate(`/p/${note.path}`)}><strong>{note.title}</strong><small>{note.path}</small></button>) : tags.isLoading ? <p>Loading tags…</p> : visibleTags.map((item) => <button className="utility-row" key={item.tag} onClick={() => navigate(`/tags/${encodeURIComponent(item.tag)}`)}><strong>#{item.tag}</strong><small>{item.count} notes</small></button>)}
+          {tag ? (
+            tagNotes.isLoading ? (
+              <p>Loading notes…</p>
+            ) : (
+              tagNotes.data?.map((note) => (
+                <button className="utility-row" key={note.path} onClick={() => navigate(`/p/${note.path}`)}>
+                  <strong>{note.title}</strong>
+                  <small>{note.path}</small>
+                </button>
+              ))
+            )
+          ) : tags.isLoading ? (
+            <p>Loading tags…</p>
+          ) : (
+            visibleTags.map((item) => (
+              <button className="utility-row" key={item.tag} onClick={() => navigate(`/tags/${encodeURIComponent(item.tag)}`)}>
+                <strong>#{item.tag}</strong>
+                <small>{item.count} notes</small>
+              </button>
+            ))
+          )}
           {!tag && <div ref={tagSentinelRef} className="utility-list-sentinel" aria-hidden="true" />}
         </div>
       )}
@@ -773,9 +857,31 @@ function SettingsDialog({ theme, onToggleTheme, onClose }: { theme: Theme; onTog
   return (
     <div className="settings-overlay" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
       <section className="settings-dialog" role="dialog" aria-modal="true" aria-labelledby="settings-title">
-        <div className="settings-dialog-header"><div><span className="eyebrow">Workspace</span><h2 id="settings-title">Settings</h2></div><button className="quiet-button" onClick={onClose} aria-label="Close settings"><ActionIcon name="close" /></button></div>
-        <div className="settings-dialog-row"><div><strong>Theme</strong><small>Current appearance: {theme}</small></div><button className="toolbar-button" onClick={onToggleTheme}>Use {theme === "dark" ? "light" : "dark"} theme</button></div>
-        <div className="settings-dialog-row"><div><strong>Source</strong><small>Local Markdown files</small></div><span className="utility-status">authoritative</span></div>
+        <div className="settings-dialog-header">
+          <div>
+            <span className="eyebrow">Workspace</span>
+            <h2 id="settings-title">Settings</h2>
+          </div>
+          <button className="quiet-button" onClick={onClose} aria-label="Close settings">
+            <ActionIcon name="close" />
+          </button>
+        </div>
+        <div className="settings-dialog-row">
+          <div>
+            <strong>Theme</strong>
+            <small>Current appearance: {theme}</small>
+          </div>
+          <button className="toolbar-button" onClick={onToggleTheme}>
+            Use {theme === "dark" ? "light" : "dark"} theme
+          </button>
+        </div>
+        <div className="settings-dialog-row">
+          <div>
+            <strong>Source</strong>
+            <small>Local Markdown files</small>
+          </div>
+          <span className="utility-status">authoritative</span>
+        </div>
       </section>
     </div>
   );
@@ -809,155 +915,37 @@ function FolderBrowser({
             {path.split("/").map((part, index, parts) => (
               <span key={`${part}-${index}`}>
                 <span aria-hidden="true">/</span>
-                <button className="breadcrumb-link" disabled={index === parts.length - 1} onClick={() => onNavigatePath(parts.slice(0, index + 1).join("/"))}>{part}</button>
+                <button className="breadcrumb-link" disabled={index === parts.length - 1} onClick={() => onNavigatePath(parts.slice(0, index + 1).join("/"))}>
+                  {part}
+                </button>
               </span>
             ))}
           </nav>
         </div>
         <span className="folder-browser-count">{nodes.length} items</span>
       </div>
-      {isLoading ? <p className="search-empty">Loading folder…</p> : isError ? <p className="search-empty">Unable to load this folder.</p> : nodes.length ? (
+      {isLoading ? (
+        <p className="search-empty">Loading folder…</p>
+      ) : isError ? (
+        <p className="search-empty">Unable to load this folder.</p>
+      ) : nodes.length ? (
         <div className="folder-card-grid">
           {sortTreeNodes(nodes).map((node) => (
-            <button className="folder-card" key={node.placementId} onClick={() => node.kind === "folder" ? onOpenFolder(node.path) : onSelect(node.path)}>
-              <span className="folder-card-icon"><NoteIcon value={node.kind === "folder" ? "folder" : "file-text"} /></span>
-              <span className="folder-card-copy"><strong>{node.note.title}</strong><small>{node.kind === "folder" ? "Folder" : node.path}</small></span>
+            <button className="folder-card" key={node.placementId} onClick={() => (node.kind === "folder" ? onOpenFolder(node.path) : onSelect(node.path))}>
+              <span className="folder-card-icon">
+                <NoteIcon value={node.kind === "folder" ? "folder" : "file-text"} />
+              </span>
+              <span className="folder-card-copy">
+                <strong>{node.note.title}</strong>
+                <small>{node.kind === "folder" ? "Folder" : node.path}</small>
+              </span>
               <ActionIcon name="chevron-right" />
             </button>
           ))}
         </div>
-      ) : <p className="search-empty">This folder is empty.</p>}
+      ) : (
+        <p className="search-empty">This folder is empty.</p>
+      )}
     </section>
-  );
-}
-
-function useThemeState(): [Theme, () => void] {
-  const [theme, setTheme] = useState<Theme>(readTheme);
-  const toggleTheme = () =>
-    setTheme((current) => {
-      const next = current === "dark" ? "light" : "dark";
-      writeTheme(next);
-      return next;
-    });
-  return [theme, toggleTheme];
-}
-
-function UtilityShell({ children, theme, onToggleTheme }: { children: ReactNode; theme: Theme; onToggleTheme: () => void }) {
-  const navigate = useNavigate();
-  const [query, setQuery] = useState("");
-  return (
-    <div className="app-shell utility-shell" data-theme={theme} data-ui-state-version={UI_STATE_VERSION}>
-      <LaunchBar onSearch={() => navigate("/")} theme={theme} onToggleTheme={onToggleTheme} />
-      <div className="utility-shell-content" data-region={shellRegions[2]}>
-        {children}
-      </div>
-    </div>
-  );
-}
-
-function RecentPage() {
-  const navigate = useNavigate();
-  const [theme, onToggleTheme] = useThemeState();
-  const recent = (JSON.parse(localStorage.getItem("miku-recent") ?? "[]") as string[]).slice(0, 20);
-  return (
-    <UtilityShell theme={theme} onToggleTheme={onToggleTheme}>
-      <main className="tags-page utility-page">
-        <span className="eyebrow">Workspace</span>
-        <h1>Recent notes</h1>
-        <p>Notes opened most recently in this browser.</p>
-        <div className="tag-note-list">
-          {recent.length ? (
-            recent.map((path) => (
-              <button className="tag-note-row" key={path} onClick={() => navigate(`/p/${path}`)}>
-                <strong>{path.split("/").pop()}</strong>
-                <small>{path}</small>
-              </button>
-            ))
-          ) : (
-            <p className="search-empty">No recent notes yet.</p>
-          )}
-        </div>
-      </main>
-    </UtilityShell>
-  );
-}
-
-function SettingsPage() {
-  const navigate = useNavigate();
-  const [theme, toggleTheme] = useThemeState();
-  return (
-    <UtilityShell theme={theme} onToggleTheme={toggleTheme}>
-      <main className="tags-page utility-page settings-page">
-        <button className="toolbar-button" onClick={() => navigate("/")}>
-          ← Workspace
-        </button>
-        <span className="eyebrow">Configuration</span>
-        <h1>Settings</h1>
-        <div className="settings-card">
-          <div>
-            <strong>Theme</strong>
-            <small>Current appearance: {theme}</small>
-          </div>
-          <button className="toolbar-button" onClick={toggleTheme}>
-            Use {theme === "dark" ? "light" : "dark"} theme
-          </button>
-        </div>
-        <div className="settings-card">
-          <div>
-            <strong>Source</strong>
-            <small>Local Markdown files</small>
-          </div>
-          <span>authoritative</span>
-        </div>
-      </main>
-    </UtilityShell>
-  );
-}
-
-function TagsPage() {
-  const client = useMemo(() => createWorkspaceClient(() => undefined), []);
-  const navigate = useNavigate();
-  const [theme, onToggleTheme] = useThemeState();
-  const wildcard = useParams()["*"] ?? "";
-  const tag = wildcard ? decodeURIComponent(wildcard) : "";
-  const tags = useQuery({ queryKey: ["tags"], queryFn: client.tags });
-  const notes = useQuery({ queryKey: ["tag-notes", tag], queryFn: () => client.tagNotes(tag), enabled: Boolean(tag) });
-  return (
-    <UtilityShell theme={theme} onToggleTheme={onToggleTheme}>
-      <main className="tags-page">
-        <div className="tags-page-header">
-          <span className="eyebrow">Index</span>
-          <h1>{tag ? `#${tag}` : "Tags"}</h1>
-          <p>Browse indexed Markdown notes by tag.</p>
-        </div>
-        {tag ? (
-          <div className="tag-note-list">
-            {notes.isLoading ? (
-              <p>Loading notes…</p>
-            ) : (
-              notes.data?.map((note) => (
-                <button className="tag-note-row" key={note.path} onClick={() => navigate(`/p/${note.path}`)}>
-                  <strong>{note.title}</strong>
-                  <small>{note.path}</small>
-                </button>
-              ))
-            )}
-          </div>
-        ) : (
-          <div className="tag-index">
-            {tags.isLoading ? (
-              <p>Loading tags…</p>
-            ) : (
-              tags.data?.map((item) => (
-                <button className="tag-index-row" key={item.tag} onClick={() => navigate(`/tags/${encodeURIComponent(item.tag)}`)}>
-                  <span>#{item.tag}</span>
-                  <small>{item.count}</small>
-                </button>
-              ))
-            )}
-          </div>
-        )}
-      </main>
-    </UtilityShell>
   );
 }
