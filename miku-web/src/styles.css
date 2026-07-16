@@ -23,6 +23,11 @@
   --accent: #8b7cff;
   --accent-soft: #24223c;
   --cyan: #6bd3d4;
+  --shell-topbar-height: 58px;
+  --shell-sidebar-width: 244px;
+  --shell-context-width: 235px;
+  --content-measure: 750px;
+  --focus-ring: 0 0 0 3px #5750a54d;
 }
 * {
   box-sizing: border-box;
@@ -47,6 +52,11 @@ button {
 button:disabled {
   cursor: not-allowed;
   opacity: 0.48;
+}
+button:focus-visible,
+input:focus-visible {
+  outline: 0;
+  box-shadow: var(--focus-ring);
 }
 .icon {
   color: var(--muted);
@@ -194,12 +204,12 @@ button:disabled {
 .workspace-layout {
   display: flex;
   min-height: 0;
-  height: calc(100vh - 58px);
+  height: calc(100vh - var(--shell-topbar-height));
   overflow: hidden;
 }
 .sidebar {
   display: flex;
-  flex: 0 0 244px;
+  flex: 0 0 var(--shell-sidebar-width);
   flex-direction: column;
   min-height: 0;
   overflow: hidden;
@@ -460,7 +470,7 @@ button:disabled {
   padding: 50px 60px 70px;
 }
 .note-scroll > * {
-  max-width: 750px;
+  max-width: var(--content-measure);
   margin-right: auto;
   margin-left: auto;
 }
@@ -673,7 +683,7 @@ button:disabled {
 .context-panel {
   min-height: 0;
   overflow-y: auto;
-  flex: 0 0 235px;
+  flex: 0 0 var(--shell-context-width);
   background: rgba(17, 19, 24, 0.55);
 }
 .context-reopen {
@@ -963,13 +973,13 @@ button:disabled {
 }
 @media (max-width: 1180px) {
   .context-panel {
-    flex-basis: 200px;
+    flex-basis: calc(var(--shell-context-width) - 35px);
   }
   .note-scroll {
     padding-inline: 38px;
   }
   .sidebar {
-    flex-basis: 220px;
+    flex-basis: calc(var(--shell-sidebar-width) - 24px);
   }
 }
 [data-theme="light"] {

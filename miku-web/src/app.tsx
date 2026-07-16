@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, useMemo, useReducer, useState } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Navigate, Route, Routes, useLocation, useNavigate, useParams } from "react-router-dom";
 import { createWorkspaceClient, subscribeToWorkspaceEvents, type ApiSource, type NoteModel, type SearchScope, type TreeNodeModel } from "./api";
+import { UI_STATE_VERSION, readTheme, shellRegions, writeTheme, type Theme } from "./ui";
 import { initialWorkspaceState, workspaceReducer } from "./workspace";
 const MarkdownEditor = lazy(() => import("./MarkdownEditor"));
 const MarkdownReader = lazy(() => import("./MarkdownReader").then((module) => ({ default: module.MarkdownReader })));
@@ -114,7 +115,7 @@ function LaunchBar({
 }) {
   const [vaultOpen, setVaultOpen] = useState(false);
   return (
-    <header className="launch-bar">
+    <header className="launch-bar" data-region={shellRegions[0]}>
       <div className="brand-mark">
         <span className="brand-glyph">m</span>
         <span>miku</span>
@@ -175,7 +176,7 @@ function Sidebar({
   onSettings: () => void;
 }) {
   return (
-    <aside className="sidebar">
+    <aside className="sidebar" data-region={shellRegions[1]}>
       <div className="sidebar-toolbar">
         <span className="eyebrow">Workspace</span>
         <button className={`tool-button ${hoisted ? "is-on" : ""}`} onClick={onToggleHoist} aria-label="Toggle hoisted note">
@@ -272,7 +273,7 @@ function NotePane({
     }
   };
   return (
-    <section className={`note-pane ${split ? "is-split" : ""}`}>
+    <section className={`note-pane ${split ? "is-split" : ""}`} data-region={shellRegions[2]}>
       <div className="note-toolbar">
         <div className="breadcrumbs">
           <span>{note.path.split("/")[0]}</span>
@@ -347,7 +348,7 @@ function ContextPanel({ note, open, onToggle, onNavigate }: { note: NoteModel; o
       </button>
     );
   return (
-    <aside className="context-panel">
+    <aside className="context-panel" data-region={shellRegions[3]}>
       <div className="context-header">
         <span className="eyebrow">Context</span>
         <button className="tool-button" onClick={onToggle} aria-label="Close context panel">
@@ -402,7 +403,7 @@ function WorkspaceScreen() {
   const [searchScope, setSearchScope] = useState<SearchScope>("all");
   const [noteCache, setNoteCache] = useState<Record<string, NoteModel>>({});
   const [apiSource, setApiSource] = useState<ApiSource>("connecting");
-  const [theme, setTheme] = useState<"dark" | "light">(() => (localStorage.getItem("miku-theme") as "dark" | "light" | null) ?? "dark");
+  const [theme, setTheme] = useState<Theme>(readTheme);
   const navigate = useNavigate();
   const location = useLocation();
   const routeId = useParams()["*"];
@@ -485,25 +486,17 @@ function WorkspaceScreen() {
   const toggleTheme = () =>
     setTheme((current) => {
       const next = current === "dark" ? "light" : "dark";
-      localStorage.setItem("miku-theme", next);
+      writeTheme(next);
       return next;
     });
   const status = useMemo(() => (workspace.data ? `${workspace.data.noteCount} notes · ${workspace.data.placementCount} placements` : "Loading workspace"), [workspace.data]);
 
   const secondaryNote = notes.find((candidate) => candidate.id === (state.tabs.find((tab) => tab !== activeId) ?? "welcome")) ?? activeNote;
   return (
-    <div className="app-shell" data-theme={theme}>
-      <LaunchBar
-        query={query}
-        setQuery={setQuery}
-        onSearch={openSearch}
-        theme={theme}
-        onToggleTheme={toggleTheme}
-        indexPhase={workspace.data?.indexPhase}
-        noteCount={workspace.data?.noteCount}
-      />
+    <div className="app-shell" data-theme={theme} data-ui-state-version={UI_STATE_VERSION}>
+      <LaunchBar query={query} setQuery={setQuery} onSearch={openSearch} theme={theme} onToggleTheme={toggleTheme} indexPhase={workspace.data?.indexPhase} noteCount={workspace.data?.noteCount} />
       {searchOpen && (
-        <div className="search-popover">
+        <div className="search-popover" data-region="quick-open">
           <div className="search-popover-head">
             <span>Quick search</span>
             <button onClick={() => setSearchOpen(false)}>Esc</button>
@@ -518,17 +511,14 @@ function WorkspaceScreen() {
             aria-label="Quick search input"
           />
           <div className="search-scopes" role="group" aria-label="Search scope">
-            {([
-              ["all", "All"],
-              ["title", "Title"],
-              ["content", "Content"]
-            ] as const).map(([value, label]) => (
-              <button
-                key={value}
-                className={`search-scope ${searchScope === value ? "is-active" : ""}`}
-                aria-pressed={searchScope === value}
-                onClick={() => setSearchScope(value)}
-              >
+            {(
+              [
+                ["all", "All"],
+                ["title", "Title"],
+                ["content", "Content"]
+              ] as const
+            ).map(([value, label]) => (
+              <button key={value} className={`search-scope ${searchScope === value ? "is-active" : ""}`} aria-pressed={searchScope === value} onClick={() => setSearchScope(value)}>
                 {label}
               </button>
             ))}
@@ -573,7 +563,7 @@ function WorkspaceScreen() {
             )}
             <ContextPanel note={activeNote} open={state.contextOpen} onToggle={() => dispatch({ type: "toggle-context" })} onNavigate={select} />
           </div>
-          <footer className="status-bar">
+          <footer className="status-bar" data-region={shellRegions[4]}>
             <span>
               <span className="online-dot" /> {apiSource === "live" ? "live vault" : apiSource === "offline" ? "offline" : "connecting"}
             </span>
@@ -616,12 +606,16 @@ function RecentPage() {
       <h1>Recent notes</h1>
       <p>Notes opened most recently in this browser.</p>
       <div className="tag-note-list">
-        {recent.length ? recent.map((path) => (
-          <button className="tag-note-row" key={path} onClick={() => navigate(`/p/${path}`)}>
-            <strong>{path.split("/").pop()}</strong>
-            <small>{path}</small>
-          </button>
-        )) : <p className="search-empty">No recent notes yet.</p>}
+        {recent.length ? (
+          recent.map((path) => (
+            <button className="tag-note-row" key={path} onClick={() => navigate(`/p/${path}`)}>
+              <strong>{path.split("/").pop()}</strong>
+              <small>{path}</small>
+            </button>
+          ))
+        ) : (
+          <p className="search-empty">No recent notes yet.</p>
+        )}
       </div>
     </main>
   );
@@ -629,22 +623,36 @@ function RecentPage() {
 
 function SettingsPage() {
   const navigate = useNavigate();
-  const [theme, setTheme] = useState<"dark" | "light">(() => (localStorage.getItem("miku-theme") as "dark" | "light" | null) ?? "dark");
-  const toggleTheme = () => setTheme((current) => {
-    const next = current === "dark" ? "light" : "dark";
-    localStorage.setItem("miku-theme", next);
-    return next;
-  });
+  const [theme, setTheme] = useState<Theme>(readTheme);
+  const toggleTheme = () =>
+    setTheme((current) => {
+      const next = current === "dark" ? "light" : "dark";
+      writeTheme(next);
+      return next;
+    });
   return (
     <main className="tags-page utility-page settings-page" data-theme={theme}>
-      <button className="toolbar-button" onClick={() => navigate("/")}>← Workspace</button>
+      <button className="toolbar-button" onClick={() => navigate("/")}>
+        ← Workspace
+      </button>
       <span className="eyebrow">Configuration</span>
       <h1>Settings</h1>
       <div className="settings-card">
-        <div><strong>Theme</strong><small>Current appearance: {theme}</small></div>
-        <button className="toolbar-button" onClick={toggleTheme}>Use {theme === "dark" ? "light" : "dark"} theme</button>
+        <div>
+          <strong>Theme</strong>
+          <small>Current appearance: {theme}</small>
+        </div>
+        <button className="toolbar-button" onClick={toggleTheme}>
+          Use {theme === "dark" ? "light" : "dark"} theme
+        </button>
       </div>
-      <div className="settings-card"><div><strong>Source</strong><small>miku_docs Markdown filesystem</small></div><span>authoritative</span></div>
+      <div className="settings-card">
+        <div>
+          <strong>Source</strong>
+          <small>miku_docs Markdown filesystem</small>
+        </div>
+        <span>authoritative</span>
+      </div>
     </main>
   );
 }
