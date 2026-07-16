@@ -60,6 +60,15 @@ export type BacklinkModel = { path: string; title: string };
 export type TagNoteModel = { path: string; title: string; mtime: number };
 export type SaveNoteInput = { body: string; title: string; expectedRevision: NonNullable<NoteModel["revision"]> };
 
+export function extractInlineTags(markdown: string): string[] {
+  const tags = new Set<string>();
+  for (const [index, segment] of markdown.split(/(```[\s\S]*?```|`[^`]*`)/g).entries()) {
+    if (index % 2 === 1) continue;
+    for (const match of segment.matchAll(/(?:^|[\s(])#([\p{L}\p{N}][\p{L}\p{N}_\-/]*)/gu)) tags.add(match[1]);
+  }
+  return [...tags].sort();
+}
+
 class ApiRequestError extends Error {
   constructor(
     message: string,
@@ -83,7 +92,8 @@ async function request<T>(path: string): Promise<T> {
 
 function normalizeNote(note: Schemas["NoteResponse"]): NoteModel {
   const frontmatter = note.frontmatter && typeof note.frontmatter === "object" ? (note.frontmatter as Record<string, unknown>) : {};
-  const tags = Array.isArray(frontmatter.tags) ? frontmatter.tags.filter((tag): tag is string => typeof tag === "string") : [];
+  const frontmatterTags = Array.isArray(frontmatter.tags) ? frontmatter.tags.filter((tag): tag is string => typeof tag === "string").map((tag) => tag.replace(/^#/, "")) : [];
+  const tags = [...new Set([...frontmatterTags, ...extractInlineTags(note.body)])].sort();
   return {
     id: note.path,
     path: note.path,

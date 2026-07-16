@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import ReactMarkdown from "react-markdown";
 import rehypeHighlight from "rehype-highlight";
 import rehypeRaw from "rehype-raw";
-import rehypeSanitize from "rehype-sanitize";
+import rehypeSanitize, { defaultSchema } from "rehype-sanitize";
 import remarkGfm from "remark-gfm";
 import { remarkAlert } from "remark-github-blockquote-alert";
 import rehypeKatex from "rehype-katex";
@@ -12,6 +12,15 @@ import mermaid from "mermaid";
 import { headingSlug } from "./ui";
 import "highlight.js/styles/github-dark.css";
 import "katex/dist/katex.min.css";
+
+const markdownSanitizeSchema = {
+  ...defaultSchema,
+  attributes: {
+    ...defaultSchema.attributes,
+    div: [...(defaultSchema.attributes?.div ?? []), "className"],
+    p: [...(defaultSchema.attributes?.p ?? []), "className"]
+  }
+};
 
 export function noteHref(target: string): string {
   const trimmed = target.trim();
@@ -109,10 +118,10 @@ export function MarkdownReader({ value, path = "" }: { value: string; path?: str
     <article className="markdown-reader">
       <ReactMarkdown
         remarkPlugins={[remarkGfm, remarkMath, remarkAlert]}
-        rehypePlugins={[rehypeRaw, rehypeSanitize, rehypeHighlight, rehypeKatex]}
+        rehypePlugins={[rehypeRaw, [rehypeSanitize, markdownSanitizeSchema], rehypeHighlight, rehypeKatex]}
         components={{
-          a: ({ href, children, ...props }) => {
-            const resolvedHref = href && path ? resolveMarkdownHref(href, path) ?? href : href;
+          a: ({ href, children, node: _node, ...props }) => {
+            const resolvedHref = href && path ? (resolveMarkdownHref(href, path) ?? href) : href;
             const internal = resolvedHref?.startsWith("/p/") || resolvedHref?.startsWith("/tags/");
             return (
               <a
@@ -128,23 +137,39 @@ export function MarkdownReader({ value, path = "" }: { value: string; path?: str
               </a>
             );
           },
-          blockquote: ({ children, ...props }) => {
-              const content = textContent(children);
-              const match = content.match(/^\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]/i);
-              return (
-                <blockquote {...props} className={match ? "admonition admonition-" + match[1].toLowerCase() : undefined}>
+          blockquote: ({ children, node: _node, ...props }) => {
+            const content = textContent(children);
+            const match = content.match(/^\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]/i);
+            return (
+              <blockquote {...props} className={match ? "admonition admonition-" + match[1].toLowerCase() : undefined}>
                 {match ? stripAdmonitionMarker(children) : children}
-                </blockquote>
-              );
-            },
-          p: ({ children, ...props }) => {
-            const match = textContent(children).match(/^\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]\s*/i);
-            return <p {...props} className={match ? "admonition admonition-" + match[1].toLowerCase() : undefined}>{match ? stripAdmonitionMarker(children) : children}</p>;
+              </blockquote>
+            );
           },
-          h2: ({ children, ...props }) => <h2 {...props} id={headingSlug(textContent(children))}>{children}</h2>,
-          h3: ({ children, ...props }) => <h3 {...props} id={headingSlug(textContent(children))}>{children}</h3>,
-          h4: ({ children, ...props }) => <h4 {...props} id={headingSlug(textContent(children))}>{children}</h4>,
-          code: ({ className, children, ...props }) => {
+          p: ({ children, node: _node, ...props }) => {
+            const match = textContent(children).match(/^\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]\s*/i);
+            return (
+              <p {...props} className={match ? "admonition admonition-" + match[1].toLowerCase() : undefined}>
+                {match ? stripAdmonitionMarker(children) : children}
+              </p>
+            );
+          },
+          h2: ({ children, node: _node, ...props }) => (
+            <h2 {...props} id={headingSlug(textContent(children))}>
+              {children}
+            </h2>
+          ),
+          h3: ({ children, node: _node, ...props }) => (
+            <h3 {...props} id={headingSlug(textContent(children))}>
+              {children}
+            </h3>
+          ),
+          h4: ({ children, node: _node, ...props }) => (
+            <h4 {...props} id={headingSlug(textContent(children))}>
+              {children}
+            </h4>
+          ),
+          code: ({ className, children, node: _node, ...props }) => {
             const source = String(children).replace(/\n$/, "");
             if (/\blanguage-mermaid\b/.test(className ?? "")) return <MermaidChart source={source} />;
             return (

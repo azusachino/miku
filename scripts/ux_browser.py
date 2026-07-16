@@ -42,11 +42,32 @@ def main() -> int:
         page.wait_for_timeout(700)
         if rows.count() == 0:
             raise AssertionError("workspace tree has no clickable rows")
-        page.locator(".tree-row").filter(has_text="Features").click()
-        page.wait_for_url("**/p/Features.md")
-        page.locator(".note-scroll h1").filter(has_text="Features").wait_for()
-        if page.locator(".note-scroll h1").first.inner_text() != "Features":
+        page.locator(".tree-row").filter(has_text="Sandbox").click()
+        page.wait_for_url("**/p/Sandbox.md")
+        page.locator(".note-scroll h1").filter(has_text="Sandbox").wait_for()
+        if page.locator(".note-scroll h1").first.inner_text() != "Sandbox":
             raise AssertionError("clicking a note did not update the reader")
+        if page.locator(".context-tag", has_text="#demo").count() != 1:
+            raise AssertionError("sandbox inline tag is missing from note context")
+        if (
+            page.locator(".markdown-alert-note").count() != 1
+            or page.locator(".markdown-alert-warning").count() != 1
+        ):
+            raise AssertionError("GitHub alert classes were not preserved in the browser")
+        page.locator(".mermaid-diagram svg").wait_for(timeout=10_000)
+        if page.locator(".mermaid-diagram svg").count() != 1:
+            raise AssertionError("sandbox Mermaid diagram did not render")
+        if page.locator(".katex").count() < 1:
+            raise AssertionError("sandbox math did not render")
+        if page.locator('a[href="/tags/demo"]').count() < 1:
+            raise AssertionError("sandbox inline tag link is missing")
+        page.locator(".context-tag", has_text="#demo").click()
+        page.wait_for_url("**/tags/demo")
+        page.get_by_role("button", name="Sandbox", exact=True).first.wait_for()
+        page.goto(f"{BASE_URL}/p/Sandbox.md", wait_until="domcontentloaded")
+        page.locator(".toc-item").first.click()
+        if "#" not in page.url:
+            raise AssertionError("TOC click did not update the URL fragment")
 
         open_nested_note(page)
         if "/p/geektime-docs/" not in page.url:
@@ -71,13 +92,11 @@ def main() -> int:
         if dark_background == light_background:
             raise AssertionError("theme toggle changed the attribute but not the shell colors")
 
-        search = page.get_by_label("Search notes")
-        search.fill("Android")
-        search.press("Enter")
+        page.get_by_role("button", name="Open quick search").click()
         quick_search = page.get_by_label("Quick search input")
         quick_search.wait_for()
-        quick_search.fill("JVM")
-        if quick_search.input_value() != "JVM":
+        quick_search.fill("Features")
+        if quick_search.input_value() != "Features":
             raise AssertionError("quick search panel input did not accept text")
         page.get_by_role("group", name="Search scope").wait_for()
         content_scope = page.get_by_role("button", name="Content")
@@ -87,9 +106,17 @@ def main() -> int:
         page.get_by_role("button", name="Title").click()
         if page.get_by_role("button", name="Title").get_attribute("aria-pressed") != "true":
             raise AssertionError("title search scope was not selectable")
+        quick_search.press("ArrowDown")
+        quick_search.press("Enter")
+        page.wait_for_url("**/p/Features.md")
 
-        source = page.get_by_text("miku_docs", exact=True)
-        source.wait_for()
+        page.goto(f"{BASE_URL}/p/does-not-exist.md", wait_until="domcontentloaded")
+        page.get_by_role("heading", name="Note unavailable", exact=True).wait_for()
+        page.goto(f"{BASE_URL}/tags/not-a-real-tag", wait_until="domcontentloaded")
+        page.get_by_role("heading", name="#not-a-real-tag").wait_for()
+        if page.locator(".tag-note-row").count() != 0:
+            raise AssertionError("missing tag unexpectedly returned notes")
+
         if page.get_by_role("button", name="Open vault menu").count():
             raise AssertionError("removed fake vault switcher is still exposed")
         page.goto(f"{BASE_URL}/", wait_until="domcontentloaded")
@@ -98,8 +125,7 @@ def main() -> int:
         page.get_by_role("heading", name="Recent notes").wait_for()
         page.goto(f"{BASE_URL}/", wait_until="domcontentloaded")
         page.get_by_role("button", name="Settings").click()
-        page.wait_for_url("**/settings")
-        page.get_by_role("heading", name="Settings").wait_for()
+        page.get_by_role("dialog", name="Settings").wait_for()
 
         page.goto(f"{BASE_URL}/", wait_until="domcontentloaded")
         page.screenshot(path=str(ARTIFACT_DIR / "reading.png"), full_page=True)

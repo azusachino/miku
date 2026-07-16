@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { extractInlineTags } from "./api";
 import { expandInlineTags, expandWikiLinks, noteHref, resolveMarkdownHref } from "./MarkdownReader";
 
 describe("Markdown reader navigation", () => {
@@ -22,5 +23,9 @@ describe("Markdown reader navigation", () => {
     expect(resolveMarkdownHref("../Shared/abc.md#part", "Design/Overview.md")).toBe("/p/Shared/abc.md#part");
     expect(resolveMarkdownHref("/p/abc/xx", "Design/Overview.md")).toBe("/p/abc/xx");
     expect(resolveMarkdownHref("https://example.com", "Design/Overview.md")).toBeNull();
+  });
+
+  it("extracts inline tags for note metadata while skipping code", () => {
+    expect(extractInlineTags("#demo and #設計\n\n`#literal`\n\n```md\n#code\n```")).toEqual(["demo", "設計"]);
   });
 });
