@@ -265,6 +265,12 @@ pub trait IndexWriter: Send + Sync {
         Ok(events)
     }
 
+    /// Populate a rebuildable hot projection from the authoritative source
+    /// without changing the durable projection.
+    async fn hydrate_hot_pages(&self, _pages: Vec<PageIndex>) -> StoreResult<()> {
+        Ok(())
+    }
+
     /// Rebuild any derived full-text structures after a bulk projection load.
     ///
     /// Stores without a separate derived search structure can keep the default

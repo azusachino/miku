@@ -84,6 +84,13 @@ projection. A failed optional cache operation degrades cache freshness, not docu
 
 ## Implementation status
 
-The ADR is accepted as the target design. The current code has the backend-neutral reader/writer
-traits and individual implementations, but its runtime composer still needs the default
-`SQLite + MemoryIndex/Tantivy` composition refactor.
+The ADR is accepted and the default composition is implemented. `miku_docs` is reconciled into
+SQLite first, then the indexer hydrates the process-local MemoryIndex/Tantivy projection from the
+unchanged Markdown files without rewriting SQLite. Search is published only after that hot
+projection rebuild; derived mentions may finish afterward and fall back to durable data while
+they are being refreshed.
+
+On the measured 14,311-file corpus, the initial default startup completed in about 34.1 seconds.
+A same-database restart performed no durable page writes and warmed the hot projection in about
+21.2 seconds. Tantivy is currently in-memory, so this restart hydration is required for body
+search after process restart.

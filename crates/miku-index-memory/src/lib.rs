@@ -200,6 +200,10 @@ impl IndexWriter for MemoryIndex {
         Ok(events)
     }
 
+    async fn hydrate_hot_pages(&self, pages: Vec<PageIndex>) -> StoreResult<()> {
+        self.replace_pages(pages).await.map(|_| ())
+    }
+
     async fn replace_mentions_for_source(
         &self,
         source_path: &str,

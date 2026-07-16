@@ -19,6 +19,7 @@ const MENTIONS_READY_VERSION: &str = "2";
 #[derive(Clone)]
 pub struct SqliteIndex {
     pool: SqlitePool,
+    search_enabled: bool,
 }
 
 impl DurableProjection for SqliteIndex {}
@@ -26,6 +27,16 @@ impl DurableProjection for SqliteIndex {}
 impl SqliteIndex {
     /// Open a new SQLite-backed index at the given path.
     pub async fn open(path: &str) -> StoreResult<Self> {
+        Self::open_with_search(path, true).await
+    }
+
+    /// Open SQLite as a durable graph/metadata projection while delegating
+    /// full-text serving to a composed hot search projection.
+    pub async fn open_without_search(path: &str) -> StoreResult<Self> {
+        Self::open_with_search(path, false).await
+    }
+
+    async fn open_with_search(path: &str, search_enabled: bool) -> StoreResult<Self> {
         let opts = SqliteConnectOptions::from_str(&format!("sqlite://{path}"))
             .map_err(|e| StoreError::InvalidInput(format!("invalid connection string: {e}")))?
             .create_if_missing(true)
@@ -56,7 +67,10 @@ impl SqliteIndex {
             .await
             .map_err(|e| StoreError::Unavailable(format!("FTS5 cleanup failed: {e}")))?;
 
-        Ok(Self { pool })
+        Ok(Self {
+            pool,
+            search_enabled,
+        })
     }
 
     /// Return reference to the underlying connection pool.
@@ -101,7 +115,7 @@ impl IndexReader for SqliteIndex {
     async fn capabilities(&self) -> StoreResult<IndexCapabilities> {
         Ok(IndexCapabilities {
             durable: true,
-            full_text_search: true,
+            full_text_search: self.search_enabled,
             fuzzy_page_search: false,
             transactions: true,
             remote_sync: false,
@@ -346,6 +360,7 @@ impl IndexReader for SqliteIndex {
 async fn replace_page_conn(
     conn: &mut sqlx::SqliteConnection,
     page: PageIndex,
+    search_enabled: bool,
 ) -> StoreResult<IndexEvent> {
     let path = page.summary.path.clone();
     let slug = page_slug(&path);
@@ -373,19 +388,21 @@ async fn replace_page_conn(
     .await
     .map_err(database_error)?;
 
-    sqlx::query("DELETE FROM tb_pages_fts WHERE path = ?")
-        .bind(&path)
-        .execute(&mut *conn)
-        .await
-        .map_err(database_error)?;
+    if search_enabled {
+        sqlx::query("DELETE FROM tb_pages_fts WHERE path = ?")
+            .bind(&path)
+            .execute(&mut *conn)
+            .await
+            .map_err(database_error)?;
 
-    sqlx::query("INSERT INTO tb_pages_fts (path, title, body) VALUES (?, ?, ?)")
-        .bind(&path)
-        .bind(&page.summary.title)
-        .bind(&page.body)
-        .execute(&mut *conn)
-        .await
-        .map_err(database_error)?;
+        sqlx::query("INSERT INTO tb_pages_fts (path, title, body) VALUES (?, ?, ?)")
+            .bind(&path)
+            .bind(&page.summary.title)
+            .bind(&page.body)
+            .execute(&mut *conn)
+            .await
+            .map_err(database_error)?;
+    }
 
     sqlx::query("DELETE FROM tb_links WHERE src_id = ?")
         .bind(page_id)
@@ -445,33 +462,29 @@ async fn replace_page_conn(
         .map_err(database_error)?;
     }
 
+    Ok(IndexEvent::PageIndexed { path })
+}
+
+async fn resolve_links_conn(conn: &mut sqlx::SqliteConnection) -> StoreResult<()> {
     sqlx::query(
         "UPDATE tb_links
          SET target_id = target.id
          FROM tb_pages target
-         WHERE tb_links.src_id = ? AND tb_links.kind = 'page'
+         WHERE tb_links.kind = 'page'
            AND tb_links.target_norm = target.slug",
     )
-    .bind(page_id)
     .execute(&mut *conn)
     .await
     .map_err(database_error)?;
-
-    sqlx::query("UPDATE tb_links SET target_id = ? WHERE target_norm = ? AND target_id IS NULL")
-        .bind(page_id)
-        .bind(&slug)
-        .execute(&mut *conn)
-        .await
-        .map_err(database_error)?;
-
-    Ok(IndexEvent::PageIndexed { path })
+    Ok(())
 }
 
 #[async_trait]
 impl IndexWriter for SqliteIndex {
     async fn replace_page(&self, page: PageIndex) -> StoreResult<IndexEvent> {
         let mut tx = self.pool.begin().await.map_err(database_error)?;
-        let event = replace_page_conn(&mut tx, page).await?;
+        let event = replace_page_conn(&mut tx, page, self.search_enabled).await?;
+        resolve_links_conn(&mut tx).await?;
         tx.commit().await.map_err(database_error)?;
         Ok(event)
     }
@@ -480,8 +493,9 @@ impl IndexWriter for SqliteIndex {
         let mut tx = self.pool.begin().await.map_err(database_error)?;
         let mut events = Vec::with_capacity(pages.len());
         for page in pages {
-            events.push(replace_page_conn(&mut tx, page).await?);
+            events.push(replace_page_conn(&mut tx, page, self.search_enabled).await?);
         }
+        resolve_links_conn(&mut tx).await?;
         tx.commit().await.map_err(database_error)?;
         Ok(events)
     }
@@ -634,12 +648,13 @@ impl IndexWriter for SqliteIndex {
             .await
             .map_err(database_error)?;
 
-        // Delete from FTS virtual table
-        sqlx::query("DELETE FROM tb_pages_fts WHERE path = ?")
-            .bind(&normalized_path)
-            .execute(&mut *tx)
-            .await
-            .map_err(database_error)?;
+        if self.search_enabled {
+            sqlx::query("DELETE FROM tb_pages_fts WHERE path = ?")
+                .bind(&normalized_path)
+                .execute(&mut *tx)
+                .await
+                .map_err(database_error)?;
+        }
 
         // Delete from tb_pages
         sqlx::query("DELETE FROM tb_pages WHERE path = ?")

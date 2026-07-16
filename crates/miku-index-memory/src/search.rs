@@ -6,6 +6,8 @@ use tantivy::query::QueryParser;
 use tantivy::schema::{Schema, Value, STORED, TEXT};
 use tantivy::{doc, Index, IndexReader, ReloadPolicy, TantivyDocument};
 
+const SEARCH_WRITER_MEMORY_BYTES: usize = 256_000_000;
+
 /// Rebuildable Tantivy search projection owned by [`super::MemoryIndex`].
 pub struct SearchProjection {
     index: Index,
@@ -41,7 +43,7 @@ impl SearchProjection {
     pub fn rebuild(&mut self, pages: &[PageIndex]) -> StoreResult<()> {
         let mut writer = self
             .index
-            .writer(15_000_000)
+            .writer(SEARCH_WRITER_MEMORY_BYTES)
             .map_err(|error| StoreError::Operation(format!("tantivy writer: {error}")))?;
         writer
             .delete_all_documents()

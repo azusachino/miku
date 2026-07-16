@@ -79,7 +79,11 @@ impl IndexReader for ComposedReader {
     }
 
     async fn mentions_for_target(&self, path: &str) -> StoreResult<Vec<MentionRecord>> {
-        self.active().mentions_for_target(path).await
+        if self.ready.load(Ordering::Acquire) && self.hot.mentions_ready().await? {
+            self.hot.mentions_for_target(path).await
+        } else {
+            self.durable.mentions_for_target(path).await
+        }
     }
 
     async fn mentions_ready(&self) -> StoreResult<bool> {
@@ -132,9 +136,17 @@ impl IndexWriter for ComposedWriter {
         Ok(events)
     }
 
+    async fn hydrate_hot_pages(&self, pages: Vec<PageIndex>) -> StoreResult<()> {
+        self.hot_result(self.hot.hydrate_hot_pages(pages).await)
+            .await
+    }
+
     async fn rebuild_search_index(&self) -> StoreResult<()> {
         self.durable.rebuild_search_index().await?;
-        self.hot_result(self.hot.rebuild_search_index().await).await
+        self.hot_result(self.hot.rebuild_search_index().await)
+            .await?;
+        self.ready.store(true, Ordering::Release);
+        Ok(())
     }
 
     async fn replace_mentions_for_source(
@@ -187,7 +199,6 @@ impl IndexWriter for ComposedWriter {
     async fn mark_mentions_ready(&self) -> StoreResult<()> {
         self.durable.mark_mentions_ready().await?;
         self.hot.mark_mentions_ready().await?;
-        self.ready.store(true, Ordering::Release);
         Ok(())
     }
 
@@ -244,6 +255,10 @@ mod tests {
             .mark_mentions_ready()
             .await
             .expect("publish hot projection");
+        api.writer()
+            .rebuild_search_index()
+            .await
+            .expect("rebuild hot search projection");
         assert_eq!(api.list_pages().await.unwrap().len(), 1);
         assert_eq!(hot.list_pages().await.unwrap().len(), 1);
     }
