@@ -377,7 +377,8 @@ function ContextPanel({
   indexPhase,
   open,
   onToggle,
-  onNavigate
+  onNavigate,
+  onResizeStart
 }: {
   note: NoteModel;
   parents: TreeNodeModel["note"][];
@@ -386,6 +387,7 @@ function ContextPanel({
   open: boolean;
   onToggle: () => void;
   onNavigate: (path: string) => void;
+  onResizeStart: (event: React.PointerEvent<HTMLButtonElement>) => void;
 }) {
   if (!open)
     return (
@@ -395,6 +397,7 @@ function ContextPanel({
     );
   return (
     <aside className="context-panel" data-region={shellRegions[3]}>
+      <button className="context-resizer" onPointerDown={onResizeStart} aria-label="Resize note context panel" />
       <div className="context-header">
         <span className="eyebrow">Context</span>
         <button className="tool-button" onClick={onToggle} aria-label="Close context panel">
@@ -489,11 +492,13 @@ function WorkspaceScreen() {
   const [searchSelection, setSearchSelection] = useState(-1);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(() => Number(localStorage.getItem("miku-sidebar-width") ?? 244));
+  const [contextWidth, setContextWidth] = useState(() => Number(localStorage.getItem("miku-context-width") ?? 235));
   const [noteCache, setNoteCache] = useState<Record<string, NoteModel>>({});
   const [apiSource, setApiSource] = useState<ApiSource>("connecting");
   const [theme, setTheme] = useState<Theme>(readTheme);
   const searchPanelRef = useRef<HTMLDivElement>(null);
   const resizingSidebar = useRef(false);
+  const resizingContext = useRef(false);
   const navigate = useNavigate();
   const location = useLocation();
   const routeId = useParams()["*"];
@@ -571,12 +576,16 @@ function WorkspaceScreen() {
 
   useEffect(() => {
     const onPointerMove = (event: PointerEvent) => {
-      if (!resizingSidebar.current) return;
-      setSidebarWidth(Math.min(380, Math.max(200, event.clientX)));
+      if (resizingSidebar.current) {
+        setSidebarWidth(Math.min(380, Math.max(200, event.clientX)));
+      } else if (resizingContext.current) {
+        setContextWidth(Math.min(420, Math.max(190, window.innerWidth - event.clientX)));
+      }
     };
     const onPointerUp = () => {
-      if (!resizingSidebar.current) return;
+      if (!resizingSidebar.current && !resizingContext.current) return;
       resizingSidebar.current = false;
+      resizingContext.current = false;
       document.body.style.cursor = "";
     };
     window.addEventListener("pointermove", onPointerMove);
@@ -589,6 +598,9 @@ function WorkspaceScreen() {
   useEffect(() => {
     localStorage.setItem("miku-sidebar-width", String(sidebarWidth));
   }, [sidebarWidth]);
+  useEffect(() => {
+    localStorage.setItem("miku-context-width", String(contextWidth));
+  }, [contextWidth]);
 
   useEffect(() => {
     if (!searchOpen) return;
@@ -719,7 +731,7 @@ function WorkspaceScreen() {
           )}
         </div>
       )}
-      <div className="workspace-layout" style={{ "--shell-sidebar-width": `${sidebarWidth}px` } as React.CSSProperties}>
+      <div className="workspace-layout" style={{ "--shell-sidebar-width": `${sidebarWidth}px`, "--shell-context-width": `${contextWidth}px` } as React.CSSProperties}>
         <Sidebar
           notes={notes}
           nodes={visibleTree}
@@ -775,6 +787,11 @@ function WorkspaceScreen() {
                   open={state.contextOpen}
                   onToggle={() => dispatch({ type: "toggle-context" })}
                   onNavigate={select}
+                  onResizeStart={(event) => {
+                    event.preventDefault();
+                    resizingContext.current = true;
+                    document.body.style.cursor = "col-resize";
+                  }}
                 />
               </div>
             </>

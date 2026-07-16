@@ -401,6 +401,7 @@ input:focus-visible {
   padding: 0 10px;
   max-width: 220px;
   overflow: hidden;
+  text-overflow: ellipsis;
   color: var(--muted);
   background: transparent;
   font-size: 0.72rem;
@@ -466,11 +467,15 @@ input:focus-visible {
   justify-content: space-between;
   height: 49px;
   padding: 0 27px;
+  min-width: 0;
   border-bottom: 1px solid var(--line);
 }
 .breadcrumbs {
   display: flex;
+  min-width: 0;
+  flex: 1;
   align-items: center;
+  overflow: hidden;
   gap: 9px;
   color: var(--faint);
   font-size: 0.68rem;
@@ -480,6 +485,8 @@ input:focus-visible {
   gap: 9px;
   min-width: 0;
 }
+.breadcrumbs > span:not(:last-child) { flex: 0 0 auto; }
+.breadcrumbs > span:last-child { min-width: 0; overflow: hidden; }
 .breadcrumbs strong {
   color: var(--muted);
   font-weight: 500;
@@ -490,6 +497,12 @@ input:focus-visible {
   background: transparent;
   font-size: inherit;
   font-weight: 500;
+}
+.breadcrumbs > span:last-child .breadcrumb-link {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .breadcrumb-link:hover:not(:disabled) { color: var(--text); text-decoration: underline; text-underline-offset: 3px; }
 .breadcrumb-link:disabled { color: var(--muted); cursor: default; }
@@ -744,11 +757,24 @@ input:focus-visible {
   font-size: 0.64rem;
 }
 .context-panel {
+  position: relative;
   min-height: 0;
   overflow-y: auto;
   flex: 0 0 var(--shell-context-width);
   background: rgba(17, 19, 24, 0.55);
 }
+.context-resizer {
+  position: absolute;
+  z-index: 2;
+  top: 0;
+  bottom: 0;
+  left: -4px;
+  width: 8px;
+  cursor: col-resize;
+  background: transparent;
+}
+.context-resizer:hover,
+.context-resizer:focus-visible { background: color-mix(in srgb, var(--accent) 45%, transparent); }
 .context-reopen {
   display: grid;
   place-items: center;
