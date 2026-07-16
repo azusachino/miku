@@ -87,6 +87,23 @@ def main() -> int:
         if page.get_by_text("Loading note…").count():
             raise AssertionError("reader remained in the loading state")
 
+        nested_folder = page.locator(".tree-row").filter(has_text="geektime-docs").first
+        if nested_folder.get_attribute("aria-expanded") != "true":
+            raise AssertionError("active note did not open its ancestor folders")
+        nested_folder.click()
+        page.wait_for_timeout(200)
+        if page.locator(".tree-row").filter(has_text=NOTE_TITLE).count() != 0:
+            raise AssertionError("closing a folder left its descendants visible")
+        nested_folder.click()
+        page.locator(".tree-row").filter(has_text=NOTE_TITLE).first.wait_for()
+        if page.locator(".tree-row[aria-current='page']").filter(has_text=NOTE_TITLE).count() != 1:
+            raise AssertionError("reopening a folder did not preserve the active note")
+        page.get_by_role("button", name="Collapse workspace tree").click()
+        if page.locator(".tree-row").filter(has_text=NOTE_TITLE).count() != 0:
+            raise AssertionError("collapsed workspace tree still shows descendants")
+        page.get_by_role("button", name="Expand workspace tree").click()
+        page.locator(".tree-row").filter(has_text=NOTE_TITLE).first.wait_for()
+
         theme = page.locator(".app-shell").get_attribute("data-theme")
         dark_background = page.locator(".app-shell").evaluate(
             "el => getComputedStyle(el).backgroundColor"
@@ -117,6 +134,18 @@ def main() -> int:
         quick_search.press("ArrowDown")
         quick_search.press("Enter")
         page.wait_for_url("**/p/Features.md")
+
+        page.set_viewport_size({"width": 390, "height": 844})
+        for path in ("Index.md", "Usage.md", "Changelog.md", "Sandbox.md"):
+            title = path.removesuffix(".md")
+            page.locator(".tree-row").filter(has_text=title).last.click()
+            page.wait_for_url(f"**/p/{path}")
+            page.wait_for_timeout(250)
+        tabs = page.locator(".tabs")
+        if tabs.evaluate("el => getComputedStyle(el).overflowX") not in ("auto", "scroll"):
+            raise AssertionError("open tabs are not horizontally scrollable")
+        if not tabs.evaluate("el => el.scrollWidth > el.clientWidth"):
+            raise AssertionError("multiple open tabs did not overflow horizontally")
 
         page.goto(f"{BASE_URL}/p/does-not-exist.md", wait_until="domcontentloaded")
         page.get_by_role("heading", name="Note unavailable", exact=True).wait_for()

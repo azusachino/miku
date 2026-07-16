@@ -89,17 +89,20 @@ function Tree({
   }, [activeId, hoisted]);
 
   useEffect(() => {
-    if (!hoisted) return;
-    setExpanded(new Set());
-  }, [hoisted]);
-
-  useEffect(() => {
     writeExpandedPaths(expanded);
   }, [expanded]);
 
   useEffect(() => {
     let cancelled = false;
-    const pending = roots.filter((node) => node.kind === "folder" && expanded.has(node.path) && !loaded[node.path]);
+    const pending: TreeNodeModel[] = [];
+    const collect = (items: TreeNodeModel[]) => {
+      for (const node of items) {
+        if (node.kind !== "folder" || !expanded.has(node.path)) continue;
+        if (!loaded[node.path]) pending.push(node);
+        else collect(loaded[node.path]);
+      }
+    };
+    collect(roots);
     if (!pending.length) return;
     void Promise.all(pending.map(async (node) => [node.path, await client.tree(node.path)] as const)).then((entries) => {
       if (cancelled) return;
