@@ -560,8 +560,15 @@ function WorkspaceScreen() {
       identityGenerated: false
     };
   useEffect(() => {
-    if (isNoteRoute && activeId) dispatch({ type: "open", id: activeId });
-  }, [activeId, isNoteRoute]);
+    if (!isNoteRoute || !activeId) return;
+    if (context.isError) {
+      const fallback = state.tabs.find((tab) => tab !== activeId);
+      dispatch({ type: "close", id: activeId });
+      navigate(fallback ? `/p/${fallback}` : "/");
+      return;
+    }
+    if (context.data?.note) dispatch({ type: "open", id: activeId });
+  }, [activeId, context.data?.note, context.isError, isNoteRoute, navigate, state.tabs]);
 
   useEffect(() => {
     if (!isWorkspaceRoot || !tree.data) return;
