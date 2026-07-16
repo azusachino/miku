@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { createWorkspaceClient, sortTreeNodes, type NoteModel, type TreeNodeModel } from "./api";
+import { createWorkspaceClient, sortTreeNodes, workspaceNoteTitle, type NoteModel, type TreeNodeModel } from "./api";
 import { readExpandedPaths, writeExpandedPaths } from "./ui";
 import { ActionIcon, NoteIcon } from "./workspaceIcons";
 
@@ -55,7 +55,9 @@ export function WorkspaceTree({ notes, nodes, activeId, onSelect, hoisted, clien
     const isFolder = node.kind === "folder";
     const isExpanded = expanded.has(node.path);
     const indexNote = children.find((child) => child.kind === "markdown" && child.path === `${node.path}/index.md`);
-    const title = isFolder ? (indexNote?.note.title ?? node.note.title) : note.title;
+    const title = isFolder
+      ? workspaceNoteTitle(node.path, indexNote?.note.title ?? node.note.title)
+      : workspaceNoteTitle(note.path, note.title);
     const toggleFolder = async () => {
       if (isExpanded) {
         setExpanded((current) => new Set([...current].filter((path) => path !== node.path)));

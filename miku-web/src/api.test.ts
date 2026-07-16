@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { TreeNodeModel } from "./api";
-import { formatUpdatedAt, shouldRetryApiQuery, sortTreeNodes } from "./api";
+import { formatUpdatedAt, shouldRetryApiQuery, sortTreeNodes, workspaceNoteTitle } from "./api";
 
 const node = (kind: TreeNodeModel["kind"], path: string, title = path): TreeNodeModel => ({
   kind,
@@ -16,6 +16,12 @@ describe("tree ordering", () => {
   it("places folders first and sorts each group case-insensitively", () => {
     const sorted = sortTreeNodes([node("markdown", "z.md", "zeta"), node("folder", "b"), node("folder", "A"), node("markdown", "a.md", "Alpha")]);
     expect(sorted.map((item) => item.path)).toEqual(["A", "b", "a.md", "z.md"]);
+  });
+
+  it("keeps ADR numbers visible in workspace titles", () => {
+    expect(workspaceNoteTitle("adr/0008-theme-switching.md", "Theme switching")).toBe("ADR-0008 — Theme switching");
+    expect(workspaceNoteTitle("adr/0017-web-markdown-workspace.md", "ADR-0017 — Web Markdown workspace")).toBe("ADR-0017 — Web Markdown workspace");
+    expect(workspaceNoteTitle("Sandbox.md", "Sandbox")).toBe("Sandbox");
   });
 });
 

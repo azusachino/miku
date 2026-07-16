@@ -27,6 +27,12 @@ export type TreeNodeModel = {
   note: Pick<NoteModel, "id" | "path" | "title" | "identityGenerated" | "parents"> & { order?: number | null };
 };
 
+export function workspaceNoteTitle(path: string, title: string): string {
+  const adrNumber = path.match(/(?:^|\/)adr\/(\d{4})-/i)?.[1];
+  if (!adrNumber || new RegExp(`^ADR-${adrNumber}\\b`, "i").test(title)) return title;
+  return `ADR-${adrNumber} — ${title}`;
+}
+
 export function sortTreeNodes(nodes: TreeNodeModel[]): TreeNodeModel[] {
   return [...nodes].sort((left, right) => {
     if (left.kind !== right.kind) return left.kind === "folder" ? -1 : 1;
