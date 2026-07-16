@@ -116,31 +116,13 @@ input:focus-visible {
   color: var(--text);
   background: var(--panel-2);
 }
-.vault-control {
-  position: relative;
-}
-.vault-menu {
-  position: absolute;
-  z-index: 20;
-  top: 43px;
-  left: 0;
-  display: grid;
-  min-width: 190px;
-  gap: 5px;
-  padding: 12px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  color: var(--text);
-  background: var(--panel);
-  box-shadow: 0 16px 40px #0008;
-  font-size: 0.72rem;
-}
-.vault-menu small {
+.workspace-source {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 130px;
   color: var(--muted);
-}
-.vault-phase {
-  color: var(--cyan);
-  font-size: 0.65rem;
+  font-size: 0.78rem;
 }
 .status-dot,
 .online-dot,
@@ -914,6 +896,14 @@ input:focus-visible {
   padding: 64px min(10vw, 140px);
   color: var(--text);
   background: var(--bg);
+}
+.utility-shell-content {
+  min-height: 0;
+  flex: 1;
+  overflow-y: auto;
+}
+.utility-shell .tags-page {
+  min-height: 100%;
 }
 .utility-page h1 {
   margin: 10px 0 8px;

@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useReducer, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useReducer, useState, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Navigate, Route, Routes, useLocation, useNavigate, useParams } from "react-router-dom";
 import { createWorkspaceClient, sortTreeNodes, subscribeToWorkspaceEvents, type ApiSource, type NoteModel, type SearchScope, type TreeNodeModel } from "./api";
@@ -146,24 +146,14 @@ function LaunchBar({
   indexPhase?: string;
   noteCount?: number;
 }) {
-  const [vaultOpen, setVaultOpen] = useState(false);
   return (
     <header className="launch-bar" data-region={shellRegions[0]}>
       <div className="brand-mark">
         <span className="brand-glyph">m</span>
         <span>miku</span>
       </div>
-      <div className="vault-control">
-        <button className="vault-switcher" aria-label="Open vault menu" onClick={() => setVaultOpen((open) => !open)} aria-expanded={vaultOpen}>
-          <span className="status-dot" /> personal vault <Icon>{vaultOpen ? "⌃" : "⌄"}</Icon>
-        </button>
-        {vaultOpen && (
-          <div className="vault-menu" role="menu">
-            <strong>personal vault</strong>
-            <small>miku_docs · {noteCount ?? 0} notes</small>
-            <span className={`vault-phase is-${(indexPhase ?? "indexing").toLowerCase()}`}>{indexPhase ?? "Indexing"}</span>
-          </div>
-        )}
+      <div className="workspace-source" title={`${noteCount ?? 0} notes · index ${indexPhase ?? "unknown"}`}>
+        <span className="status-dot" /> miku_docs
       </div>
       <div className="launch-search">
         <Icon>⌕</Icon>
@@ -736,32 +726,7 @@ function LegacyNoteRedirect() {
   return <Navigate replace to={`/p/${path}`} />;
 }
 
-function RecentPage() {
-  const navigate = useNavigate();
-  const recent = (JSON.parse(localStorage.getItem("miku-recent") ?? "[]") as string[]).slice(0, 20);
-  return (
-    <main className="tags-page utility-page">
-      <span className="eyebrow">Workspace</span>
-      <h1>Recent notes</h1>
-      <p>Notes opened most recently in this browser.</p>
-      <div className="tag-note-list">
-        {recent.length ? (
-          recent.map((path) => (
-            <button className="tag-note-row" key={path} onClick={() => navigate(`/p/${path}`)}>
-              <strong>{path.split("/").pop()}</strong>
-              <small>{path}</small>
-            </button>
-          ))
-        ) : (
-          <p className="search-empty">No recent notes yet.</p>
-        )}
-      </div>
-    </main>
-  );
-}
-
-function SettingsPage() {
-  const navigate = useNavigate();
+function useThemeState(): [Theme, () => void] {
   const [theme, setTheme] = useState<Theme>(readTheme);
   const toggleTheme = () =>
     setTheme((current) => {
@@ -769,74 +734,125 @@ function SettingsPage() {
       writeTheme(next);
       return next;
     });
+  return [theme, toggleTheme];
+}
+
+function UtilityShell({ children, theme, onToggleTheme }: { children: ReactNode; theme: Theme; onToggleTheme: () => void }) {
+  const navigate = useNavigate();
+  const [query, setQuery] = useState("");
   return (
-    <main className="tags-page utility-page settings-page" data-theme={theme}>
-      <button className="toolbar-button" onClick={() => navigate("/")}>
-        ← Workspace
-      </button>
-      <span className="eyebrow">Configuration</span>
-      <h1>Settings</h1>
-      <div className="settings-card">
-        <div>
-          <strong>Theme</strong>
-          <small>Current appearance: {theme}</small>
+    <div className="app-shell utility-shell" data-theme={theme} data-ui-state-version={UI_STATE_VERSION}>
+      <LaunchBar query={query} setQuery={setQuery} onSearch={() => navigate("/")} theme={theme} onToggleTheme={onToggleTheme} />
+      <div className="utility-shell-content" data-region={shellRegions[2]}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function RecentPage() {
+  const navigate = useNavigate();
+  const [theme, onToggleTheme] = useThemeState();
+  const recent = (JSON.parse(localStorage.getItem("miku-recent") ?? "[]") as string[]).slice(0, 20);
+  return (
+    <UtilityShell theme={theme} onToggleTheme={onToggleTheme}>
+      <main className="tags-page utility-page">
+        <span className="eyebrow">Workspace</span>
+        <h1>Recent notes</h1>
+        <p>Notes opened most recently in this browser.</p>
+        <div className="tag-note-list">
+          {recent.length ? (
+            recent.map((path) => (
+              <button className="tag-note-row" key={path} onClick={() => navigate(`/p/${path}`)}>
+                <strong>{path.split("/").pop()}</strong>
+                <small>{path}</small>
+              </button>
+            ))
+          ) : (
+            <p className="search-empty">No recent notes yet.</p>
+          )}
         </div>
-        <button className="toolbar-button" onClick={toggleTheme}>
-          Use {theme === "dark" ? "light" : "dark"} theme
+      </main>
+    </UtilityShell>
+  );
+}
+
+function SettingsPage() {
+  const navigate = useNavigate();
+  const [theme, toggleTheme] = useThemeState();
+  return (
+    <UtilityShell theme={theme} onToggleTheme={toggleTheme}>
+      <main className="tags-page utility-page settings-page">
+        <button className="toolbar-button" onClick={() => navigate("/")}>
+          ← Workspace
         </button>
-      </div>
-      <div className="settings-card">
-        <div>
-          <strong>Source</strong>
-          <small>miku_docs Markdown filesystem</small>
+        <span className="eyebrow">Configuration</span>
+        <h1>Settings</h1>
+        <div className="settings-card">
+          <div>
+            <strong>Theme</strong>
+            <small>Current appearance: {theme}</small>
+          </div>
+          <button className="toolbar-button" onClick={toggleTheme}>
+            Use {theme === "dark" ? "light" : "dark"} theme
+          </button>
         </div>
-        <span>authoritative</span>
-      </div>
-    </main>
+        <div className="settings-card">
+          <div>
+            <strong>Source</strong>
+            <small>miku_docs Markdown filesystem</small>
+          </div>
+          <span>authoritative</span>
+        </div>
+      </main>
+    </UtilityShell>
   );
 }
 
 function TagsPage() {
   const client = useMemo(() => createWorkspaceClient(() => undefined), []);
   const navigate = useNavigate();
+  const [theme, onToggleTheme] = useThemeState();
   const wildcard = useParams()["*"] ?? "";
   const tag = wildcard ? decodeURIComponent(wildcard) : "";
   const tags = useQuery({ queryKey: ["tags"], queryFn: client.tags });
   const notes = useQuery({ queryKey: ["tag-notes", tag], queryFn: () => client.tagNotes(tag), enabled: Boolean(tag) });
   return (
-    <main className="tags-page">
-      <div className="tags-page-header">
-        <span className="eyebrow">Index</span>
-        <h1>{tag ? `#${tag}` : "Tags"}</h1>
-        <p>Browse indexed Markdown notes by tag.</p>
-      </div>
-      {tag ? (
-        <div className="tag-note-list">
-          {notes.isLoading ? (
-            <p>Loading notes…</p>
-          ) : (
-            notes.data?.map((note) => (
-              <button className="tag-note-row" key={note.path} onClick={() => navigate(`/p/${note.path}`)}>
-                <strong>{note.title}</strong>
-                <small>{note.path}</small>
-              </button>
-            ))
-          )}
+    <UtilityShell theme={theme} onToggleTheme={onToggleTheme}>
+      <main className="tags-page">
+        <div className="tags-page-header">
+          <span className="eyebrow">Index</span>
+          <h1>{tag ? `#${tag}` : "Tags"}</h1>
+          <p>Browse indexed Markdown notes by tag.</p>
         </div>
-      ) : (
-        <div className="tag-index">
-          {tags.isLoading ? (
-            <p>Loading tags…</p>
-          ) : (
-            tags.data?.map((item) => (
-              <button className="tag-index-row" key={item.tag} onClick={() => navigate(`/tags/${encodeURIComponent(item.tag)}`)}>
-                <span>#{item.tag}</span>
-                <small>{item.count}</small>
-              </button>
-            ))
-          )}
-        </div>
-      )}
-    </main>
+        {tag ? (
+          <div className="tag-note-list">
+            {notes.isLoading ? (
+              <p>Loading notes…</p>
+            ) : (
+              notes.data?.map((note) => (
+                <button className="tag-note-row" key={note.path} onClick={() => navigate(`/p/${note.path}`)}>
+                  <strong>{note.title}</strong>
+                  <small>{note.path}</small>
+                </button>
+              ))
+            )}
+          </div>
+        ) : (
+          <div className="tag-index">
+            {tags.isLoading ? (
+              <p>Loading tags…</p>
+            ) : (
+              tags.data?.map((item) => (
+                <button className="tag-index-row" key={item.tag} onClick={() => navigate(`/tags/${encodeURIComponent(item.tag)}`)}>
+                  <span>#{item.tag}</span>
+                  <small>{item.count}</small>
+                </button>
+              ))
+            )}
+          </div>
+        )}
+      </main>
+    </UtilityShell>
   );
 }
