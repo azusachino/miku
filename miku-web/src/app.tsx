@@ -445,7 +445,7 @@ function WorkspaceScreen() {
   );
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+      if ((event.metaKey || event.ctrlKey) && ["k", "p"].includes(event.key.toLowerCase())) {
         event.preventDefault();
         setSearchSelection(-1);
         setSearchOpen(true);
