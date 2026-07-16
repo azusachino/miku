@@ -1,4 +1,4 @@
-import { useEffect, useId, useState, type ReactNode } from "react";
+import { Children, cloneElement, isValidElement, useEffect, useId, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import ReactMarkdown from "react-markdown";
 import rehypeHighlight from "rehype-highlight";
@@ -84,6 +84,24 @@ function textContent(children: ReactNode): string {
   return "";
 }
 
+function stripAdmonitionMarker(children: ReactNode): ReactNode {
+  let removed = false;
+  const strip = (value: ReactNode): ReactNode => {
+    if (typeof value === "string") {
+      if (removed) return value;
+      removed = true;
+      return value.replace(/^\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]\s*/i, "");
+    }
+    if (Array.isArray(value)) return value.map(strip);
+    if (isValidElement(value)) {
+      const props = value.props as { children?: ReactNode };
+      if (props.children !== undefined) return cloneElement(value, {}, strip(props.children));
+    }
+    return value;
+  };
+  return Children.map(children, strip);
+}
+
 export function MarkdownReader({ value, path = "" }: { value: string; path?: string }) {
   const navigate = useNavigate();
   return (
@@ -110,13 +128,13 @@ export function MarkdownReader({ value, path = "" }: { value: string; path?: str
             );
           },
           blockquote: ({ children, ...props }) => {
-            const content = textContent(children);
-            const match = content.match(/^\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]/i);
-            return (
-              <blockquote {...props} className={match ? "admonition admonition-" + match[1].toLowerCase() : undefined}>
-                {children}
-              </blockquote>
-            );
+              const content = textContent(children);
+              const match = content.match(/^\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]/i);
+              return (
+                <blockquote {...props} className={match ? "admonition admonition-" + match[1].toLowerCase() : undefined}>
+                {match ? stripAdmonitionMarker(children) : children}
+                </blockquote>
+              );
           },
           h2: ({ children, ...props }) => <h2 {...props} id={headingSlug(textContent(children))}>{children}</h2>,
           h3: ({ children, ...props }) => <h3 {...props} id={headingSlug(textContent(children))}>{children}</h3>,
