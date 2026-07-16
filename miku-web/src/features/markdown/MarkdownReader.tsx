@@ -32,7 +32,11 @@ export function noteHref(target: string): string {
 export function resolveMarkdownHref(href: string, currentPath: string): string | null {
   const trimmed = href.trim();
   if (!trimmed || trimmed.startsWith("#") || /^[a-z][a-z\d+.-]*:/i.test(trimmed)) return null;
-  if (trimmed.startsWith("/p/") || trimmed.startsWith("/tags/") || trimmed.startsWith("/assets/")) return trimmed;
+  if (trimmed.startsWith("/p/")) {
+    const [target, hash] = trimmed.slice(3).split("#", 2);
+    return noteHref(target) + (hash ? `#${hash}` : "");
+  }
+  if (trimmed.startsWith("/tags/") || trimmed.startsWith("/assets/")) return trimmed;
   const [target, hash] = trimmed.split("#", 2);
   if (!target || (/\.[a-z\d]+$/i.test(target) && !target.endsWith(".md"))) return null;
   const base = currentPath.split("/").slice(0, -1);

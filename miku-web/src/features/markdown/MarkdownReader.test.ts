@@ -28,7 +28,8 @@ describe("Markdown reader navigation", () => {
   it("resolves relative Markdown links from the current note", () => {
     expect(resolveMarkdownHref("abc", "Design/Overview.md")).toBe("/p/Design/abc.md");
     expect(resolveMarkdownHref("../Shared/abc.md#part", "Design/Overview.md")).toBe("/p/Shared/abc.md#part");
-    expect(resolveMarkdownHref("/p/abc/xx", "Design/Overview.md")).toBe("/p/abc/xx");
+    expect(resolveMarkdownHref("/p/abc/xx", "Design/Overview.md")).toBe("/p/abc/xx.md");
+    expect(resolveMarkdownHref("/p/abc/xx#part", "Design/Overview.md")).toBe("/p/abc/xx.md#part");
     expect(resolveMarkdownHref("https://example.com", "Design/Overview.md")).toBeNull();
   });
 

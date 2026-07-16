@@ -2,6 +2,10 @@ import { useEffect, useRef, type Dispatch } from "react";
 import type { NavigateFunction } from "react-router-dom";
 import type { WorkspaceAction } from "./state";
 
+export function normalizeNotePath(path: string): string {
+  return path.endsWith(".md") ? path : `${path}.md`;
+}
+
 type NoteRouteRecoveryOptions = {
   activeId: string;
   isNoteRoute: boolean;

@@ -5,7 +5,7 @@ import { createWorkspaceClient, subscribeToWorkspaceEvents, type ApiSource, type
 import { ContextPanel, FolderBrowser, LaunchBar, NotePane, SettingsDialog, Sidebar, Tabs, WorkspaceUtility } from "./WorkspaceComponents";
 import { NoteIcon } from "../../components/workspace/icons";
 import { WorkspaceNotice } from "../../components/workspace/WorkspaceNotice";
-import { useNoteRouteRecovery } from "./noteRoute";
+import { normalizeNotePath, useNoteRouteRecovery } from "./noteRoute";
 import { UI_STATE_VERSION, moveSearchSelection, readTheme, shellRegions, writeTheme, type Theme } from "../../shared/ui";
 import { initialWorkspaceState, workspaceReducer } from "./state";
 
@@ -41,7 +41,7 @@ export function WorkspaceScreen() {
         .join("/")
     : "";
   const utilityRoute = location.pathname.startsWith("/tags") ? "tags" : location.pathname === "/recent" ? "recent" : undefined;
-  const activeId = isNoteRoute ? (routeId ?? state.activeId) : "";
+  const activeId = isNoteRoute ? normalizeNotePath(routeId ?? state.activeId) : "";
   const workspace = useQuery({ queryKey: ["workspace"], queryFn: client.workspace });
   const tree = useQuery({ queryKey: ["tree"], queryFn: () => client.tree() });
   const folder = useQuery({ queryKey: ["folder", folderPath], queryFn: () => client.tree(folderPath), enabled: Boolean(folderPath) });
@@ -96,6 +96,10 @@ export function WorkspaceScreen() {
       navigate(`/p/${firstNote.path}`, { replace: true });
     }
   }, [isWorkspaceRoot, navigate, tree.data]);
+  useEffect(() => {
+    if (!isNoteRoute || !routeId || routeId.endsWith(".md")) return;
+    navigate(`/p/${normalizeNotePath(routeId)}`, { replace: true });
+  }, [isNoteRoute, navigate, routeId]);
   useEffect(
     () =>
       subscribeToWorkspaceEvents(() => {
