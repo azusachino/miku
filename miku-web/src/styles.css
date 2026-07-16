@@ -119,10 +119,14 @@ input:focus-visible {
   padding: 0;
 }
 .brand-mark:hover { color: var(--text); }
-.brand-note-icon {
+.brand-icon {
   display: block;
   width: 25px;
   height: 25px;
+  flex: 0 0 25px;
+  border-radius: 8px;
+  object-fit: cover;
+  box-shadow: 0 4px 18px color-mix(in srgb, var(--accent) 25%, transparent);
 }
 .vault-switcher {
   display: flex;
