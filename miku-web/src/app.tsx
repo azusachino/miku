@@ -709,7 +709,6 @@ function WorkspaceScreen() {
             <span>{workspace.data?.readonly ? "readonly API" : "workspace"}</span>
             <span className="status-spacer" />
             <span>focus: {state.focus}</span>
-            <span>⌘ P commands</span>
           </footer>
         </main>
       </div>
