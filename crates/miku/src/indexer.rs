@@ -548,6 +548,7 @@ impl IndexerQueue {
                             &sender_for_watcher,
                             &reconcile_flag_for_watcher,
                         );
+                        return;
                     }
                     for path in event.paths {
                         if path.extension().is_some_and(|extension| extension == "md")
