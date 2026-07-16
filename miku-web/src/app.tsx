@@ -518,6 +518,7 @@ function WorkspaceScreen() {
   const [apiSource, setApiSource] = useState<ApiSource>("connecting");
   const [theme, setTheme] = useState<Theme>(readTheme);
   const searchPanelRef = useRef<HTMLDivElement>(null);
+  const handledInvalidRoute = useRef<string | null>(null);
   const resizingSidebar = useRef(false);
   const resizingContext = useRef(false);
   const navigate = useNavigate();
@@ -560,13 +561,19 @@ function WorkspaceScreen() {
       identityGenerated: false
     };
   useEffect(() => {
-    if (!isNoteRoute || !activeId) return;
+    if (!isNoteRoute || !activeId) {
+      handledInvalidRoute.current = null;
+      return;
+    }
     if (context.isError) {
+      if (handledInvalidRoute.current === activeId) return;
+      handledInvalidRoute.current = activeId;
       const fallback = state.tabs.find((tab) => tab !== activeId);
       dispatch({ type: "close", id: activeId });
       navigate(fallback ? `/p/${fallback}` : "/");
       return;
     }
+    handledInvalidRoute.current = null;
     if (context.data?.note) dispatch({ type: "open", id: activeId });
   }, [activeId, context.data?.note, context.isError, isNoteRoute, navigate, state.tabs]);
 
