@@ -88,10 +88,10 @@ def main() -> int:
         if page.get_by_role("button", name="Title").get_attribute("aria-pressed") != "true":
             raise AssertionError("title search scope was not selectable")
 
-        page.get_by_role("button", name="Open vault menu").click()
-        if page.get_by_role("menu").count() != 1:
-            raise AssertionError("personal vault menu did not open")
-        page.get_by_role("button", name="Open vault menu").click()
+        source = page.get_by_text("miku_docs", exact=True)
+        source.wait_for()
+        if page.get_by_role("button", name="Open vault menu").count():
+            raise AssertionError("removed fake vault switcher is still exposed")
         page.goto(f"{BASE_URL}/", wait_until="domcontentloaded")
         page.get_by_role("button", name="Recent").click()
         page.wait_for_url("**/recent")
