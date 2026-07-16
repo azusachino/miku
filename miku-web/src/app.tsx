@@ -89,7 +89,10 @@ function Tree({
   client: ReturnType<typeof createWorkspaceClient>;
 }) {
   const noteMap = new Map(notes.map((note) => [note.id, note]));
-  const [expanded, setExpanded] = useState<Set<string>>(() => new Set(readExpandedPaths()));
+  const [expanded, setExpanded] = useState<Set<string>>(() => {
+    const persisted = readExpandedPaths();
+    return new Set(persisted.filter((path) => !persisted.some((parent) => parent !== path && path.startsWith(`${parent}/`))));
+  });
   const [loaded, setLoaded] = useState<Record<string, TreeNodeModel[]>>({});
   const roots = sortTreeNodes(nodes.filter((node) => node.parentId === null));
 
