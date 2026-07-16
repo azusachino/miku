@@ -61,7 +61,7 @@ function Tree({
   const roots = sortTreeNodes(nodes.filter((node) => node.parentId === null));
 
   useEffect(() => {
-    if (!activeId) return;
+    if (!activeId || hoisted) return;
     const ancestors = activeId
       .split("/")
       .slice(0, -1)
@@ -71,7 +71,12 @@ function Tree({
       ancestors.forEach((path) => next.add(path));
       return next;
     });
-  }, [activeId]);
+  }, [activeId, hoisted]);
+
+  useEffect(() => {
+    if (!hoisted) return;
+    setExpanded(new Set());
+  }, [hoisted]);
 
   useEffect(() => {
     writeExpandedPaths(expanded);
@@ -621,7 +626,13 @@ function WorkspaceScreen() {
     const recent = JSON.parse(localStorage.getItem("miku-recent") ?? "[]") as string[];
     localStorage.setItem("miku-recent", JSON.stringify([id, ...recent.filter((path) => path !== id)].slice(0, 20)));
   };
-  const openBreadcrumbPath = (path: string) => navigate(`/folder/${path.split("/").map(encodeURIComponent).join("/")}`);
+  const openBreadcrumbPath = (path: string) => {
+    if (!path) {
+      navigate("/");
+      return;
+    }
+    navigate(`/folder/${path.split("/").map(encodeURIComponent).join("/")}`);
+  };
   const toggleWorkspaceTree = () => {
     const expanding = state.hoisted;
     dispatch({ type: "toggle-hoist" });
@@ -748,7 +759,7 @@ function WorkspaceScreen() {
         />
         <main className="main-stage">
           {folderPath ? (
-            <FolderBrowser path={folderPath} nodes={folder.data ?? []} isLoading={folder.isLoading} isError={folder.isError} onSelect={select} onOpenFolder={(path) => navigate(`/folder/${path.split("/").map(encodeURIComponent).join("/")}`)} />
+            <FolderBrowser path={folderPath} nodes={folder.data ?? []} isLoading={folder.isLoading} isError={folder.isError} onSelect={select} onOpenFolder={(path) => navigate(`/folder/${path.split("/").map(encodeURIComponent).join("/")}`)} onNavigatePath={openBreadcrumbPath} />
           ) : utilityRoute ? (
             <WorkspaceUtility route={utilityRoute} theme={theme} onToggleTheme={toggleTheme} client={client} />
           ) : (
@@ -895,7 +906,8 @@ function FolderBrowser({
   isLoading,
   isError,
   onSelect,
-  onOpenFolder
+  onOpenFolder,
+  onNavigatePath
 }: {
   path: string;
   nodes: TreeNodeModel[];
@@ -903,6 +915,7 @@ function FolderBrowser({
   isError: boolean;
   onSelect: (id: string) => void;
   onOpenFolder: (path: string) => void;
+  onNavigatePath: (path: string) => void;
 }) {
   const title = path.split("/").at(-1) || path;
   return (
@@ -911,7 +924,15 @@ function FolderBrowser({
         <div>
           <span className="eyebrow">Folder</span>
           <h1 id="folder-browser-title">{title}</h1>
-          <p>{path}</p>
+          <nav className="folder-breadcrumbs" aria-label="Folder location">
+            <button className="breadcrumb-link" onClick={() => onNavigatePath("")}>Workspace</button>
+            {path.split("/").map((part, index, parts) => (
+              <span key={`${part}-${index}`}>
+                <span aria-hidden="true">/</span>
+                <button className="breadcrumb-link" disabled={index === parts.length - 1} onClick={() => onNavigatePath(parts.slice(0, index + 1).join("/"))}>{part}</button>
+              </span>
+            ))}
+          </nav>
         </div>
         <span className="folder-browser-count">{nodes.length} items</span>
       </div>
