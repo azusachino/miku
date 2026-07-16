@@ -18,12 +18,13 @@ READY_TIMEOUT_SECONDS = float(os.environ.get("MIKU_BLACKBOX_READY_TIMEOUT_SECOND
 def get(path: str) -> tuple[int, str, str]:
     try:
         with urllib.request.urlopen(f"{BASE_URL}{path}", timeout=60) as response:
-            return response.status, response.headers.get("content-type", ""), response.read().decode(
-                "utf-8", errors="replace"
-            )
+            body = response.read().decode("utf-8", errors="replace")
+            return response.status, response.headers.get("content-type", ""), body
     except urllib.error.HTTPError as error:
-        return error.code, error.headers.get("content-type", ""), error.read().decode(
-            "utf-8", errors="replace"
+        return (
+            error.code,
+            error.headers.get("content-type", ""),
+            error.read().decode("utf-8", errors="replace"),
         )
 
 
@@ -31,6 +32,15 @@ def expect(status: int, expected: int, path: str) -> None:
     if status != expected:
         raise AssertionError(f"{path}: expected HTTP {expected}, got {status}")
     print(f"ok: GET {path} -> {status}")
+
+
+def validate_ready(content_type: str, body: str) -> dict[str, object]:
+    if "application/json" not in content_type:
+        raise AssertionError(f"/readyz: expected JSON, got {content_type}")
+    health = json.loads(body)
+    if health.get("status") != "ok":
+        raise AssertionError(f"/readyz: unexpected payload {health}")
+    return health
 
 
 def json_get(path: str) -> object:
@@ -46,7 +56,7 @@ def wait_for_ready() -> dict[str, object]:
     while time.monotonic() < deadline:
         status, _, body = get("/readyz")
         if status == 200:
-            health = json.loads(body)
+            health = validate_ready("application/json", body)
             if health.get("index_ready") is True:
                 return health
         time.sleep(1)
@@ -64,7 +74,7 @@ def main() -> int:
     workspace = json_get("/api/v1/workspace")
     if not workspace.get("note_count", 0):
         raise AssertionError("workspace contains no Markdown notes")
-    tree = json_get("/api/v1/tree")
+    json_get("/api/v1/tree")
     content_root = Path(os.environ.get("MIKU_CONTENT_ROOT", "miku_docs"))
     candidates = sorted(content_root.rglob("*.md"))
     if not candidates:
