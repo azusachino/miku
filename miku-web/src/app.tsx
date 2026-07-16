@@ -512,7 +512,6 @@ function WorkspaceScreen() {
   const workspace = useQuery({ queryKey: ["workspace"], queryFn: client.workspace });
   const tree = useQuery({ queryKey: ["tree"], queryFn: () => client.tree() });
   const folder = useQuery({ queryKey: ["folder", folderPath], queryFn: () => client.tree(folderPath), enabled: Boolean(folderPath) });
-  const note = useQuery({ queryKey: ["note", activeId], queryFn: () => client.note(activeId), enabled: Boolean(activeId) });
   const context = useQuery({ queryKey: ["context", activeId], queryFn: () => client.context(activeId), enabled: Boolean(activeId) });
   const results = useQuery({ queryKey: ["search", query, searchScope], queryFn: () => client.search(query, searchScope), enabled: searchOpen });
   const isWorkspaceRoot = location.pathname === "/";
@@ -520,19 +519,17 @@ function WorkspaceScreen() {
   const treeNotes = useMemo(() => visibleTree.map((node) => ({ ...node.note, icon: "file-text", updated: "indexed", body: "", backlinks: [], tags: [] })), [visibleTree]);
   const contextualNote = useMemo(() => context.data?.note, [context.data]);
   useEffect(() => {
-    const loadedNote = contextualNote ?? note.data;
-    if (loadedNote) setNoteCache((current) => ({ ...current, [loadedNote.id]: loadedNote }));
-  }, [contextualNote, note.data]);
+    if (contextualNote) setNoteCache((current) => ({ ...current, [contextualNote.id]: contextualNote }));
+  }, [contextualNote]);
   const notes = useMemo(() => {
     const combined = [...treeNotes, ...Object.values(noteCache)];
     return Array.from(new Map(combined.map((candidate) => [candidate.id, candidate])).values());
   }, [noteCache, treeNotes]);
   const activeNote = contextualNote ??
-    note.data ??
     notes.find((candidate) => candidate.id === activeId) ?? {
       id: activeId,
       path: "",
-      title: note.isLoading ? "Loading note…" : "Note unavailable",
+      title: context.isLoading ? "Loading note…" : "Note unavailable",
       icon: "file-text",
       parents: [],
       updated: "",
@@ -558,7 +555,6 @@ function WorkspaceScreen() {
       subscribeToWorkspaceEvents(() => {
         void queryClient.invalidateQueries({ queryKey: ["workspace"] });
         void queryClient.invalidateQueries({ queryKey: ["tree"] });
-        void queryClient.invalidateQueries({ queryKey: ["note"] });
         void queryClient.invalidateQueries({ queryKey: ["context"] });
         void queryClient.invalidateQueries({ queryKey: ["search"] });
       }),
