@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { EXPLORER_STATE_KEY, UI_STATE_KEY, keyboardShortcuts, readExpandedPaths, readTheme, shellRegions, writeExpandedPaths, writeTheme, workspaceRoutes } from "./ui";
+import { EXPLORER_STATE_KEY, UI_STATE_KEY, keyboardShortcuts, moveSearchSelection, readExpandedPaths, readTheme, shellRegions, writeExpandedPaths, writeTheme, workspaceRoutes } from "./ui";
 
 describe("shared UI contract", () => {
   it("keeps shell regions and route ownership explicit", () => {
@@ -60,5 +60,11 @@ describe("shared UI contract", () => {
     writeExpandedPaths(["projects", "projects/miku", "projects", "projects/miku"], adapter);
     expect(adapter.getItem(EXPLORER_STATE_KEY)).toBe('["projects","projects/miku"]');
     expect(readExpandedPaths(adapter)).toEqual(["projects", "projects/miku"]);
+  });
+
+  it("wraps quick-open selection without inventing a result", () => {
+    expect(moveSearchSelection(-1, 3, "ArrowDown")).toBe(0);
+    expect(moveSearchSelection(0, 3, "ArrowUp")).toBe(2);
+    expect(moveSearchSelection(0, 0, "ArrowDown")).toBe(-1);
   });
 });

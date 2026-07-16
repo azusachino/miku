@@ -850,7 +850,8 @@ input:focus-visible {
   background: transparent;
   text-align: left;
 }
-.search-result:hover {
+.search-result:hover,
+.search-result.is-selected {
   background: var(--panel-2);
 }
 .search-result-icon {
@@ -869,6 +870,12 @@ input:focus-visible {
   margin-top: 3px;
   color: var(--faint);
   font-size: 0.62rem;
+}
+.search-result-snippet {
+  max-width: 360px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .search-result kbd {
   margin-left: auto;

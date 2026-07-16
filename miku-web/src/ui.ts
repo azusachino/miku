@@ -49,3 +49,9 @@ export function readExpandedPaths(storage: Storage = localStorage): string[] {
 export function writeExpandedPaths(paths: Iterable<string>, storage: Storage = localStorage): void {
   storage.setItem(EXPLORER_STATE_KEY, JSON.stringify([...new Set(paths)].sort()));
 }
+
+export function moveSearchSelection(current: number, count: number, key: "ArrowDown" | "ArrowUp"): number {
+  if (!count) return -1;
+  const delta = key === "ArrowDown" ? 1 : -1;
+  return (current + delta + count) % count;
+}

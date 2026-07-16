@@ -2,7 +2,7 @@ import { lazy, Suspense, useEffect, useMemo, useReducer, useState } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Navigate, Route, Routes, useLocation, useNavigate, useParams } from "react-router-dom";
 import { createWorkspaceClient, sortTreeNodes, subscribeToWorkspaceEvents, type ApiSource, type NoteModel, type SearchScope, type TreeNodeModel } from "./api";
-import { UI_STATE_VERSION, readExpandedPaths, readTheme, shellRegions, writeExpandedPaths, writeTheme, type Theme } from "./ui";
+import { UI_STATE_VERSION, moveSearchSelection, readExpandedPaths, readTheme, shellRegions, writeExpandedPaths, writeTheme, type Theme } from "./ui";
 import { initialWorkspaceState, workspaceReducer } from "./workspace";
 const MarkdownEditor = lazy(() => import("./MarkdownEditor"));
 const MarkdownReader = lazy(() => import("./MarkdownReader").then((module) => ({ default: module.MarkdownReader })));
@@ -434,6 +434,7 @@ function WorkspaceScreen() {
   const [query, setQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchScope, setSearchScope] = useState<SearchScope>("all");
+  const [searchSelection, setSearchSelection] = useState(-1);
   const [noteCache, setNoteCache] = useState<Record<string, NoteModel>>({});
   const [apiSource, setApiSource] = useState<ApiSource>("connecting");
   const [theme, setTheme] = useState<Theme>(readTheme);
@@ -498,12 +499,19 @@ function WorkspaceScreen() {
     const handler = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
+        setSearchSelection(-1);
         setSearchOpen(true);
+      } else if (event.key === "Escape" && searchOpen) {
+        setSearchOpen(false);
       }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, []);
+  }, [searchOpen]);
+
+  useEffect(() => {
+    setSearchSelection((current) => (results.data?.length ? Math.min(current, results.data.length - 1) : -1));
+  }, [results.data]);
 
   const select = (id: string) => {
     dispatch({ type: "open", id });
@@ -515,7 +523,14 @@ function WorkspaceScreen() {
   const searchTag = (tag: string) => {
     navigate(`/tags/${encodeURIComponent(tag)}`);
   };
-  const openSearch = () => setSearchOpen(true);
+  const openSearch = () => {
+    setSearchSelection(-1);
+    setSearchOpen(true);
+  };
+  const updateSearchQuery = (value: string) => {
+    setQuery(value);
+    setSearchSelection(-1);
+  };
   const toggleTheme = () =>
     setTheme((current) => {
       const next = current === "dark" ? "light" : "dark";
@@ -538,10 +553,26 @@ function WorkspaceScreen() {
             className="search-popover-input"
             autoFocus
             value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            onKeyDown={(event) => event.key === "Escape" && setSearchOpen(false)}
+            onChange={(event) => updateSearchQuery(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Escape") {
+                event.preventDefault();
+                setSearchOpen(false);
+              } else if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+                event.preventDefault();
+                const key = event.key as "ArrowDown" | "ArrowUp";
+                setSearchSelection((current) => moveSearchSelection(current, results.data?.length ?? 0, key));
+              } else if (event.key === "Enter" && searchSelection >= 0 && results.data?.[searchSelection]) {
+                event.preventDefault();
+                select(results.data[searchSelection].id);
+              }
+            }}
             placeholder="Search notes…"
             aria-label="Quick search input"
+            role="combobox"
+            aria-controls="quick-open-results"
+            aria-activedescendant={searchSelection >= 0 ? `search-result-${searchSelection}` : undefined}
+            aria-expanded="true"
           />
           <div className="search-scopes" role="group" aria-label="Search scope">
             {(
@@ -559,16 +590,27 @@ function WorkspaceScreen() {
           {results.isLoading ? (
             <div className="search-empty">Searching…</div>
           ) : results.data?.length ? (
-            results.data.map((result) => (
-              <button className="search-result" key={result.id} onClick={() => select(result.id)}>
-                <span className="search-result-icon">{result.icon}</span>
-                <span>
-                  <strong>{result.title}</strong>
-                  <small>{result.path}</small>
-                </span>
-                <kbd>↵</kbd>
-              </button>
-            ))
+            <div id="quick-open-results" role="listbox" aria-label="Search results">
+              {results.data.map((result, index) => (
+                <button
+                  className={`search-result ${searchSelection === index ? "is-selected" : ""}`}
+                  id={`search-result-${index}`}
+                  key={result.id}
+                  role="option"
+                  aria-selected={searchSelection === index}
+                  onMouseEnter={() => setSearchSelection(index)}
+                  onClick={() => select(result.id)}
+                >
+                  <span className="search-result-icon">{result.icon}</span>
+                  <span>
+                    <strong>{result.title}</strong>
+                    <small>{result.path}</small>
+                    {result.snippet && <small className="search-result-snippet">{result.snippet}</small>}
+                  </span>
+                  <kbd>{searchSelection === index ? "↵" : index + 1}</kbd>
+                </button>
+              ))}
+            </div>
           ) : (
             <div className="search-empty">No matching notes</div>
           )}
