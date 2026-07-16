@@ -354,7 +354,7 @@ function NotePane({
               <li><span className="meta-label">type</span> Markdown note</li>
               <li><span className="meta-label">status</span> <span className="saved-state"><span className="saved-dot" /> {editing ? saveState : "reading"}</span></li>
               <li><span className="meta-label">updated</span> {note.updated}</li>
-              {note.tags.length > 0 && <li><span className="meta-label">tags</span> <span className="tag-row">{note.tags.map((tag) => <button className="tag" key={tag} onClick={() => onTagSearch(tag)}>#{tag}</button>)}</span></li>}
+              {note.tags.length > 0 && <li className="note-meta-tags"><span className="tag-row">{note.tags.map((tag) => <button className="tag" key={tag} onClick={() => onTagSearch(tag)}>#{tag}</button>)}</span></li>}
             </ul>
           </div>
         </div>
@@ -433,10 +433,6 @@ function ContextPanel({
         ) : (
           <p className="context-empty">No backlinks indexed yet.</p>
         )}
-      </div>
-      <div className="context-section">
-        <div className="context-title">Tags <span>{note.tags.length}</span></div>
-        {note.tags.length ? <div className="context-tags">{note.tags.map((tag) => <button className="context-tag" key={tag} onClick={() => onNavigate(`/tags/${encodeURIComponent(tag)}`)}>#{tag}</button>)}</div> : <p className="context-empty">No tags on this note.</p>}
       </div>
       <div className="context-section">
         <div className="context-title">On this page <span>{noteHeadings(note.body).length}</span></div>

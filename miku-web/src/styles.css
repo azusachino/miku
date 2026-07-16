@@ -884,11 +884,6 @@ input:focus-visible {
 .relation-copy strong { color: inherit; font-size: 0.69rem; font-weight: 600; }
 .relation-copy small { margin-top: 3px; color: var(--faint); font-size: 0.61rem; }
 .backlink-row { padding-block: 9px; }
-.context-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 5px;
-}
 .toc-list { display: grid; gap: 3px; }
 .toc-item {
   display: block;
@@ -908,14 +903,6 @@ input:focus-visible {
 .markdown-reader h4 { scroll-margin-top: 18px; }
 .toc-level-3 { padding-left: 10px; }
 .toc-level-4 { padding-left: 20px; }
-.context-tag {
-  padding: 4px 7px;
-  border-radius: 5px;
-  color: var(--accent-strong);
-  background: var(--accent-soft);
-  font-size: 0.63rem;
-}
-.context-tag:hover { color: var(--text); background: var(--panel-2); }
 .relation-line {
   width: 12px;
   height: 1px;

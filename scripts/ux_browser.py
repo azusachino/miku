@@ -47,8 +47,10 @@ def main() -> int:
         page.locator(".note-scroll h1").filter(has_text="Sandbox").wait_for()
         if page.locator(".note-scroll h1").first.inner_text() != "Sandbox":
             raise AssertionError("clicking a note did not update the reader")
-        if page.locator(".context-tag", has_text="#demo").count() != 1:
-            raise AssertionError("sandbox inline tag is missing from note context")
+        if page.locator(".note-meta-tags .tag", has_text="#demo").count() != 1:
+            raise AssertionError("sandbox inline tag is missing from note metadata")
+        if page.locator(".context-title", has_text="Tags").count() != 0:
+            raise AssertionError("tags are duplicated in the Context panel")
         if (
             page.locator(".markdown-alert-note").count() != 1
             or page.locator(".markdown-alert-warning").count() != 1
@@ -61,7 +63,7 @@ def main() -> int:
             raise AssertionError("sandbox math did not render")
         if page.locator('a[href="/tags/demo"]').count() < 1:
             raise AssertionError("sandbox inline tag link is missing")
-        page.locator(".context-tag", has_text="#demo").click()
+        page.locator(".note-meta-tags .tag", has_text="#demo").click()
         page.wait_for_url("**/tags/demo")
         page.get_by_role("button", name="Sandbox", exact=True).first.wait_for()
         page.goto(f"{BASE_URL}/p/Sandbox.md", wait_until="domcontentloaded")
