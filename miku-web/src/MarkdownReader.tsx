@@ -5,8 +5,11 @@ import rehypeHighlight from "rehype-highlight";
 import rehypeRaw from "rehype-raw";
 import rehypeSanitize from "rehype-sanitize";
 import remarkGfm from "remark-gfm";
+import rehypeKatex from "rehype-katex";
+import remarkMath from "remark-math";
 import mermaid from "mermaid";
 import "highlight.js/styles/github-dark.css";
+import "katex/dist/katex.min.css";
 
 export function noteHref(target: string): string {
   const trimmed = target.trim();
@@ -69,8 +72,8 @@ export function MarkdownReader({ value }: { value: string }) {
   return (
     <article className="markdown-reader">
       <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
-        rehypePlugins={[rehypeRaw, rehypeSanitize, rehypeHighlight]}
+        remarkPlugins={[remarkGfm, remarkMath]}
+        rehypePlugins={[rehypeRaw, rehypeSanitize, rehypeHighlight, rehypeKatex]}
         components={{
           a: ({ href, children, ...props }) => {
             const internal = href?.startsWith("/p/") || href?.startsWith("/tags/");

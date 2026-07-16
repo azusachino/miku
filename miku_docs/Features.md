@@ -41,12 +41,48 @@ Miku Note also supports:
 - `![[asset.png]]` asset embeds;
 - inline `#tags` and YAML frontmatter properties;
 - fenced Mermaid diagrams;
-- fenced code blocks with language-aware Prism highlighting;
+- fenced code blocks with language-aware syntax highlighting;
 - inline and display LaTeX-style math (`$...$` and `$$...$$`).
 
-Mermaid, Prism, and KaTeX are loaded only when the current reader content needs
-them. Code blocks receive a small copy action on demand. These enhancements are
-progressive: the server-rendered Markdown remains the source of the page.
+Mermaid and KaTeX are loaded by the reader for content that uses them. Syntax
+highlighting and these math/diagram enhancements are progressive: the original
+Markdown remains the editable source of the page.
+
+### Common authoring use cases
+
+Render a flow or sequence diagram with a fenced `mermaid` block:
+
+````markdown
+```mermaid
+flowchart LR
+  note[Markdown file] --> index[Rebuildable index]
+  index --> reader[Miku reader]
+```
+````
+
+Use single dollar signs for inline math and double dollar signs for a display
+equation:
+
+```markdown
+Inline: the area is $A = \pi r^2$.
+
+$$
+\int_0^1 x^2\,dx = \frac{1}{3}
+$$
+```
+
+Other reader-oriented examples include:
+
+- `> [!TIP]` and the other GitHub-style callouts for explanations or warnings;
+- fenced `js`, `rust`, or `bash` blocks for highlighted source with copy action;
+- GFM tables, task lists, footnotes, strikethrough, autolinks, and raw HTML;
+- `[[Design/Home]]` for a note link, `[[Design/Home|design]]` for an alias, and
+  `![[diagram.png]]` for an asset or note embed;
+- `#project/miku` in prose or YAML `tags` frontmatter for indexed tags.
+
+Mermaid diagrams are rendered in the browser and may show a readable error
+block when the diagram source is invalid. Math is rendered as presentation
+output; the original Markdown remains the editable source.
 
 ## Wikilinks, backlinks, and mentions
 
@@ -64,17 +100,16 @@ from Markdown and frontmatter are indexed together.
 
 - `/tags` shows the tag index and loads more results as you scroll;
 - `/tags/<tag>` shows matching pages and also uses scroll-triggered paging;
-- `/search` searches Markdown source content directly with embedded ripgrep;
-  results are grouped by note and loaded as you scroll;
-- `Cmd-K` opens one palette with Pages, Content, and Commands tabs;
-- Pages uses the disposable title/path index for fast switching, while Content
-  uses the Markdown files as the search source of truth.
+- `Cmd-K` opens the quick-search palette. It searches Pages, Content, or All,
+  keeps results scrollable, and supports arrow-key selection plus Enter to open;
+  the indexed result path remains a projection while Markdown is the content
+  source of truth.
 
 ## Editing and safe writes
 
 Editing is opt-in from the reader. The inline editor uses CodeMirror 6 and
-loads its editor modules only when editing starts; the full editor remains
-available at `/p/<path>/edit`.
+loads its editor modules only when editing starts; use the `Edit` action in the
+note toolbar to enter it.
 
 Saving writes a temporary file, flushes it, and atomically renames it into
 place. A changed-file hash protects against overwriting edits made elsewhere.
