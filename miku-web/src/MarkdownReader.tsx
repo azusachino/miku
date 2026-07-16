@@ -8,6 +8,7 @@ import remarkGfm from "remark-gfm";
 import rehypeKatex from "rehype-katex";
 import remarkMath from "remark-math";
 import mermaid from "mermaid";
+import { headingSlug } from "./ui";
 import "highlight.js/styles/github-dark.css";
 import "katex/dist/katex.min.css";
 
@@ -15,6 +16,22 @@ export function noteHref(target: string): string {
   const trimmed = target.trim();
   const path = trimmed.endsWith(".md") ? trimmed : trimmed + ".md";
   return "/p/" + path.split("/").map(encodeURIComponent).join("/");
+}
+
+export function resolveMarkdownHref(href: string, currentPath: string): string | null {
+  const trimmed = href.trim();
+  if (!trimmed || trimmed.startsWith("#") || /^[a-z][a-z\d+.-]*:/i.test(trimmed)) return null;
+  if (trimmed.startsWith("/p/") || trimmed.startsWith("/tags/") || trimmed.startsWith("/assets/")) return trimmed;
+  const [target, hash] = trimmed.split("#", 2);
+  if (!target || (/\.[a-z\d]+$/i.test(target) && !target.endsWith(".md"))) return null;
+  const base = currentPath.split("/").slice(0, -1);
+  const normalized: string[] = [];
+  for (const segment of [...base, ...target.split("/")]) {
+    if (!segment || segment === ".") continue;
+    if (segment === "..") normalized.pop();
+    else normalized.push(segment);
+  }
+  return noteHref(normalized.join("/")) + (hash ? `#${hash}` : "");
 }
 
 export function expandWikiLinks(markdown: string): string {
@@ -55,7 +72,7 @@ function MermaidChart({ source }: { source: string }) {
   }, [id, source]);
 
   if (error) return <pre className="mermaid-error">{error}</pre>;
-  return <div className="mermaid-diagram" dangerouslySetInnerHTML={{ __html: svg }} />;
+  return svg ? <div className="mermaid-diagram" dangerouslySetInnerHTML={{ __html: svg }} /> : <div className="mermaid-diagram mermaid-loading">Rendering diagram…</div>;
 }
 
 function textContent(children: ReactNode): string {
@@ -67,7 +84,7 @@ function textContent(children: ReactNode): string {
   return "";
 }
 
-export function MarkdownReader({ value }: { value: string }) {
+export function MarkdownReader({ value, path = "" }: { value: string; path?: string }) {
   const navigate = useNavigate();
   return (
     <article className="markdown-reader">
@@ -76,15 +93,16 @@ export function MarkdownReader({ value }: { value: string }) {
         rehypePlugins={[rehypeRaw, rehypeSanitize, rehypeHighlight, rehypeKatex]}
         components={{
           a: ({ href, children, ...props }) => {
-            const internal = href?.startsWith("/p/") || href?.startsWith("/tags/");
+            const resolvedHref = href && path ? resolveMarkdownHref(href, path) ?? href : href;
+            const internal = resolvedHref?.startsWith("/p/") || resolvedHref?.startsWith("/tags/");
             return (
               <a
                 {...props}
-                href={href}
+                href={resolvedHref}
                 onClick={(event) => {
-                  if (!internal || !href) return;
+                  if (!internal || !resolvedHref) return;
                   event.preventDefault();
-                  navigate(href);
+                  navigate(resolvedHref);
                 }}
               >
                 {children}
@@ -100,9 +118,12 @@ export function MarkdownReader({ value }: { value: string }) {
               </blockquote>
             );
           },
+          h2: ({ children, ...props }) => <h2 {...props} id={headingSlug(textContent(children))}>{children}</h2>,
+          h3: ({ children, ...props }) => <h3 {...props} id={headingSlug(textContent(children))}>{children}</h3>,
+          h4: ({ children, ...props }) => <h4 {...props} id={headingSlug(textContent(children))}>{children}</h4>,
           code: ({ className, children, ...props }) => {
             const source = String(children).replace(/\n$/, "");
-            if (className === "language-mermaid") return <MermaidChart source={source} />;
+            if (/\blanguage-mermaid\b/.test(className ?? "")) return <MermaidChart source={source} />;
             return (
               <code className={className} {...props}>
                 {children}

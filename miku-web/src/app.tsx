@@ -2,8 +2,8 @@ import { lazy, Suspense, useEffect, useMemo, useReducer, useRef, useState, type 
 import { ArrowUp, ArrowUpRight, BookOpen, CaretDown, CaretLeft, CaretRight, CheckCircle, Clock, FileText, Folder, GearSix, Hash, MagnifyingGlass, Moon, Rocket, Sun, TreeStructure, X, type Icon } from "@phosphor-icons/react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Navigate, Route, Routes, useLocation, useNavigate, useParams } from "react-router-dom";
-import { createWorkspaceClient, sortTreeNodes, subscribeToWorkspaceEvents, type ApiSource, type NoteModel, type SearchScope, type TreeNodeModel } from "./api";
-import { UI_STATE_VERSION, moveSearchSelection, readExpandedPaths, readTheme, shellRegions, writeExpandedPaths, writeTheme, type Theme } from "./ui";
+import { createWorkspaceClient, sortTreeNodes, subscribeToWorkspaceEvents, type ApiSource, type BacklinkModel, type NoteModel, type SearchScope, type TreeNodeModel } from "./api";
+import { UI_STATE_VERSION, headingSlug, moveSearchSelection, readExpandedPaths, readTheme, shellRegions, writeExpandedPaths, writeTheme, type Theme } from "./ui";
 import { initialWorkspaceState, workspaceReducer } from "./workspace";
 const MarkdownEditor = lazy(() => import("./MarkdownEditor"));
 const MarkdownReader = lazy(() => import("./MarkdownReader").then((module) => ({ default: module.MarkdownReader })));
@@ -38,6 +38,21 @@ function NoteIcon({ value = "file-text", large = false }: { value?: string; larg
   const IconComponent = icons[icon.toLowerCase()] ?? FileText;
   const isEmoji = !icons[icon.toLowerCase()] && !/^[a-z0-9-]+$/i.test(icon);
   return isEmoji ? <span className={`note-icon-emoji ${large ? "is-large" : ""}`} aria-hidden="true">{icon}</span> : <IconComponent className={`note-icon-library ${large ? "is-large" : ""}`} size={large ? 25 : 16} weight="regular" aria-hidden="true" />;
+}
+
+function noteHeadings(markdown: string): { id: string; text: string; level: number }[] {
+  const headings: { id: string; text: string; level: number }[] = [];
+  const seen = new Map<string, number>();
+  for (const line of markdown.split("\n")) {
+    const match = line.match(/^(#{2,4})\s+(.+?)\s*#*$/);
+    if (!match) continue;
+    const text = match[2].replace(/[*_`]/g, "").trim();
+    const base = headingSlug(text);
+    const count = seen.get(base) ?? 0;
+    seen.set(base, count + 1);
+    headings.push({ id: count ? `${base}-${count}` : base, text, level: match[1].length });
+  }
+  return headings;
 }
 
 function Tree({
@@ -357,7 +372,7 @@ function NotePane({
           </Suspense>
         ) : (
           <Suspense fallback={<div className="markdown-editor-loading">Rendering Markdown…</div>}>
-            <MarkdownReader value={note.body} />
+            <MarkdownReader value={note.body} path={note.path} />
           </Suspense>
         )}
         {editing && (
@@ -373,8 +388,7 @@ function NotePane({
 
 function ContextPanel({
   note,
-  parents,
-  children,
+  backlinks,
   indexPhase,
   open,
   onToggle,
@@ -382,8 +396,7 @@ function ContextPanel({
   onResizeStart
 }: {
   note: NoteModel;
-  parents: TreeNodeModel["note"][];
-  children: TreeNodeModel[];
+  backlinks: BacklinkModel[];
   indexPhase?: string;
   open: boolean;
   onToggle: () => void;
@@ -406,28 +419,14 @@ function ContextPanel({
         </button>
       </div>
       <div className="context-section">
-        <div className="context-title">Children <span>{children.length}</span></div>
-        {children.length ? (
-          children.map((child) => (
-            <button className="relation-row" key={child.placementId} onClick={() => onNavigate(child.path)}>
-              <NoteIcon value={child.kind === "folder" ? "folder" : "file-text"} />
-              <span>{child.note.title}</span>
-              <ActionIcon name="chevron-right" />
-            </button>
-          ))
-        ) : (
-          <p className="context-empty">No child notes in this location.</p>
-        )}
-      </div>
-      <div className="context-section">
         <div className="context-title">
-          Relations <span>{note.backlinks.length}</span>
+          Backlinks <span>{backlinks.length}</span>
         </div>
-        {note.backlinks.length ? (
-          note.backlinks.map((backlink) => (
-            <button className="relation-row" key={backlink} onClick={() => onNavigate(backlink)}>
+        {backlinks.length ? (
+          backlinks.map((backlink) => (
+            <button className="relation-row backlink-row" key={backlink.path} onClick={() => onNavigate(backlink.path)}>
               <span className="relation-line" />
-              <span>{backlink}</span>
+              <span className="relation-copy"><strong>{backlink.title}</strong><small>{backlink.path}</small></span>
               <ActionIcon name="arrow-up-right" />
             </button>
           ))
@@ -440,20 +439,10 @@ function ContextPanel({
         {note.tags.length ? <div className="context-tags">{note.tags.map((tag) => <button className="context-tag" key={tag} onClick={() => onNavigate(`/tags/${encodeURIComponent(tag)}`)}>#{tag}</button>)}</div> : <p className="context-empty">No tags on this note.</p>}
       </div>
       <div className="context-section">
-        <div className="context-title">
-          Parents <span>{parents.length}</span>
-        </div>
-        {parents.length ? (
-          parents.map((parent) => (
-            <button className="relation-row" key={parent.path} onClick={() => onNavigate(parent.path)}>
-              <span className="relation-line" />
-              <span>{parent.title}</span>
-              <ActionIcon name="arrow-up" />
-            </button>
-          ))
-        ) : (
-          <p className="context-empty">This note is at the vault root.</p>
-        )}
+        <div className="context-title">On this page <span>{noteHeadings(note.body).length}</span></div>
+        {noteHeadings(note.body).length ? <nav className="toc-list" aria-label="Table of contents">
+          {noteHeadings(note.body).map((heading) => <button className={`toc-item toc-level-${heading.level}`} key={heading.id} onClick={() => document.getElementById(heading.id)?.scrollIntoView({ behavior: "smooth", block: "start" })}>{heading.text}</button>)}
+        </nav> : <p className="context-empty">No headings in this note.</p>}
       </div>
       <div className="context-section">
         <div className="context-title">Properties</div>
@@ -519,7 +508,7 @@ function WorkspaceScreen() {
   const isWorkspaceRoot = location.pathname === "/";
   const visibleTree = useMemo(() => [...(tree.data ?? []), ...(context.data?.children ?? [])], [context.data?.children, tree.data]);
   const treeNotes = useMemo(() => visibleTree.map((node) => ({ ...node.note, icon: "file-text", updated: "indexed", body: "", backlinks: [], tags: [] })), [visibleTree]);
-  const contextualNote = useMemo(() => (context.data ? { ...context.data.note, backlinks: context.data.backlinks } : undefined), [context.data]);
+  const contextualNote = useMemo(() => context.data?.note, [context.data]);
   useEffect(() => {
     const loadedNote = contextualNote ?? note.data;
     if (loadedNote) setNoteCache((current) => ({ ...current, [loadedNote.id]: loadedNote }));
@@ -644,6 +633,10 @@ function WorkspaceScreen() {
   };
   const searchTag = (tag: string) => {
     navigate(`/tags/${encodeURIComponent(tag)}`);
+  };
+  const navigateContextPath = (path: string) => {
+    if (path.endsWith(".md")) select(path);
+    else openBreadcrumbPath(path);
   };
   const openSearch = () => {
     setSearchSelection(-1);
@@ -790,12 +783,11 @@ function WorkspaceScreen() {
                 )}
                 <ContextPanel
                   note={activeNote}
-                  parents={context.data?.parents ?? []}
-                  children={context.data?.children ?? []}
+                  backlinks={context.data?.backlinks ?? []}
                   indexPhase={workspace.data?.indexPhase}
                   open={state.contextOpen}
                   onToggle={() => dispatch({ type: "toggle-context" })}
-                  onNavigate={select}
+                  onNavigate={navigateContextPath}
                   onResizeStart={(event) => {
                     event.preventDefault();
                     resizingContext.current = true;

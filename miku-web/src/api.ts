@@ -50,12 +50,13 @@ export type ContextModel = {
   note: NoteModel;
   parents: TreeNodeModel["note"][];
   children: TreeNodeModel[];
-  backlinks: string[];
+  backlinks: BacklinkModel[];
 };
 
 export type SearchItem = { id: string; path: string; title: string; icon: string; snippet: string };
 export type SearchScope = "all" | "title" | "content";
 export type TagModel = { tag: string; count: number };
+export type BacklinkModel = { path: string; title: string };
 export type TagNoteModel = { path: string; title: string; mtime: number };
 export type SaveNoteInput = { body: string; title: string; expectedRevision: NonNullable<NoteModel["revision"]> };
 
@@ -179,7 +180,7 @@ export function createWorkspaceClient(onSource: (source: ApiSource) => void) {
           note: normalizeNote(response.note),
           parents: response.parents.map((parent) => ({ id: parent.path, path: parent.path, title: parent.title, identityGenerated: parent.identity_generated, parents: [], order: parent.order })),
           children: sortTreeNodes(response.children.map((node) => normalizeTreeNode(node as ApiTreeNode))),
-          backlinks: response.backlinks.map((backlink) => backlink.path)
+          backlinks: response.backlinks.map((backlink) => ({ path: backlink.path, title: backlink.title }))
         } satisfies ContextModel;
       }),
     search: (query: string, scope: SearchScope = "all"): Promise<SearchItem[]> =>

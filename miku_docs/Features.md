@@ -25,6 +25,8 @@ The reader includes:
 
 - a collapsible filesystem explorer;
 - breadcrumbs, backlinks, unlinked mentions, and page properties;
+- a Context panel with backlinks, tags, page properties, and a jumpable table
+  of contents;
 - Thin, Wide, and Full reading-width modes;
 - light/dark themes, accent colors, compact spacing, and Zen mode;
 - a quick switcher and command palette (`Ctrl-K` / `Ctrl-Shift-P`).
@@ -90,13 +92,26 @@ Write `[[PageName]]` to connect notes. Matching is case-insensitive, and links
 can include a display alias such as `[[Index|Home]]`.
 
 When a note links to another note, the target page shows explicit backlinks.
-The indexer also records plain-text mentions as a secondary discovery surface;
-an unlinked mention can be promoted to a real wikilink from the reader.
+Each backlink shows the source note title and path and opens that source note;
+the indexer also records plain-text mentions as a secondary discovery surface.
 
 ## Tags and search
 
 Use tags such as `#docs`, `#feature`, or `#area/sub` anywhere in prose. Tags
 from Markdown and frontmatter are indexed together.
+
+Tag workflow example:
+
+```yaml
+---
+tags: [project/miku, markdown]
+---
+This note is also discoverable through #project/miku.
+```
+
+Tags are clickable in the note metadata and Context panel. The Tags page starts
+with ten tags and loads another ten when its list reaches the scroll sentinel;
+selecting a tag opens its indexed note list.
 
 - `/tags` shows the tag index and loads more results as you scroll;
 - `/tags/<tag>` shows matching pages and also uses scroll-triggered paging;

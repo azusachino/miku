@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { expandInlineTags, expandWikiLinks, noteHref } from "./MarkdownReader";
+import { expandInlineTags, expandWikiLinks, noteHref, resolveMarkdownHref } from "./MarkdownReader";
 
 describe("Markdown reader navigation", () => {
   it("keeps nested note paths readable in URLs", () => {
@@ -15,5 +15,12 @@ describe("Markdown reader navigation", () => {
     const result = expandInlineTags("Read #miku and `#literal`.");
     expect(result).toContain("[#miku](/tags/miku)");
     expect(result).toContain("`#literal`");
+  });
+
+  it("resolves relative Markdown links from the current note", () => {
+    expect(resolveMarkdownHref("abc", "Design/Overview.md")).toBe("/p/Design/abc.md");
+    expect(resolveMarkdownHref("../Shared/abc.md#part", "Design/Overview.md")).toBe("/p/Shared/abc.md#part");
+    expect(resolveMarkdownHref("/p/abc/xx", "Design/Overview.md")).toBe("/p/abc/xx");
+    expect(resolveMarkdownHref("https://example.com", "Design/Overview.md")).toBeNull();
   });
 });
