@@ -382,7 +382,7 @@ function ContextPanel({
 }) {
   if (!open)
     return (
-      <button className="context-reopen" onClick={onToggle} aria-label="Open context panel">
+      <button className="context-reopen" onClick={onToggle} aria-label="Open context panel" title="Open context panel">
         <ActionIcon name="chevron-left" />
       </button>
     );
@@ -391,7 +391,7 @@ function ContextPanel({
       <button className="context-resizer" onPointerDown={onResizeStart} aria-label="Resize note context panel" />
       <div className="context-header">
         <span className="eyebrow">Context</span>
-        <button className="tool-button" onClick={onToggle} aria-label="Close context panel">
+        <button className="tool-button" onClick={onToggle} aria-label="Close context panel" title="Close context panel">
           <ActionIcon name="chevron-right" />
         </button>
       </div>
