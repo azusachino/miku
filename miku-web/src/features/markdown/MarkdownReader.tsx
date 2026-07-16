@@ -1,7 +1,6 @@
 import { Children, cloneElement, isValidElement, useEffect, useId, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import ReactMarkdown from "react-markdown";
-import rehypePrism from "rehype-prism-plus/common";
 import rehypeRaw from "rehype-raw";
 import rehypeSanitize, { defaultSchema } from "rehype-sanitize";
 import remarkGfm from "remark-gfm";
@@ -10,6 +9,7 @@ import rehypeKatex from "rehype-katex";
 import remarkMath from "remark-math";
 import mermaid from "mermaid";
 import { headingSlug, type Theme } from "../../shared/ui";
+import { rehypePrism } from "./prism";
 import "katex/dist/katex.min.css";
 import lightSyntaxTheme from "prismjs/themes/prism.css?url";
 import darkSyntaxTheme from "prismjs/themes/prism-tomorrow.css?url";

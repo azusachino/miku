@@ -1,8 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { extractInlineTags } from "../workspace/api";
 import { expandInlineTags, expandWikiLinks, mermaidTheme, noteHref, resolveMarkdownHref } from "./MarkdownReader";
+import { supportedPrismLanguages } from "./prism";
 
 describe("Markdown reader navigation", () => {
+  it("supports modern documentation language aliases", () => {
+    for (const language of ["docker", "dockerfile", "graphql", "hcl", "terraform", "jsx", "tsx", "nix", "powershell", "toml", "zig"]) {
+      expect(supportedPrismLanguages.has(language)).toBe(true);
+    }
+  });
+
   it("keeps nested note paths readable in URLs", () => {
     expect(noteHref("projects/miku/home")).toBe("/p/projects/miku/home.md");
   });

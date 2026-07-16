@@ -73,7 +73,7 @@ $$
 Other reader-oriented examples include:
 
 - `> [!TIP]` and the other GitHub-style callouts for explanations or warnings;
-- fenced `js`, `rust`, or `bash` blocks for highlighted source with copy action;
+- fenced code blocks use Prism/Refractor language labels, including JavaScript/TypeScript, JSX/TSX, Python, Rust, Go, Java, C/C++, SQL, JSON/YAML/TOML, Bash, Docker, GraphQL, HCL/Terraform, Nix, PowerShell, Swift, and Zig;
 - GFM tables, task lists, footnotes, strikethrough, autolinks, and raw HTML;
 - `[[Design/Home]]` for a note link, `[[Design/Home|design]]` for an alias, and `![[diagram.png]]` for an asset or note embed;
 - `#project/miku` in prose or YAML `tags` frontmatter for indexed tags.
