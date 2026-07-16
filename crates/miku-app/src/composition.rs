@@ -201,3 +201,50 @@ impl IndexWriter for ComposedWriter {
         Ok(event)
     }
 }
+
+#[cfg(all(test, feature = "memory", feature = "sqlite"))]
+mod tests {
+    use super::*;
+    use miku_domain::{DocumentSignals, PageIndex, PageSummary};
+    use miku_index_memory::MemoryIndex;
+    use miku_index_sqlite::SqliteIndex;
+
+    #[tokio::test]
+    async fn default_composition_commits_durable_before_hot_and_switches_on_ready() {
+        let directory = tempfile::tempdir().expect("temporary index directory");
+        let path = directory.path().join("index.sqlite");
+        let durable = Arc::new(
+            SqliteIndex::open(path.to_str().expect("sqlite path"))
+                .await
+                .unwrap(),
+        );
+        let hot = Arc::new(MemoryIndex::new());
+        let api = compose_projections(durable.clone(), hot.clone());
+        let page = PageIndex {
+            summary: PageSummary {
+                path: "Index.md".to_string(),
+                title: "Index".to_string(),
+                frontmatter: serde_json::json!({}),
+                mtime: 1,
+            },
+            body: "# Index".to_string(),
+            links: Vec::new(),
+            tags: vec!["home".to_string()],
+            aliases: Vec::new(),
+            has_mermaid: false,
+            signals: DocumentSignals::default(),
+        };
+
+        api.replace_page(page).await.expect("durable and hot write");
+        assert_eq!(api.list_pages().await.unwrap().len(), 1);
+        assert_eq!(durable.list_pages().await.unwrap().len(), 1);
+        assert_eq!(hot.list_pages().await.unwrap().len(), 1);
+
+        api.writer()
+            .mark_mentions_ready()
+            .await
+            .expect("publish hot projection");
+        assert_eq!(api.list_pages().await.unwrap().len(), 1);
+        assert_eq!(hot.list_pages().await.unwrap().len(), 1);
+    }
+}
