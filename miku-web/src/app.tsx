@@ -149,7 +149,7 @@ function LaunchBar({
   return (
     <header className="launch-bar" data-region={shellRegions[0]}>
       <button className="brand-mark" onClick={() => navigate("/")} aria-label="Go to workspace home">
-        <img className="brand-icon" src="/favicon.svg" alt="" />
+        <img className="brand-icon" src={`/miku-icon-${theme}.svg`} alt="" />
         <span>miku note</span>
       </button>
       <button className="launch-search" onClick={onSearch} aria-label="Open quick search">
