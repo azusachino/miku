@@ -135,6 +135,10 @@ export function MarkdownReader({ value, path = "" }: { value: string; path?: str
                 {match ? stripAdmonitionMarker(children) : children}
                 </blockquote>
               );
+            },
+          p: ({ children, ...props }) => {
+            const match = textContent(children).match(/^\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]\s*/i);
+            return <p {...props} className={match ? "admonition admonition-" + match[1].toLowerCase() : undefined}>{match ? stripAdmonitionMarker(children) : children}</p>;
           },
           h2: ({ children, ...props }) => <h2 {...props} id={headingSlug(textContent(children))}>{children}</h2>,
           h3: ({ children, ...props }) => <h3 {...props} id={headingSlug(textContent(children))}>{children}</h3>,
