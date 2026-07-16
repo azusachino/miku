@@ -925,7 +925,6 @@ function FolderBrowser({
           <span className="eyebrow">Folder</span>
           <h1 id="folder-browser-title">{title}</h1>
           <nav className="folder-breadcrumbs" aria-label="Folder location">
-            <button className="breadcrumb-link" onClick={() => onNavigatePath("")}>Workspace</button>
             {path.split("/").map((part, index, parts) => (
               <span key={`${part}-${index}`}>
                 <span aria-hidden="true">/</span>
