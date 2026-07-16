@@ -657,9 +657,17 @@ input:focus-visible {
 .markdown-reader a:hover {
   color: var(--text);
 }
+.markdown-reader a[href^="/p/"] {
+  color: var(--accent-strong);
+}
 .markdown-reader a[href^="/tags/"] {
   color: var(--cyan);
   text-decoration-style: dotted;
+}
+.markdown-reader a[href^="http://"],
+.markdown-reader a[href^="https://"] {
+  color: var(--reader-muted);
+  text-decoration-style: dashed;
 }
 .markdown-reader blockquote a {
   font-weight: 600;
@@ -888,6 +896,7 @@ input:focus-visible {
 .relation-copy strong { color: inherit; font-size: 0.69rem; font-weight: 600; }
 .relation-copy small { margin-top: 3px; color: var(--faint); font-size: 0.61rem; }
 .backlink-row { padding-block: 9px; }
+.backlink-row:hover { background: color-mix(in srgb, var(--relation) 10%, transparent); }
 .toc-list { display: grid; gap: 3px; }
 .toc-item {
   display: block;
