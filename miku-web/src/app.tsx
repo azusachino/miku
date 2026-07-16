@@ -1,8 +1,8 @@
 import { lazy, Suspense, useEffect, useMemo, useReducer, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Navigate, Route, Routes, useLocation, useNavigate, useParams } from "react-router-dom";
-import { createWorkspaceClient, subscribeToWorkspaceEvents, type ApiSource, type NoteModel, type SearchScope, type TreeNodeModel } from "./api";
-import { UI_STATE_VERSION, readTheme, shellRegions, writeTheme, type Theme } from "./ui";
+import { createWorkspaceClient, sortTreeNodes, subscribeToWorkspaceEvents, type ApiSource, type NoteModel, type SearchScope, type TreeNodeModel } from "./api";
+import { UI_STATE_VERSION, readExpandedPaths, readTheme, shellRegions, writeExpandedPaths, writeTheme, type Theme } from "./ui";
 import { initialWorkspaceState, workspaceReducer } from "./workspace";
 const MarkdownEditor = lazy(() => import("./MarkdownEditor"));
 const MarkdownReader = lazy(() => import("./MarkdownReader").then((module) => ({ default: module.MarkdownReader })));
@@ -49,15 +49,47 @@ function Tree({
   client: ReturnType<typeof createWorkspaceClient>;
 }) {
   const noteMap = new Map(notes.map((note) => [note.id, note]));
-  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set(readExpandedPaths()));
   const [loaded, setLoaded] = useState<Record<string, TreeNodeModel[]>>({});
-  const roots = nodes.filter((node) => (hoisted ? node.noteId === activeId : node.parentId === null));
+  const roots = sortTreeNodes(nodes.filter((node) => (hoisted ? node.path === activeId || activeId.startsWith(`${node.path}/`) : node.parentId === null)));
+
+  useEffect(() => {
+    if (!activeId) return;
+    const ancestors = activeId
+      .split("/")
+      .slice(0, -1)
+      .map((_, index, parts) => parts.slice(0, index + 1).join("/"));
+    setExpanded((current) => {
+      const next = new Set(current);
+      ancestors.forEach((path) => next.add(path));
+      return next;
+    });
+  }, [activeId]);
+
+  useEffect(() => {
+    writeExpandedPaths(expanded);
+  }, [expanded]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const pending = roots.filter((node) => node.kind === "folder" && expanded.has(node.path) && !loaded[node.path]);
+    if (!pending.length) return;
+    void Promise.all(pending.map(async (node) => [node.path, await client.tree(node.path)] as const)).then((entries) => {
+      if (cancelled) return;
+      setLoaded((current) => ({ ...current, ...Object.fromEntries(entries) }));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [client, expanded, loaded, roots]);
 
   const branch = (node: TreeNodeModel, depth: number) => {
     const note = noteMap.get(node.noteId) ?? { ...node.note, icon: "□", updated: "unknown", body: "", backlinks: [], tags: [] };
-    const children = loaded[node.path] ?? [];
+    const children = sortTreeNodes(loaded[node.path] ?? []);
     const isFolder = node.kind === "folder";
     const isExpanded = expanded.has(node.path);
+    const indexNote = children.find((child) => child.kind === "markdown" && child.path === `${node.path}/index.md`);
+    const title = isFolder ? (indexNote?.note.title ?? node.note.title) : note.title;
     const toggleFolder = async () => {
       if (isExpanded) {
         setExpanded((current) => {
@@ -83,10 +115,11 @@ function Tree({
             else onSelect(node.path);
           }}
           aria-current={activeId === note.id ? "page" : undefined}
+          aria-expanded={isFolder ? isExpanded : undefined}
         >
           <span className="tree-caret">{isFolder ? (isExpanded ? "⌄" : "›") : "·"}</span>
           <FileIcon kind={isFolder ? "folder" : "note"} />
-          <span className="tree-label">{note.title}</span>
+          <span className="tree-label">{title}</span>
         </button>
         {!hoisted && isExpanded && children.map((child) => branch(child, depth + 1))}
       </div>

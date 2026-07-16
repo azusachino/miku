@@ -1,5 +1,6 @@
 export const UI_STATE_VERSION = 2 as const;
 export const UI_STATE_KEY = "miku:ui:v2" as const;
+export const EXPLORER_STATE_KEY = "miku:explorer:v1" as const;
 
 export const shellRegions = ["launch", "explorer", "content", "context", "status"] as const;
 export type ShellRegion = (typeof shellRegions)[number];
@@ -34,4 +35,17 @@ export function readTheme(storage: Storage = localStorage): Theme {
 export function writeTheme(theme: Theme, storage: Storage = localStorage): void {
   storage.setItem(UI_STATE_KEY, theme);
   storage.removeItem("miku-theme");
+}
+
+export function readExpandedPaths(storage: Storage = localStorage): string[] {
+  try {
+    const value: unknown = JSON.parse(storage.getItem(EXPLORER_STATE_KEY) ?? "[]");
+    return Array.isArray(value) ? value.filter((path): path is string => typeof path === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+export function writeExpandedPaths(paths: Iterable<string>, storage: Storage = localStorage): void {
+  storage.setItem(EXPLORER_STATE_KEY, JSON.stringify([...new Set(paths)].sort()));
 }
