@@ -119,6 +119,22 @@ pub fn page_slug(path: &str) -> String {
         .unwrap_or_else(|| path.to_lowercase())
 }
 
+/// Resolve a page link without guessing when multiple notes share a basename.
+/// Explicit path links are allowed to cross folders; basename links require a
+/// globally unique candidate.
+pub fn resolve_link_path(target_norm: &str, pages: &[PageSummary]) -> Option<String> {
+    let target = target_norm.to_lowercase();
+    if target.contains('/') {
+        return pages.iter().find_map(|page| {
+            let path = page.path.strip_suffix(".md").unwrap_or(&page.path);
+            (path.to_lowercase() == target).then(|| page.path.clone())
+        });
+    }
+    let mut matches = pages.iter().filter(|page| page_slug(&page.path) == target);
+    let first = matches.next()?;
+    matches.next().is_none().then(|| first.path.clone())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -143,5 +159,29 @@ mod tests {
 
         assert!(!page.body.contains('\0'));
         assert!(page.has_mermaid);
+    }
+
+    #[test]
+    fn resolves_unique_names_and_explicit_cross_folder_paths_only() {
+        let pages = vec![
+            build_page_index("same/Source.md", b"source", 1).summary,
+            build_page_index("same/Target.md", b"target", 1).summary,
+            build_page_index("other/Target.md", b"conflict", 1).summary,
+            build_page_index("other/Deep.md", b"deep", 1).summary,
+        ];
+
+        assert_eq!(
+            resolve_link_path("deep", &pages),
+            Some("other/Deep.md".to_string())
+        );
+        assert_eq!(
+            resolve_link_path("other/deep", &pages),
+            Some("other/Deep.md".to_string())
+        );
+        assert_eq!(resolve_link_path("target", &pages), None);
+        assert_eq!(
+            resolve_link_path("same/source", &pages),
+            Some("same/Source.md".to_string())
+        );
     }
 }

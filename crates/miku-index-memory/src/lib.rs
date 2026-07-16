@@ -111,14 +111,20 @@ impl IndexReader for MemoryIndex {
     }
 
     async fn backlinks(&self, path: &str) -> StoreResult<Vec<Backlink>> {
-        let target = miku_indexer::page_slug(path);
-        Ok(self
-            .read_pages()?
+        let pages = self.read_pages()?;
+        let summaries = pages
+            .values()
+            .map(|page| page.summary.clone())
+            .collect::<Vec<_>>();
+        Ok(pages
             .values()
             .filter(|page| {
                 page.summary.path != path
                     && page.links.iter().any(|link| {
-                        link.kind == miku_domain::LinkKind::Page && link.target_norm == target
+                        link.kind == miku_domain::LinkKind::Page
+                            && miku_indexer::resolve_link_path(&link.target_norm, &summaries)
+                                .as_deref()
+                                == Some(path)
                     })
             })
             .map(|page| Backlink {
@@ -367,6 +373,68 @@ mod tests {
             1
         );
         assert_eq!(index.tags().await.expect("tags")[0].count, 2);
+    }
+
+    #[tokio::test]
+    async fn backlinks_cover_same_layer_cross_layer_and_global_conflicts() {
+        let unique = MemoryIndex::new();
+        let mut same_source = page("same/Source.md", "Source", "[[Target]]");
+        same_source.links.push(LinkRecord {
+            target: "Target".to_string(),
+            target_norm: "target".to_string(),
+            alias: None,
+            kind: LinkKind::Page,
+            is_embed: false,
+        });
+        unique.replace_page(same_source).await.expect("same source");
+        unique
+            .replace_page(page("same/Target.md", "Target", "target"))
+            .await
+            .expect("same target");
+        assert_eq!(unique.backlinks("same/Target.md").await.unwrap().len(), 1);
+
+        let conflict = MemoryIndex::new();
+        let mut explicit_source = page("same/Explicit.md", "Explicit", "[[other/Target]]");
+        explicit_source.links.push(LinkRecord {
+            target: "other/Target".to_string(),
+            target_norm: "other/target".to_string(),
+            alias: None,
+            kind: LinkKind::Page,
+            is_embed: false,
+        });
+        conflict
+            .replace_page(explicit_source)
+            .await
+            .expect("explicit source");
+        let mut ambiguous_source = page("same/Ambiguous.md", "Ambiguous", "[[Target]]");
+        ambiguous_source.links.push(LinkRecord {
+            target: "Target".to_string(),
+            target_norm: "target".to_string(),
+            alias: None,
+            kind: LinkKind::Page,
+            is_embed: false,
+        });
+        conflict
+            .replace_page(ambiguous_source)
+            .await
+            .expect("ambiguous source");
+        conflict
+            .replace_page(page("same/Target.md", "Target", "target"))
+            .await
+            .expect("same target");
+        conflict
+            .replace_page(page("other/Target.md", "Target", "target"))
+            .await
+            .expect("other target");
+
+        assert!(conflict
+            .backlinks("same/Target.md")
+            .await
+            .unwrap()
+            .is_empty());
+        let cross_layer = conflict.backlinks("other/Target.md").await.unwrap();
+        assert_eq!(cross_layer.len(), 1);
+        assert_eq!(cross_layer[0].path, "same/Explicit.md");
     }
 
     #[tokio::test]

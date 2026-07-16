@@ -337,17 +337,32 @@ impl IndexWriter for PostgresIndex {
             "UPDATE tb_links link SET target_id = target.id
              FROM tb_pages target
              WHERE link.src_id = $1 AND link.kind = 'page'
-               AND link.target_norm = target.slug",
+               AND (
+                 (POSITION('/' IN link.target_norm) > 0
+                   AND lower(regexp_replace(target.path, '\\.md$', '')) = link.target_norm)
+                 OR
+                 (POSITION('/' IN link.target_norm) = 0
+                   AND target.slug = link.target_norm
+                   AND (SELECT COUNT(*) FROM tb_pages candidate WHERE candidate.slug = target.slug) = 1)
+               )",
         )
         .bind(page_id)
         .execute(&mut *tx)
         .await
         .map_err(database_error)?;
         sqlx::query(
-            "UPDATE tb_links SET target_id = $1 WHERE target_norm = $2 AND target_id IS NULL",
+            "UPDATE tb_links link SET target_id = target.id
+             FROM tb_pages target
+             WHERE link.kind = 'page'
+               AND (
+                 (POSITION('/' IN link.target_norm) > 0
+                   AND lower(regexp_replace(target.path, '\\.md$', '')) = link.target_norm)
+                 OR
+                 (POSITION('/' IN link.target_norm) = 0
+                   AND target.slug = link.target_norm
+                   AND (SELECT COUNT(*) FROM tb_pages candidate WHERE candidate.slug = target.slug) = 1)
+               )",
         )
-        .bind(page_id)
-        .bind(&slug)
         .execute(&mut *tx)
         .await
         .map_err(database_error)?;

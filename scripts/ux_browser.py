@@ -51,6 +51,12 @@ def main() -> int:
             raise AssertionError("sandbox inline tag is missing from note metadata")
         if page.locator(".context-title", has_text="Tags").count() != 0:
             raise AssertionError("tags are duplicated in the Context panel")
+        backlink_text = "\n".join(page.locator(".backlink-row").all_inner_texts())
+        for source in ("Changelog", "Features", "Index", "Usage"):
+            if source not in backlink_text:
+                raise AssertionError(f"Sandbox is missing its self-doc backlink from {source}")
+        if "Sandbox.md" in backlink_text:
+            raise AssertionError("a note must not list itself as a backlink")
         if (
             page.locator(".markdown-alert-note").count() != 1
             or page.locator(".markdown-alert-warning").count() != 1
