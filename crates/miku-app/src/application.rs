@@ -86,26 +86,6 @@ impl FileMikuApplication {
         }
     }
 
-    fn file_node(document: &VaultDocument) -> FileNode {
-        let path = RelativePath::new(&document.note.source_path)
-            .expect("VaultDocument source paths are canonical relative paths");
-        let name = path
-            .as_str()
-            .rsplit('/')
-            .next()
-            .unwrap_or(path.as_str())
-            .to_string();
-        FileNode {
-            kind: FileNodeKind::Markdown,
-            path,
-            note_id: Some(document.note.id.clone()),
-            identity_generated: document.identity_generated,
-            name,
-            title: Some(document.note.title.clone()),
-            has_children: false,
-        }
-    }
-
     fn folder_node(path: RelativePath, name: String, has_children: bool) -> FileNode {
         FileNode {
             kind: FileNodeKind::Folder,
@@ -116,10 +96,6 @@ impl FileMikuApplication {
             title: None,
             has_children,
         }
-    }
-
-    fn summary_node(document: &VaultDocument) -> FileNode {
-        Self::file_node(document)
     }
 
     fn summary_file_node(page: &PageSummary) -> FileNode {
@@ -226,18 +202,38 @@ impl VaultReader for FileMikuApplication {
 
     async fn note_context(&self, note: NoteRef) -> Result<NoteContext, ApplicationError> {
         let document = self.resolve_document(note).await?;
-        let documents = self.documents().await?;
+        let pages = self
+            .index
+            .list_pages()
+            .await
+            .map_err(ApplicationError::from)?;
         let parents = document
             .note
             .parents
             .iter()
-            .filter_map(|id| documents.iter().find(|candidate| candidate.note.id == *id))
-            .map(Self::summary_node)
+            .filter_map(|id| {
+                pages.iter().find(|page| {
+                    page.frontmatter
+                        .get("id")
+                        .and_then(serde_json::Value::as_str)
+                        == Some(id.as_str())
+                })
+            })
+            .map(Self::summary_file_node)
             .collect();
-        let children = documents
+        let children = pages
             .iter()
-            .filter(|candidate| candidate.note.parents.contains(&document.note.id))
-            .map(Self::summary_node)
+            .filter(|page| {
+                page.frontmatter
+                    .get("parents")
+                    .and_then(serde_json::Value::as_array)
+                    .is_some_and(|parents| {
+                        parents
+                            .iter()
+                            .any(|parent| parent.as_str() == Some(document.note.id.as_str()))
+                    })
+            })
+            .map(Self::summary_file_node)
             .collect();
         let backlinks = self.index.backlinks(&document.note.source_path).await?;
         Ok(NoteContext {
