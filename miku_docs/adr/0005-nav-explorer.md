@@ -1,6 +1,6 @@
 ---
 id: ADR-0005
-title: Navigation explorer (folder/file tree)
+title: ADR-0005 — Navigation explorer (folder/file tree)
 slug: nav-explorer
 status: Accepted
 date-proposed: 2026-06-26

@@ -1,6 +1,6 @@
 ---
 id: ADR-0017
-title: Web Markdown workspace and file-based note graph
+title: ADR-0017 — Web Markdown workspace and file-based note graph
 slug: web-markdown-workspace
 status: Accepted
 date-proposed: 2026-07-15

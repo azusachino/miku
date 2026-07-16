@@ -1,6 +1,6 @@
 ---
 id: ADR-0002
-title: Markdown & wikilink grammar (comrak)
+title: ADR-0002 — Markdown & wikilink grammar (comrak)
 slug: markdown-wikilink-grammar
 status: Accepted
 date-proposed: 2026-06-25

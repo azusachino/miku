@@ -1,6 +1,6 @@
 ---
 id: ADR-0013
-title: crates.io release surface
+title: ADR-0013 — crates.io release surface
 slug: crates-io-release-surface
 status: Accepted
 date-proposed: 2026-07-14

@@ -1,6 +1,6 @@
 ---
 id: ADR-0008
-title: Theme switching (palette × mode)
+title: ADR-0008 — Theme switching (palette × mode)
 slug: theme-switching
 status: Accepted
 date-proposed: 2026-06-26

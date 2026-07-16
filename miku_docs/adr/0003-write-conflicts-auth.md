@@ -1,6 +1,6 @@
 ---
 id: ADR-0003
-title: Write conflicts & auth
+title: ADR-0003 — Write conflicts & auth
 slug: write-conflicts-auth
 status: Accepted
 date-proposed: 2026-06-25

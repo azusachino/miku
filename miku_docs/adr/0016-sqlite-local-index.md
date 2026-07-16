@@ -1,6 +1,6 @@
 ---
 id: ADR-0016
-title: SQLite (sqlx) local index
+title: ADR-0016 — SQLite (sqlx) local index
 slug: sqlite-local-index
 status: Accepted
 date-proposed: 2026-07-15

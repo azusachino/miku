@@ -1,6 +1,6 @@
 ---
 id: ADR-0001
-title: Full-text search (Postgres english FTS)
+title: ADR-0001 — Full-text search (Postgres english FTS)
 slug: fts-english
 status: Accepted
 date-proposed: 2026-06-25

@@ -1,6 +1,6 @@
 ---
 id: ADR-0004
-title: Rename / delete & assets
+title: ADR-0004 — Rename / delete & assets
 slug: rename-delete-assets
 status: Superseded
 date-proposed: 2026-06-25

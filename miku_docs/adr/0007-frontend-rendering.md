@@ -1,6 +1,6 @@
 ---
 id: ADR-0007
-title: Frontend rendering & client-JS budget
+title: ADR-0007 — Frontend rendering & client-JS budget
 slug: frontend-rendering
 status: Accepted
 date-proposed: 2026-06-26
