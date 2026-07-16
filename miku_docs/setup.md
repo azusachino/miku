@@ -90,5 +90,5 @@ The native stack above is preferred for day-to-day local development. Docker Com
 
 ## Database
 
-The legacy SQLite index is stored at `miku_docs/.miku-index.sqlite` when `MIKU_INDEX_BACKEND=sqlite` is selected. Postgres migrations live under `crates/miku-index-postgres/migrations/` and are used
+The SQLite index is stored at `miku_docs/.miku-index.sqlite` when `MIKU_INDEX_BACKEND=sqlite` is selected. Postgres migrations live under `crates/miku-index-postgres/migrations/` and are used
 only for the explicit Postgres profile. Both indexes are fully rebuildable from `miku_docs/**/*.md`; dropping and recreating either loses no user data.

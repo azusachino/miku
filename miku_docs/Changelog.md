@@ -12,7 +12,7 @@ User-facing changes to Miku Note are recorded here. See [[Index]] for the starti
 
 ## Unreleased — workspace cleanup (2026-07-16)
 
-- Replaced the legacy server-rendered/Alpine frontend description with the current React, Vite, Tailwind, Prism, Mermaid, and KaTeX architecture.
+- Replaced the former server-rendered/Alpine frontend description with the current React, Vite, Tailwind, Prism, Mermaid, and KaTeX architecture.
 - Organized the frontend source by app, workspace, Markdown, components, and shared helpers.
 - Removed duplicate planning notes and stale pre-workspace documentation.
 - Standardized first-party Markdown notes and ADRs on Obsidian-style YAML frontmatter.

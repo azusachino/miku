@@ -12,7 +12,7 @@ mirror: asobi:miku:decision:sqlite-local-index
 supersedes: [ADR-0011, ADR-0014]
 superseded-by:
 relates-to: [ADR-0009, ADR-0010, ADR-0012, ADR-0013]
-rejects: [rusqlite-sync, libsql-embedded, redb-kv, retained-legacy-backend]
+rejects: [rusqlite-sync, libsql-embedded, redb-kv, retained-removed-backend]
 impacts: [crates/miku-index-sqlite, crates/miku-app, Cargo.toml, Makefile, miku_docs/setup.md, miku_docs/architecture.md]
 config-keys: [MIKU_INDEX_BACKEND, MIKU_INDEX_PATH]
 tags: [index, sqlite, sqlx, fts5, dependencies]

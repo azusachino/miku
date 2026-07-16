@@ -41,7 +41,6 @@ type ApiTreeResponse = { parent_id: string | null; nodes: ApiTreeNode[] };
 export type WorkspaceModel = {
   noteCount: number;
   placementCount: number;
-  legacyCount: number;
   indexPhase: Schemas["WorkspaceResponse"]["index_phase"];
   readonly: boolean;
 };

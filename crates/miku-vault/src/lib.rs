@@ -475,8 +475,8 @@ mod tests {
     #[test]
     fn generated_identity_scan_and_explicit_migration_do_not_rewrite_during_planning() {
         let root = tempfile::tempdir().unwrap();
-        let path = root.path().join("Legacy.md");
-        fs::write(&path, "---\ntitle: Legacy\n---\nbody\n").unwrap();
+        let path = root.path().join("Current.md");
+        fs::write(&path, "---\ntitle: Current\n---\nbody\n").unwrap();
         let vault = Vault::new(root.path());
 
         let before = fs::read_to_string(&path).unwrap();
@@ -485,7 +485,7 @@ mod tests {
         assert_eq!(fs::read_to_string(&path).unwrap(), before);
 
         assert_eq!(vault.apply_migration(&plan).unwrap(), 1);
-        let migrated = vault.read("Legacy").unwrap();
+        let migrated = vault.read("Current").unwrap();
         assert!(!migrated.identity_generated);
         assert_eq!(migrated.note.id, plan.candidates[0].proposed_id);
     }
