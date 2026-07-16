@@ -327,7 +327,6 @@ function NotePane({
             <ul className="note-meta-list">
               <li><span className="meta-label">type</span> Markdown note</li>
               <li><span className="meta-label">status</span> <span className="saved-state"><span className="saved-dot" /> {editing ? saveState : "reading"}</span></li>
-              <li><span className="meta-label">path</span> <code>{note.path}</code></li>
               <li><span className="meta-label">updated</span> {note.updated}</li>
               {note.tags.length > 0 && <li><span className="meta-label">tags</span> <span className="tag-row">{note.tags.map((tag) => <button className="tag" key={tag} onClick={() => onTagSearch(tag)}>#{tag}</button>)}</span></li>}
             </ul>

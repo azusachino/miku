@@ -537,7 +537,8 @@ input:focus-visible {
 }
 .note-header {
   display: flex;
-  align-items: center;
+  flex-direction: row;
+  align-items: flex-start;
   gap: 16px;
   padding-bottom: 32px;
 }
@@ -547,6 +548,8 @@ input:focus-visible {
   place-items: center;
   width: 43px;
   height: 43px;
+  flex: 0 0 43px;
+  margin-top: 10px;
   border: 1px solid color-mix(in srgb, var(--accent) 55%, var(--line));
   border-radius: 12px;
   color: var(--note-icon);

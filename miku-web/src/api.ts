@@ -89,7 +89,16 @@ function normalizeNote(note: Schemas["NoteResponse"]): NoteModel {
     title: note.title,
     icon: typeof frontmatter.icon === "string" ? frontmatter.icon : "file-text",
     parents: Array.isArray(frontmatter.parents) ? frontmatter.parents.filter((parent): parent is string => typeof parent === "string") : [],
-    updated: note.revision.mtime ? new Date(note.revision.mtime * 1000).toLocaleString() : "unknown",
+    updated: note.revision.mtime
+      ? new Date(note.revision.mtime * 1000).toLocaleString(undefined, {
+          year: "numeric",
+          month: "short",
+          day: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: false
+        })
+      : "unknown",
     body: note.body,
     backlinks: [],
     tags,
