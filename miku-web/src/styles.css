@@ -1,4 +1,16 @@
 @import "tailwindcss";
+@plugin "@tailwindcss/typography";
+
+@theme inline {
+  --color-miku-bg: var(--bg);
+  --color-miku-panel: var(--panel);
+  --color-miku-panel-2: var(--panel-2);
+  --color-miku-text: var(--text);
+  --color-miku-muted: var(--muted);
+  --color-miku-accent: var(--accent);
+  --color-miku-line: var(--line);
+  --font-sans: Inter, ui-sans-serif, system-ui, sans-serif;
+}
 
 :root {
   /*
@@ -91,10 +103,6 @@ input:focus-visible {
   font-size: 1.15em;
 }
 .app-shell {
-  display: flex;
-  min-height: 0;
-  height: 100vh;
-  flex-direction: column;
   color: var(--text);
   background: var(--bg);
 }
@@ -230,10 +238,6 @@ input:focus-visible {
   color: var(--text);
 }
 .workspace-layout {
-  display: flex;
-  min-height: 0;
-  height: calc(100vh - var(--shell-topbar-height));
-  overflow: hidden;
 }
 .sidebar {
   display: flex;
@@ -369,12 +373,6 @@ input:focus-visible {
   font-size: 0.65rem;
 }
 .main-stage {
-  display: flex;
-  min-width: 0;
-  min-height: 0;
-  overflow: hidden;
-  flex: 1;
-  flex-direction: column;
 }
 .tabs {
   display: flex;
@@ -640,44 +638,6 @@ input:focus-visible {
   color: var(--text);
   background: var(--panel-2);
 }
-.markdown-reader {
-  color: var(--text-soft);
-  font-size: 0.88rem;
-  line-height: 1.82;
-}
-.markdown-reader .katex { color: var(--text); }
-.markdown-reader .katex-display { overflow-x: auto; padding: 4px 0; }
-.markdown-reader h2,
-.markdown-reader h3,
-.markdown-reader h4 {
-  margin: 2em 0 0.65em;
-  color: var(--reader-heading);
-  line-height: 1.25;
-}
-.markdown-reader p,
-.markdown-reader ul,
-.markdown-reader ol,
-.markdown-reader pre,
-.markdown-reader blockquote {
-  margin: 1em 0;
-}
-.markdown-reader ul {
-  list-style: disc;
-  padding-left: 1.5em;
-}
-.markdown-reader ol {
-  list-style: decimal;
-  padding-left: 1.5em;
-}
-.markdown-reader a {
-  color: var(--accent-strong);
-  text-decoration: underline;
-  text-decoration-color: var(--reader-link-underline);
-  text-underline-offset: 3px;
-}
-.markdown-reader a:hover {
-  color: var(--text);
-}
 .markdown-reader a[href^="/p/"] {
   color: var(--accent-strong);
 }
@@ -697,39 +657,8 @@ input:focus-visible {
   content: " ↗";
   font-size: 0.78em;
 }
-.markdown-reader blockquote a {
-  font-weight: 600;
-}
-.markdown-reader code:not(pre code) {
-  padding: 2px 5px;
-  border-radius: 4px;
-  color: var(--cyan);
-  background: var(--panel-2);
-  font-size: 0.82em;
-}
-.markdown-reader pre {
-  overflow-x: auto;
-  padding: 15px 17px;
-  border: 1px solid var(--reader-border);
-  border-radius: 8px;
-  background: var(--surface-code);
-  font-size: 0.78rem;
-  line-height: 1.65;
-}
-.markdown-reader pre code.hljs {
+.markdown-reader pre code[class*="language-"] {
   background: transparent !important;
-}
-.markdown-reader blockquote {
-  padding: 3px 17px;
-  border-left: 3px solid var(--faint);
-  color: var(--reader-muted);
-}
-.markdown-reader .admonition {
-  position: relative;
-  padding: 12px 16px 12px 18px;
-  border-left-color: var(--accent);
-  border-radius: 0 7px 7px 0;
-  background: var(--accent-soft);
 }
 .markdown-reader .markdown-alert {
   position: relative;
@@ -747,32 +676,6 @@ input:focus-visible {
 .markdown-reader .markdown-alert-warning,
 .markdown-reader .markdown-alert-caution { border-left-color: var(--folder); background: color-mix(in srgb, var(--folder) 15%, var(--panel)); }
 .markdown-reader .markdown-alert::before { display: none; }
-.markdown-reader .admonition::before {
-  display: block;
-  margin-bottom: 4px;
-  color: var(--accent-strong);
-  content: "NOTE";
-  font-size: 0.62rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-}
-.markdown-reader .admonition-tip::before { content: "TIP"; }
-.markdown-reader .admonition-important::before { content: "IMPORTANT"; }
-.markdown-reader .admonition-warning::before { content: "WARNING"; }
-.markdown-reader .admonition-caution::before { content: "CAUTION"; }
-.markdown-reader .admonition-tip {
-  border-left-color: var(--cyan);
-  background: color-mix(in srgb, var(--cyan) 15%, var(--panel));
-}
-.markdown-reader .admonition-warning,
-.markdown-reader .admonition-caution {
-  border-left-color: var(--folder);
-  background: color-mix(in srgb, var(--folder) 15%, var(--panel));
-}
-.markdown-reader .admonition-important {
-  border-left-color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 15%, var(--panel));
-}
 .mermaid-diagram {
   overflow-x: auto;
   margin: 1.2em 0;

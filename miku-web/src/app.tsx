@@ -557,7 +557,7 @@ function WorkspaceScreen() {
 
   const secondaryNote = notes.find((candidate) => candidate.id === (state.tabs.find((tab) => tab !== activeId) ?? "welcome")) ?? activeNote;
   return (
-    <div className="app-shell" data-theme={theme} data-ui-state-version={UI_STATE_VERSION}>
+    <div className="app-shell flex h-screen min-h-0 flex-col bg-miku-bg text-miku-text" data-theme={theme} data-ui-state-version={UI_STATE_VERSION}>
       <LaunchBar onSearch={openSearch} theme={theme} onToggleTheme={toggleTheme} />
       {searchOpen && (
         <div className="search-popover" ref={searchPanelRef} data-region="quick-open">
@@ -633,7 +633,7 @@ function WorkspaceScreen() {
         </div>
       )}
       <WorkspaceNotice message={notice} onDismiss={() => setNotice(null)} />
-      <div className="workspace-layout" style={{ "--shell-sidebar-width": `${sidebarWidth}px`, "--shell-context-width": `${contextWidth}px` } as React.CSSProperties}>
+      <div className="workspace-layout flex h-[calc(100vh-var(--shell-topbar-height))] min-h-0 overflow-hidden" style={{ "--shell-sidebar-width": `${sidebarWidth}px`, "--shell-context-width": `${contextWidth}px` } as React.CSSProperties}>
         <Sidebar
           notes={notes}
           nodes={visibleTree}
@@ -652,7 +652,7 @@ function WorkspaceScreen() {
             document.body.style.cursor = "col-resize";
           }}
         />
-        <main className="main-stage">
+        <main className="main-stage flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
           {folderPath ? (
             <FolderBrowser path={folderPath} nodes={folder.data ?? []} isLoading={folder.isLoading} isError={folder.isError} onSelect={select} onOpenFolder={(path) => navigate(`/folder/${path.split("/").map(encodeURIComponent).join("/")}`)} onNavigatePath={openBreadcrumbPath} />
           ) : utilityRoute ? (

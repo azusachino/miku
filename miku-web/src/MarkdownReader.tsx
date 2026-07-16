@@ -1,7 +1,7 @@
 import { Children, cloneElement, isValidElement, useEffect, useId, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import ReactMarkdown from "react-markdown";
-import rehypeHighlight from "rehype-highlight";
+import rehypePrism from "rehype-prism-plus/common";
 import rehypeRaw from "rehype-raw";
 import rehypeSanitize, { defaultSchema } from "rehype-sanitize";
 import remarkGfm from "remark-gfm";
@@ -11,8 +11,8 @@ import remarkMath from "remark-math";
 import mermaid from "mermaid";
 import { headingSlug, type Theme } from "./ui";
 import "katex/dist/katex.min.css";
-import lightSyntaxTheme from "highlight.js/styles/github.css?url";
-import darkSyntaxTheme from "highlight.js/styles/github-dark.css?url";
+import lightSyntaxTheme from "prismjs/themes/prism.css?url";
+import darkSyntaxTheme from "prismjs/themes/prism-tomorrow.css?url";
 
 const markdownSanitizeSchema = {
   ...defaultSchema,
@@ -120,8 +120,8 @@ function stripAdmonitionMarker(children: ReactNode): ReactNode {
 function SyntaxTheme({ theme }: { theme: Theme }) {
   useEffect(() => {
     const themes = [
-      { id: "miku-highlight-light", href: lightSyntaxTheme },
-      { id: "miku-highlight-dark", href: darkSyntaxTheme }
+      { id: "miku-prism-light", href: lightSyntaxTheme },
+      { id: "miku-prism-dark", href: darkSyntaxTheme }
     ];
     for (const syntaxTheme of themes) {
       let link = document.getElementById(syntaxTheme.id) as HTMLLinkElement | null;
@@ -132,7 +132,7 @@ function SyntaxTheme({ theme }: { theme: Theme }) {
         link.href = syntaxTheme.href;
         document.head.appendChild(link);
       }
-      link.disabled = syntaxTheme.id !== `miku-highlight-${theme}`;
+      link.disabled = syntaxTheme.id !== `miku-prism-${theme}`;
     }
   }, [theme]);
   return null;
@@ -141,11 +141,11 @@ function SyntaxTheme({ theme }: { theme: Theme }) {
 export function MarkdownReader({ value, path = "", theme = "dark" }: { value: string; path?: string; theme?: Theme }) {
   const navigate = useNavigate();
   return (
-    <article className="markdown-reader">
+    <article className={`markdown-reader prose prose-stone max-w-none ${theme === "dark" ? "prose-invert" : ""}`}>
       <SyntaxTheme theme={theme} />
       <ReactMarkdown
         remarkPlugins={[remarkGfm, remarkMath, remarkAlert]}
-        rehypePlugins={[rehypeRaw, [rehypeSanitize, markdownSanitizeSchema], rehypeHighlight, rehypeKatex]}
+        rehypePlugins={[rehypeRaw, [rehypeSanitize, markdownSanitizeSchema], rehypePrism, rehypeKatex]}
         components={{
           a: ({ href, children, node: _node, ...props }) => {
             const resolvedHref = href && path ? (resolveMarkdownHref(href, path) ?? href) : href;
