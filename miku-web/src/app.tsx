@@ -531,6 +531,9 @@ function WorkspaceScreen() {
       tags: [],
       identityGenerated: false
     };
+  useEffect(() => {
+    if (isNoteRoute && activeId) dispatch({ type: "open", id: activeId });
+  }, [activeId, isNoteRoute]);
 
   useEffect(() => {
     if (!isWorkspaceRoot || !tree.data) return;
