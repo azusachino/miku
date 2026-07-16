@@ -294,7 +294,8 @@ function NotePane({
   indexPhase,
   client,
   onTagSearch,
-  onNavigatePath
+  onNavigatePath,
+  theme
 }: {
   note: NoteModel;
   split: boolean;
@@ -304,6 +305,7 @@ function NotePane({
   client: ReturnType<typeof createWorkspaceClient>;
   onTagSearch: (tag: string) => void;
   onNavigatePath: (path: string) => void;
+  theme: Theme;
 }) {
   const [draft, setDraft] = useState(note.body);
   const [saveState, setSaveState] = useState("saved");
@@ -375,7 +377,7 @@ function NotePane({
           </Suspense>
         ) : (
           <Suspense fallback={<div className="markdown-editor-loading">Rendering Markdown…</div>}>
-            <MarkdownReader value={note.body} path={note.path} />
+            <MarkdownReader value={note.body} path={note.path} theme={theme} />
           </Suspense>
         )}
         {editing && (
@@ -788,6 +790,7 @@ function WorkspaceScreen() {
                   client={client}
                   onTagSearch={searchTag}
                   onNavigatePath={openBreadcrumbPath}
+                  theme={theme}
                 />
                 {state.split && (
                   <NotePane
@@ -799,6 +802,7 @@ function WorkspaceScreen() {
                     client={client}
                     onTagSearch={searchTag}
                     onNavigatePath={openBreadcrumbPath}
+                    theme={theme}
                   />
                 )}
                 <ContextPanel

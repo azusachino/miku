@@ -9,7 +9,7 @@ import { remarkAlert } from "remark-github-blockquote-alert";
 import rehypeKatex from "rehype-katex";
 import remarkMath from "remark-math";
 import mermaid from "mermaid";
-import { headingSlug } from "./ui";
+import { headingSlug, type Theme } from "./ui";
 import "highlight.js/styles/github-dark.css";
 import "katex/dist/katex.min.css";
 
@@ -59,7 +59,11 @@ export function expandInlineTags(markdown: string): string {
     .join("");
 }
 
-function MermaidChart({ source }: { source: string }) {
+export function mermaidTheme(theme: Theme): "dark" | "default" {
+  return theme === "dark" ? "dark" : "default";
+}
+
+function MermaidChart({ source, theme }: { source: string; theme: Theme }) {
   const rawId = useId();
   const id = "miku-mermaid-" + rawId.replace(/[^a-zA-Z0-9_-]/g, "");
   const [svg, setSvg] = useState("");
@@ -67,7 +71,7 @@ function MermaidChart({ source }: { source: string }) {
 
   useEffect(() => {
     let active = true;
-    mermaid.initialize({ startOnLoad: false, securityLevel: "strict", theme: "neutral" });
+    mermaid.initialize({ startOnLoad: false, securityLevel: "strict", theme: mermaidTheme(theme) });
     mermaid
       .render(id, source)
       .then(({ svg: rendered }) => {
@@ -79,7 +83,7 @@ function MermaidChart({ source }: { source: string }) {
     return () => {
       active = false;
     };
-  }, [id, source]);
+  }, [id, source, theme]);
 
   if (error) return <pre className="mermaid-error">{error}</pre>;
   return svg ? <div className="mermaid-diagram" dangerouslySetInnerHTML={{ __html: svg }} /> : <div className="mermaid-diagram mermaid-loading">Rendering diagram…</div>;
@@ -112,7 +116,7 @@ function stripAdmonitionMarker(children: ReactNode): ReactNode {
   return Children.map(children, strip);
 }
 
-export function MarkdownReader({ value, path = "" }: { value: string; path?: string }) {
+export function MarkdownReader({ value, path = "", theme = "dark" }: { value: string; path?: string; theme?: Theme }) {
   const navigate = useNavigate();
   return (
     <article className="markdown-reader">
@@ -171,7 +175,7 @@ export function MarkdownReader({ value, path = "" }: { value: string; path?: str
           ),
           code: ({ className, children, node: _node, ...props }) => {
             const source = String(children).replace(/\n$/, "");
-            if (/\blanguage-mermaid\b/.test(className ?? "")) return <MermaidChart source={source} />;
+            if (/\blanguage-mermaid\b/.test(className ?? "")) return <MermaidChart source={source} theme={theme} />;
             return (
               <code className={className} {...props}>
                 {children}

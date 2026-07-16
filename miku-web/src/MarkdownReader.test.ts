@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { extractInlineTags } from "./api";
-import { expandInlineTags, expandWikiLinks, noteHref, resolveMarkdownHref } from "./MarkdownReader";
+import { expandInlineTags, expandWikiLinks, mermaidTheme, noteHref, resolveMarkdownHref } from "./MarkdownReader";
 
 describe("Markdown reader navigation", () => {
   it("keeps nested note paths readable in URLs", () => {
@@ -27,5 +27,10 @@ describe("Markdown reader navigation", () => {
 
   it("extracts inline tags for note metadata while skipping code", () => {
     expect(extractInlineTags("#demo and #設計\n\n`#literal`\n\n```md\n#code\n```")).toEqual(["demo", "設計"]);
+  });
+
+  it("maps Mermaid rendering to the active shell theme", () => {
+    expect(mermaidTheme("light")).toBe("default");
+    expect(mermaidTheme("dark")).toBe("dark");
   });
 });

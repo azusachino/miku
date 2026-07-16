@@ -669,7 +669,14 @@ input:focus-visible {
 .markdown-reader a[href^="http://"],
 .markdown-reader a[href^="https://"] {
   color: var(--reader-muted);
-  text-decoration-style: dashed;
+  text-decoration-style: solid;
+  text-decoration-color: var(--faint);
+}
+.markdown-reader a[href^="http://"]::after,
+.markdown-reader a[href^="https://"]::after {
+  color: var(--faint);
+  content: " ↗";
+  font-size: 0.78em;
 }
 .markdown-reader blockquote a {
   font-weight: 600;
@@ -750,7 +757,7 @@ input:focus-visible {
   padding: 15px;
   border: 1px solid var(--reader-border);
   border-radius: 8px;
-  background: var(--text);
+  background: var(--panel);
 }
 .mermaid-diagram svg {
   min-width: 100%;

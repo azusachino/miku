@@ -60,6 +60,14 @@ export type BacklinkModel = { path: string; title: string };
 export type TagNoteModel = { path: string; title: string; mtime: number };
 export type SaveNoteInput = { body: string; title: string; expectedRevision: NonNullable<NoteModel["revision"]> };
 
+const padDatePart = (value: number): string => String(value).padStart(2, "0");
+
+export function formatUpdatedAt(unixSeconds: number | null | undefined): string {
+  if (typeof unixSeconds !== "number" || !Number.isFinite(unixSeconds)) return "unknown";
+  const date = new Date(unixSeconds * 1000);
+  return `${date.getFullYear()}-${padDatePart(date.getMonth() + 1)}-${padDatePart(date.getDate())} ${padDatePart(date.getHours())}:${padDatePart(date.getMinutes())}:${padDatePart(date.getSeconds())}`;
+}
+
 export function extractInlineTags(markdown: string): string[] {
   const tags = new Set<string>();
   for (const [index, segment] of markdown.split(/(```[\s\S]*?```|`[^`]*`)/g).entries()) {
@@ -100,16 +108,7 @@ function normalizeNote(note: Schemas["NoteResponse"]): NoteModel {
     title: note.title,
     icon: typeof frontmatter.icon === "string" ? frontmatter.icon : "file-text",
     parents: Array.isArray(frontmatter.parents) ? frontmatter.parents.filter((parent): parent is string => typeof parent === "string") : [],
-    updated: note.revision.mtime
-      ? new Date(note.revision.mtime * 1000).toLocaleString(undefined, {
-          year: "numeric",
-          month: "short",
-          day: "numeric",
-          hour: "2-digit",
-          minute: "2-digit",
-          hour12: false
-        })
-      : "unknown",
+    updated: formatUpdatedAt(note.revision.mtime),
     body: note.body,
     backlinks: [],
     tags,
