@@ -121,7 +121,7 @@ schema.
 
 ### Rendering: "no JS bundler / server-first" ≠ "zero JS"
 
-> **Latest decision: ADR-7** (`docs/adr/0007-frontend-rendering.md`) — see there. Highlights uses **client-side Prism.js** for the MVP; **`syntect` is deferred** as a post-MVP swap. The server-side
+> **Latest decision: ADR-7** (`miku_docs/adr/0007-frontend-rendering.md`) — see there. Highlights uses **client-side Prism.js** for the MVP; **`syntect` is deferred** as a post-MVP swap. The server-side
 > stance below is the _target_, not the MVP.
 
 - **Code highlighting → server-side `syntect`.** Highlight at render time into classed spans, colored by CSS; themeable via the Themes mechanism. No client JS, works with JS disabled.

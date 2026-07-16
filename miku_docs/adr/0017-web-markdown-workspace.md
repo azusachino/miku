@@ -244,12 +244,12 @@ mobile, collections, and WYSIWYG parity are not prerequisites for this
 milestone.
 
 The implementation plan and unresolved choices are tracked in
-`docs/ux/0.0.3-decision-register.md`.
+`miku_docs/ux/0.0.3-decision-register.md`.
 
 ## Verification
 
 The design must pass the workflow simulation in
-`docs/ux/0.0.3-workflow-simulation.md` before implementation is considered
+`miku_docs/ux/0.0.3-workflow-simulation.md` before implementation is considered
 ready. The most important end-to-end proof is:
 
 ```text

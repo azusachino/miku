@@ -1,6 +1,6 @@
 # Dataflow & Workflows
 
-All diagrams are Mermaid. See `docs/architecture.md` for the prose design and schema. Watcher scaling (folder-scoped watching and fallbacks) is covered in §8.
+All diagrams are Mermaid. See `miku_docs/architecture.md` for the prose design and schema. Watcher scaling (folder-scoped watching and fallbacks) is covered in §8.
 
 ## 1. System overview
 

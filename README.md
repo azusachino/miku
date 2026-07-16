@@ -60,7 +60,7 @@ make db-up
 make dev
 ```
 
-See [`docs/setup.md`](docs/setup.md) for external Postgres, Tailscale/LAN access, containers, browser checks, and environment overrides.
+See [`miku_docs/setup.md`](miku_docs/setup.md) for external Postgres, Tailscale/LAN access, containers, browser checks, and environment overrides.
 
 ## Configuration
 
@@ -102,7 +102,7 @@ The main browser routes are:
 - `/tags` and `/tags/{tag}` — browse tags with incremental loading.
 - `/healthz`, `/readyz`, and `/metrics` — local/runtime probes.
 
-More detail lives in [`docs/architecture.md`](docs/architecture.md), [`docs/runtime-workflow.md`](docs/runtime-workflow.md), and the decision records under [`docs/adr/`](docs/adr/).
+More detail lives in [`miku_docs/architecture.md`](miku_docs/architecture.md), [`miku_docs/runtime-workflow.md`](miku_docs/runtime-workflow.md), and the decision records under [`miku_docs/adr/`](miku_docs/adr/).
 
 ## Development
 

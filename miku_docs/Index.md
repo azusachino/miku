@@ -25,6 +25,18 @@ rebuildable background index supplies links, tags, mentions, and search. #docs
 - [[Sandbox]] — live examples of Markdown, diagrams, code, math, and links.
 - [[Changelog]] — shipped and in-progress product changes. #release
 
+## Project knowledge
+
+- [[architecture]] — system boundaries, storage, indexing, and link resolution.
+- [[dataflow]] — Mermaid workflows for indexing, reading, and saving notes.
+- [[setup]] — local development, backends, and verification commands.
+- [[runtime-workflow]] — how filesystem changes become reader state.
+- [[product]] — product direction and UX constraints.
+- [[decisions]] — the ADR staging and decision history.
+- [[adr/README]] — verified ADR index; individual records live below `adr/`.
+- [[ux/quartz-uiux-plan]] — UX research and interaction direction.
+- [[roadmap-0.0.3-trilium-like-ux]] — current milestone roadmap.
+
 ## Core invariant
 
 `miku_docs/**/*.md` is the source of truth. The configured local index backend

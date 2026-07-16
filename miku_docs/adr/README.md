@@ -1,6 +1,6 @@
 # Architecture Decision Records (verified)
 
-This folder holds **only verified ADRs** — decisions that have been accepted and are safe to build against. Proposed or under-discussion decisions stay in `docs/decisions.md`; once verified, an ADR
+This folder holds **only verified ADRs** — decisions that have been accepted and are safe to build against. Proposed or under-discussion decisions stay in `miku_docs/decisions.md`; once verified, an ADR
 **graduates** here as its own file.
 
 ## Convention
@@ -22,7 +22,7 @@ This folder holds **only verified ADRs** — decisions that have been accepted a
 ## Lifecycle
 
 ```
-docs/decisions.md (proposed)  →  verified  →  docs/adr/NNNN-*.md (Accepted)
+miku_docs/decisions.md (proposed)  →  verified  →  miku_docs/adr/NNNN-*.md (Accepted)
 ```
 
 A decision is **verified** when it is accepted by the maintainer, consistent with `architecture.md`'s core invariant, and has no open questions blocking implementation. Implementation builds against
@@ -51,4 +51,4 @@ this folder.
 | [0017](0017-composed-projections.md)           | Composed durable and hot projections           | Accepted   | 2026-07-16 |
 | [0017](0017-web-markdown-workspace.md)         | Web Markdown workspace and file-based note graph | Accepted | 2026-07-15 |
 
-Staged (proposed, not yet verified) in `docs/decisions.md`: none outstanding.
+Staged (proposed, not yet verified) in `miku_docs/decisions.md`: none outstanding.

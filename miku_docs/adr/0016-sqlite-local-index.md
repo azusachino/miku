@@ -11,7 +11,7 @@ supersedes: [ADR-0011, ADR-0014]
 superseded-by:
 relates-to: [ADR-0009, ADR-0010, ADR-0012, ADR-0013]
 rejects: [rusqlite-sync, libsql-embedded, redb-kv, retained-legacy-backend]
-impacts: [crates/miku-index-sqlite, crates/miku-app, Cargo.toml, Makefile, docs/setup.md, docs/architecture.md]
+impacts: [crates/miku-index-sqlite, crates/miku-app, Cargo.toml, Makefile, miku_docs/setup.md, miku_docs/architecture.md]
 config-keys: [MIKU_INDEX_BACKEND, MIKU_INDEX_PATH]
 tags: [index, sqlite, sqlx, fts5, dependencies]
 ---
@@ -112,7 +112,7 @@ Same tables as Postgres (`tb_pages`, `tb_links`, `tb_tags`, `tb_page_aliases`, `
 - The workspace contains only the supported SQLite, Postgres, memory, and Valkey backend crates.
 - `Makefile`: `MIKU_INDEX_BACKEND ?= sqlite`, `MIKU_INDEX_PATH ?= miku_docs/.miku-index.sqlite`; `inspect-index` targets the SQLite example.
 - `.gitignore`: ignore `*.sqlite*` (WAL/SHM sidecars) under `miku_docs/`.
-- Docs: README config table, `docs/setup.md`, `docs/architecture.md`.
+- Docs: README config table, `miku_docs/setup.md`, `miku_docs/architecture.md`.
 
 ### Capabilities
 

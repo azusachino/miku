@@ -11,7 +11,7 @@ supersedes: []
 superseded-by:
 relates-to: []
 rejects: [rocksdb-primary-store, rocksdb-work-queue]
-impacts: [src/indexer, src/watcher, docs/setup.md]
+impacts: [src/indexer, src/watcher, miku_docs/setup.md]
 config-keys: [fs.inotify.max_user_watches]
 tags: [watcher, notify, inotify, scale]
 ---
@@ -37,4 +37,4 @@ the limit (100k files across ~200 folders ≈ 200 watches; default cap 65k–524
 ## Trade-offs / Rejected
 
 **RocksDB** as a durable work-queue or primary store (the former `dataflow_v2.md`) is rejected: it solves a problem Miku doesn't have, adds a second store, and risks the core invariant
-(files-are-truth). The event-driven, single-writer v1 model is retained unchanged. See `docs/dataflow.md` §8 (folder-scoped watching).
+(files-are-truth). The event-driven, single-writer v1 model is retained unchanged. See `miku_docs/dataflow.md` §8 (folder-scoped watching).

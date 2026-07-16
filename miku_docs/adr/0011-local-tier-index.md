@@ -10,7 +10,7 @@ mirror: asobi:miku:decision:local-tier-index
 supersedes: []
 superseded-by: [ADR-0016]
 relates-to: [ADR-0009, ADR-0010]
-impacts: [crates/miku-index-sqlite, Makefile, docs/setup.md]
+impacts: [crates/miku-index-sqlite, Makefile, miku_docs/setup.md]
 config-keys: [MIKU_INDEX_BACKEND, MIKU_INDEX_PATH]
 tags: [backend, sqlite, local]
 ---

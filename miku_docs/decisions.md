@@ -2,7 +2,7 @@
 
 Resolutions to the open design corners. Each is a decision, not code. Mirrored in asobi (`miku:decision:*`). See `architecture.md` for the prose design.
 
-> **Status:** ADR-1 … ADR-5 below are **verified** and now canonical in `docs/adr/` (`0001`–`0005`). This file is the **draft/staging** pool for proposed decisions; the verified copies in `docs/adr/`
+> **Status:** ADR-1 … ADR-5 below are **verified** and now canonical in `miku_docs/adr/` (`0001`–`0005`). This file is the **draft/staging** pool for proposed decisions; the verified copies in `miku_docs/adr/`
 > win on any conflict.
 
 ---
@@ -36,7 +36,7 @@ followed by a tag char, no space. Stored whole (`area/health`); ancestor groupin
 **Callouts — conflict resolved:** Obsidian/GitHub `> [!type]` wins (now _native_ via comrak alerts); `:::` directive syntax dropped; `architecture.md` updated. **Transclusion** `![[Page]]` /
 `![[image.png]]`: custom, server-side, with a recursion/cycle depth limit (roadmap render; grammar fixed now).
 
-**Latest decision wins.** If a later ADR supersedes an earlier one, the later ADR is the canonical decision. See `docs/adr/` for verified, timestamped decisions.
+**Latest decision wins.** If a later ADR supersedes an earlier one, the later ADR is the canonical decision. See `miku_docs/adr/` for verified, timestamped decisions.
 
 ---
 
@@ -97,7 +97,7 @@ materializing them duplicates truth and invites drift. Mirrored in asobi `miku:d
 
 ## ADR-6 — Filesystem watcher at scale
 
-> **Status: Verified** → canonical in `docs/adr/0006-watcher-at-scale.md`. Lifts the `docs/dataflow.md` §8 resolution into a decision so the RocksDB detour is not re-litigated.
+> **Status: Verified** → canonical in `miku_docs/adr/0006-watcher-at-scale.md`. Lifts the `miku_docs/dataflow.md` §8 resolution into a decision so the RocksDB detour is not re-litigated.
 
 **Decision.** Keep v1's `notify` watcher as the sole index trigger; scale it by watching **directories, not files**. Watch budget = directory count, not file count. Three levers in order: (1)
 recursive `notify` (one watch per directory, default); (2) document raising `fs.inotify.max_user_watches` in setup; (3) a `PollWatcher` fallback (zero inotify watches, periodic mtime scan) past an
@@ -107,15 +107,15 @@ extreme directory-count threshold. The startup mtime+hash reconcile sweeps any e
 approaches the limit (100k files in ~200 folders ≈ 200 watches; default cap 65k–524k; macOS FSEvents has no per-file limit). The watcher's only irreplaceable job is **live pickup of external edits** —
 exactly the files-are-truth payoff.
 
-**Rejected.** RocksDB as a durable work-queue / primary store — solves a problem Miku doesn't have, adds a second store, and risks the core invariant. See `docs/dataflow.md` §8 (folder-scoped
-watching). Canonical decision: `docs/adr/0006-watcher-at-scale.md`.
+**Rejected.** RocksDB as a durable work-queue / primary store — solves a problem Miku doesn't have, adds a second store, and risks the core invariant. See `miku_docs/dataflow.md` §8 (folder-scoped
+watching). Canonical decision: `miku_docs/adr/0006-watcher-at-scale.md`.
 
 ---
 
 ## ADR-7 — Frontend rendering & client-JS budget
 
-> **Status: Verified** → canonical in `docs/adr/0007-frontend-rendering.md`. **Supersedes** `product.md`'s server-side `syntect` highlighting choice (latest decision wins). Source plan:
-> `docs/frontend_design.md` (agy), reconciled.
+> **Status: Verified** → canonical in `miku_docs/adr/0007-frontend-rendering.md`. **Supersedes** `product.md`'s server-side `syntect` highlighting choice (latest decision wins). Source plan:
+> `miku_docs/frontend_design.md` (agy), reconciled.
 
 **Decision (summary).** Server-rendered, **no JS bundler**, with a client-JS budget of vendored, locally-served libraries:
 
@@ -131,7 +131,7 @@ See the ADR for full rationale and the deferred-syntect note.
 
 ## ADR-8 — Theme switching
 
-> **Status: Verified** → canonical in `docs/adr/0008-theme-switching.md`. **Extends ADR-7** (Themes + Alpine budget); ADR-7 is immutable, so the switcher is a new decision.
+> **Status: Verified** → canonical in `miku_docs/adr/0008-theme-switching.md`. **Extends ADR-7** (Themes + Alpine budget); ADR-7 is immutable, so the switcher is a new decision.
 
 **Decision.** A theme switcher on **two orthogonal axes**, both persisted to `localStorage` (per-browser display prefs, not content):
 
@@ -150,4 +150,4 @@ System" = Latte by day, Mocha by night with zero extra UI. Fits the decided no-b
 
 **Trade-offs / Rejected.** Four CSS variable sets to maintain (and matching Prism themes). One new inline pre-paint `<script>` — justified by FOUC, kept minimal. `localStorage` is per-browser and
 **not synced** — acceptable for a display preference. Rejected: a flat single-list of themes (loses the palette×mode independence the user chose); server-side per-user theme storage (no user system —
-ADR-3). Candidate verified file: `docs/adr/0008-theme-switching.md`.
+ADR-3). Candidate verified file: `miku_docs/adr/0008-theme-switching.md`.

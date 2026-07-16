@@ -14,7 +14,7 @@ Miku (初音ミク / ミク) is a filesystem-owned personal Markdown wiki: a bro
 - **Frontend (v0):** server-rendered HTML + plain `<textarea>` (no JS bundler)
 
 **Core invariant:** Markdown files + assets under `miku/` are the source of truth. Postgres holds only a disposable index (`pages`, `links`, `tags`, FTS) that is fully rebuildable from `miku/**/*.md`.
-See `docs/architecture.md`.
+See `miku_docs/architecture.md`.
 
 **Single-writer model:** HTTP handlers are read-only against Postgres; the background indexer is the sole writer. Saves are atomic (temp + rename) and the `notify` watcher is the _only_ index trigger
 — no double-indexing, no races.
@@ -56,5 +56,5 @@ automatically). Project scripting/automation is Python run via `uv run` (root `p
 - `src/main.rs` — binary entry point (axum server)
 - `src/lib.rs` — crate root
 - `migrations/` — sqlx Postgres migrations (index schema)
-- `docs/architecture.md` — design, schema, save/index contract
+- `miku_docs/architecture.md` — design, schema, save/index contract
 - `static/` — server-rendered assets

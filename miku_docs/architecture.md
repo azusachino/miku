@@ -107,10 +107,10 @@ The readonly rendered view is the **primary** mode; editing is opt-in (classic w
 - `POST /page/Foo` → atomic save → 303 redirect back to the readonly view
 
 A `MIKU_READONLY` flag (roadmap) gates the edit/save routes for publishing. Rich rendering beyond CommonMark is server-side via comrak, which supports wikilinks and Obsidian/GitHub `> [!note]`
-callouts natively; `![[transclusion]]` is our own extractor — never MDX/JSX (see `docs/decisions.md` ADR-2 / asobi `miku:decision:no-mdx`). The `:::` directive syntax was considered and dropped in
+callouts natively; `![[transclusion]]` is our own extractor — never MDX/JSX (see `miku_docs/decisions.md` ADR-2 / asobi `miku:decision:no-mdx`). The `:::` directive syntax was considered and dropped in
 favor of `[!type]` for compatibility.
 
-See `docs/dataflow.md` for the full set of workflow / dataflow Mermaid diagrams.
+See `miku_docs/dataflow.md` for the full set of workflow / dataflow Mermaid diagrams.
 
 ## Link resolution
 
