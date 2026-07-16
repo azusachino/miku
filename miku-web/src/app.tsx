@@ -124,7 +124,7 @@ function Tree({
           aria-current={activeId === note.id ? "page" : undefined}
           aria-expanded={isFolder ? isExpanded : undefined}
         >
-          <span className="tree-caret">{isFolder ? <ActionIcon name={isExpanded ? "chevron-down" : "chevron-right"} /> : <span aria-hidden="true">·</span>}</span>
+          <span className="tree-caret">{isFolder ? <ActionIcon name={isExpanded ? "chevron-down" : "chevron-right"} /> : null}</span>
           {isFolder ? <NoteIcon value="folder" /> : <NoteIcon value={note.icon} />}
           <span className="tree-label">{title}</span>
         </button>
@@ -149,7 +149,7 @@ function LaunchBar({
   return (
     <header className="launch-bar" data-region={shellRegions[0]}>
       <button className="brand-mark" onClick={() => navigate("/")} aria-label="Go to workspace home">
-        <span className="brand-note-icon"><NoteIcon value="file-text" large /></span>
+        <img className="brand-icon" src="/favicon.svg" alt="" />
         <span>miku note</span>
       </button>
       <button className="launch-search" onClick={onSearch} aria-label="Open quick search">
@@ -177,7 +177,8 @@ function Sidebar({
   onTags,
   onRecent,
   onSettings,
-  noteCount
+  noteCount,
+  onResizeStart
 }: {
   notes: NoteModel[];
   nodes: TreeNodeModel[];
@@ -190,9 +191,11 @@ function Sidebar({
   onRecent: () => void;
   onSettings: () => void;
   noteCount: number;
+  onResizeStart: (event: React.PointerEvent<HTMLButtonElement>) => void;
 }) {
   return (
     <aside className="sidebar" data-region={shellRegions[1]}>
+      <button className="sidebar-resizer" onPointerDown={onResizeStart} aria-label="Resize workspace navigation" />
       <div className="sidebar-toolbar">
         <span className="eyebrow">Workspace</span>
         <button className={`tool-button ${hoisted ? "is-on" : ""}`} onClick={onToggleHoist} aria-label="Toggle hoisted note">
@@ -271,6 +274,7 @@ function NotePane({
   client: ReturnType<typeof createWorkspaceClient>;
   onTagSearch: (tag: string) => void;
 }) {
+  const navigate = useNavigate();
   const [draft, setDraft] = useState(note.body);
   const [saveState, setSaveState] = useState("saved");
   const [editing, setEditing] = useState(false);
@@ -297,7 +301,9 @@ function NotePane({
           {note.path.split("/").map((part, index, parts) => (
             <span key={`${part}-${index}`}>
               {index > 0 && <span aria-hidden="true">/</span>}
-              <strong>{index === parts.length - 1 ? note.title : part}</strong>
+              <button className="breadcrumb-link" disabled={index === parts.length - 1} onClick={() => navigate(`/p/${parts.slice(0, index + 1).join("/")}`)} aria-current={index === parts.length - 1 ? "page" : undefined}>
+                {index === parts.length - 1 ? note.title : part}
+              </button>
             </span>
           ))}
         </nav>
@@ -352,16 +358,12 @@ function NotePane({
             <MarkdownReader value={note.body} />
           </Suspense>
         )}
-        <div className="note-footer">
-          <span>{editing ? "Markdown source" : "Reader mode"}</span>
-          {editing && (
-            <button className="toolbar-button" disabled={readonly || !note.revision || saveState === "saving…"} onClick={save}>
-              Save
-            </button>
-          )}
-          <span>{readonly ? "Readonly" : editing ? "Edit mode" : "Reader mode"}</span>
-          <span>index: {indexPhase ?? "unknown"}</span>
-        </div>
+        {editing && (
+          <div className="note-footer">
+            <span>Markdown source</span>
+            <button className="toolbar-button" disabled={readonly || !note.revision || saveState === "saving…"} onClick={save}>Save</button>
+          </div>
+        )}
       </div>
     </section>
   );
@@ -370,6 +372,7 @@ function NotePane({
 function ContextPanel({
   note,
   parents,
+  children,
   indexPhase,
   open,
   onToggle,
@@ -377,6 +380,7 @@ function ContextPanel({
 }: {
   note: NoteModel;
   parents: TreeNodeModel["note"][];
+  children: TreeNodeModel[];
   indexPhase?: string;
   open: boolean;
   onToggle: () => void;
@@ -397,6 +401,20 @@ function ContextPanel({
         </button>
       </div>
       <div className="context-section">
+        <div className="context-title">Children <span>{children.length}</span></div>
+        {children.length ? (
+          children.map((child) => (
+            <button className="relation-row" key={child.placementId} onClick={() => onNavigate(child.path)}>
+              <NoteIcon value={child.kind === "folder" ? "folder" : "file-text"} />
+              <span>{child.note.title}</span>
+              <ActionIcon name="chevron-right" />
+            </button>
+          ))
+        ) : (
+          <p className="context-empty">No child notes in this location.</p>
+        )}
+      </div>
+      <div className="context-section">
         <div className="context-title">
           Relations <span>{note.backlinks.length}</span>
         </div>
@@ -411,6 +429,10 @@ function ContextPanel({
         ) : (
           <p className="context-empty">No backlinks indexed yet.</p>
         )}
+      </div>
+      <div className="context-section">
+        <div className="context-title">Tags <span>{note.tags.length}</span></div>
+        {note.tags.length ? <div className="context-tags">{note.tags.map((tag) => <button className="context-tag" key={tag} onClick={() => onNavigate(`/tags/${encodeURIComponent(tag)}`)}>#{tag}</button>)}</div> : <p className="context-empty">No tags on this note.</p>}
       </div>
       <div className="context-section">
         <div className="context-title">
@@ -465,10 +487,12 @@ function WorkspaceScreen() {
   const [searchScope, setSearchScope] = useState<SearchScope>("all");
   const [searchSelection, setSearchSelection] = useState(-1);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [sidebarWidth, setSidebarWidth] = useState(() => Number(localStorage.getItem("miku-sidebar-width") ?? 244));
   const [noteCache, setNoteCache] = useState<Record<string, NoteModel>>({});
   const [apiSource, setApiSource] = useState<ApiSource>("connecting");
   const [theme, setTheme] = useState<Theme>(readTheme);
   const searchPanelRef = useRef<HTMLDivElement>(null);
+  const resizingSidebar = useRef(false);
   const navigate = useNavigate();
   const location = useLocation();
   const routeId = useParams()["*"];
@@ -545,6 +569,27 @@ function WorkspaceScreen() {
   }, [searchOpen, settingsOpen]);
 
   useEffect(() => {
+    const onPointerMove = (event: PointerEvent) => {
+      if (!resizingSidebar.current) return;
+      setSidebarWidth(Math.min(380, Math.max(200, event.clientX)));
+    };
+    const onPointerUp = () => {
+      if (!resizingSidebar.current) return;
+      resizingSidebar.current = false;
+      document.body.style.cursor = "";
+    };
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onPointerUp);
+    return () => {
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerUp);
+    };
+  }, []);
+  useEffect(() => {
+    localStorage.setItem("miku-sidebar-width", String(sidebarWidth));
+  }, [sidebarWidth]);
+
+  useEffect(() => {
     if (!searchOpen) return;
     const closeOnOutsidePointer = (event: PointerEvent) => {
       if (!searchPanelRef.current?.contains(event.target as Node)) setSearchOpen(false);
@@ -581,7 +626,7 @@ function WorkspaceScreen() {
       writeTheme(next);
       return next;
     });
-  const status = useMemo(() => (workspace.data ? `${workspace.data.noteCount} notes · ${workspace.data.placementCount} placements` : "Loading workspace"), [workspace.data]);
+  const status = useMemo(() => (workspace.data ? `${workspace.data.noteCount} notes` : "Loading workspace"), [workspace.data]);
 
   const secondaryNote = notes.find((candidate) => candidate.id === (state.tabs.find((tab) => tab !== activeId) ?? "welcome")) ?? activeNote;
   return (
@@ -660,7 +705,7 @@ function WorkspaceScreen() {
           )}
         </div>
       )}
-      <div className="workspace-layout">
+      <div className="workspace-layout" style={{ "--shell-sidebar-width": `${sidebarWidth}px` } as React.CSSProperties}>
         <Sidebar
           notes={notes}
           nodes={visibleTree}
@@ -673,6 +718,11 @@ function WorkspaceScreen() {
           onRecent={() => navigate("/recent")}
           onSettings={() => setSettingsOpen(true)}
           noteCount={workspace.data?.noteCount ?? 0}
+          onResizeStart={(event) => {
+            event.preventDefault();
+            resizingSidebar.current = true;
+            document.body.style.cursor = "col-resize";
+          }}
         />
         <main className="main-stage">
           {utilityRoute ? (
@@ -704,6 +754,7 @@ function WorkspaceScreen() {
                 <ContextPanel
                   note={activeNote}
                   parents={context.data?.parents ?? []}
+                  children={context.data?.children ?? []}
                   indexPhase={workspace.data?.indexPhase}
                   open={state.contextOpen}
                   onToggle={() => dispatch({ type: "toggle-context" })}
