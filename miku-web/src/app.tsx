@@ -25,6 +25,7 @@ import { UI_STATE_VERSION, headingSlug, moveSearchSelection, readExpandedPaths, 
 import { initialWorkspaceState, workspaceReducer } from "./workspace";
 const MarkdownEditor = lazy(() => import("./MarkdownEditor"));
 const MarkdownReader = lazy(() => import("./MarkdownReader").then((module) => ({ default: module.MarkdownReader })));
+const INDEX_NOTE_PATH = "Index.md";
 
 type ActionIconName = "arrow-up" | "arrow-up-right" | "chevron-down" | "chevron-left" | "chevron-right" | "close" | "hash" | "moon" | "search" | "settings" | "sun" | "tree" | "clock";
 
@@ -570,7 +571,7 @@ function WorkspaceScreen() {
       handledInvalidRoute.current = activeId;
       const fallback = state.tabs.find((tab) => tab !== activeId);
       dispatch({ type: "close", id: activeId });
-      navigate(fallback ? `/p/${fallback}` : "/");
+      navigate(fallback ? `/p/${fallback}` : `/p/${INDEX_NOTE_PATH}`);
       return;
     }
     handledInvalidRoute.current = null;
@@ -579,7 +580,7 @@ function WorkspaceScreen() {
 
   useEffect(() => {
     if (!isWorkspaceRoot || !tree.data) return;
-    const firstNote = tree.data.find((node) => node.kind === "markdown");
+    const firstNote = tree.data.find((node) => node.kind === "markdown" && node.path === INDEX_NOTE_PATH) ?? tree.data.find((node) => node.kind === "markdown");
     if (firstNote) {
       dispatch({ type: "open", id: firstNote.path });
       navigate(`/p/${firstNote.path}`, { replace: true });

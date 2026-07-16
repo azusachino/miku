@@ -152,7 +152,7 @@ def main() -> int:
             raise AssertionError("multiple open tabs did not overflow horizontally")
 
         page.goto(f"{BASE_URL}/p/does-not-exist.md", wait_until="domcontentloaded")
-        page.wait_for_url(f"{BASE_URL}/", timeout=10_000)
+        page.wait_for_url(f"{BASE_URL}/p/Index.md", timeout=10_000)
         page.goto(f"{BASE_URL}/p/Sandbox.md", wait_until="domcontentloaded")
         page.locator(".note-scroll h1").filter(has_text="Sandbox").first.wait_for()
         page.goto(f"{BASE_URL}/tags/not-a-real-tag", wait_until="domcontentloaded")
