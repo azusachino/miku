@@ -1,8 +1,10 @@
 ---
 id: ADR-0001
+type: adr
 title: ADR-0001 — Full-text search (Postgres english FTS)
 slug: fts-english
 status: Accepted
+updated: 2026-06-26
 date-proposed: 2026-06-25
 date-accepted: 2026-06-26
 deciders: [haru]

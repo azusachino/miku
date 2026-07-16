@@ -1,8 +1,10 @@
 ---
 id: ADR-0014
+type: adr
 title: ADR-0014 — Native local backend
 slug: native-local-backend
 status: Superseded by ADR-0016
+updated: 2026-07-14
 date-proposed: 2026-07-14
 date-accepted: 2026-07-14
 deciders: [haru]

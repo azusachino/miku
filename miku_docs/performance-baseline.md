@@ -1,3 +1,11 @@
+---
+title: Performance Baseline
+type: reference
+status: active
+tags: [miku, performance, benchmark]
+updated: 2026-07-16
+---
+
 # Indexing performance baseline
 
 This document records the current 0.0.2 SQLite/SQLx profile. Historical backend measurements remain archival context.
@@ -39,7 +47,7 @@ for size in 128 512 1000; do
   MIKU_RECONCILE_BATCH_SIZE=$size \
   MIKU_INDEX_PATH="/tmp/miku-$size.sqlite" \
   MIKU_INDEX_BACKEND=sqlite \
-  make run
+  make dev
 done
 ```
 

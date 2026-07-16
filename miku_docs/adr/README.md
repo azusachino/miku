@@ -1,7 +1,16 @@
-# Architecture Decision Records (verified)
+---
+title: Architecture Decision Records
+type: index
+status: active
+tags: [miku, architecture, adr]
+updated: 2026-07-16
+---
 
-This folder holds **only verified ADRs** — decisions that have been accepted and are safe to build against. Proposed or under-discussion decisions stay in `miku_docs/decisions.md`; once verified, an ADR
-**graduates** here as its own file.
+# Architecture Decision Records
+
+This folder holds the project’s accepted architecture decisions. Superseded
+records remain here for historical traceability; current behavior is determined
+by the newest accepted ADR and the implementation.
 
 ## Convention
 
@@ -9,6 +18,15 @@ This folder holds **only verified ADRs** — decisions that have been accepted a
 - Every file starts with a status header:
 
   ```markdown
+  ---
+  id: ADR-NNNN
+  type: adr
+  title: <Title>
+  status: Accepted
+  updated: YYYY-MM-DD
+  tags: [area]
+  ---
+
   # ADR-NNNN — <Title>
 
   - **Status:** Accepted <!-- Accepted | Superseded by ADR-NNNN -->
@@ -22,7 +40,7 @@ This folder holds **only verified ADRs** — decisions that have been accepted a
 ## Lifecycle
 
 ```
-miku_docs/decisions.md (proposed)  →  verified  →  miku_docs/adr/NNNN-*.md (Accepted)
+proposed decision  →  accepted ADR  →  implementation and tests
 ```
 
 A decision is **verified** when it is accepted by the maintainer, consistent with `architecture.md`'s core invariant, and has no open questions blocking implementation. Implementation builds against
@@ -51,4 +69,5 @@ this folder.
 | [0017](0017-web-markdown-workspace.md)         | Web Markdown workspace and file-based note graph | Accepted | 2026-07-15 |
 | [0018](0018-composed-projections.md)           | Composed durable and hot projections           | Accepted   | 2026-07-16 |
 
-Staged (proposed, not yet verified) in `miku_docs/decisions.md`: none outstanding.
+There is no separate staging file. New decisions should be added as a numbered
+ADR once the boundary is clear enough to implement.

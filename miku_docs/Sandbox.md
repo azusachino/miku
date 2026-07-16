@@ -1,3 +1,11 @@
+---
+title: Markdown Sandbox
+type: sandbox
+status: active
+tags: [miku, demo, markdown]
+updated: 2026-07-16
+---
+
 # Sandbox: Miku Note Markdown Playground
 
 Welcome to the Sandbox! This page demonstrates Miku Note's Markdown support and wikilink behavior. #demo

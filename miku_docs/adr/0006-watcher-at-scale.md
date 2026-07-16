@@ -1,8 +1,10 @@
 ---
 id: ADR-0006
+type: adr
 title: ADR-0006 — Filesystem watcher at scale
 slug: watcher-at-scale
 status: Accepted
+updated: 2026-06-26
 date-proposed: 2026-06-26
 date-accepted: 2026-06-26
 deciders: [haru]

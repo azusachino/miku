@@ -1,8 +1,10 @@
 ---
 id: ADR-0003
+type: adr
 title: ADR-0003 — Write conflicts & auth
 slug: write-conflicts-auth
 status: Accepted
+updated: 2026-06-26
 date-proposed: 2026-06-25
 date-accepted: 2026-06-26
 deciders: [haru]

@@ -1,24 +1,42 @@
+---
+title: Changelog
+type: changelog
+status: active
+tags: [miku, release]
+updated: 2026-07-16
+---
+
 # Changelog
 
 User-facing changes to Miku Note are recorded here. See [[Index]] for the
 starting point and [[Features]] for the current product boundary. #release
 
+## Unreleased — workspace cleanup (2026-07-16)
+
+- Replaced the legacy server-rendered/Alpine frontend description with the
+  current React, Vite, Tailwind, Prism, Mermaid, and KaTeX architecture.
+- Organized the frontend source by app, workspace, Markdown, components, and
+  shared helpers.
+- Removed duplicate planning notes and stale pre-workspace documentation.
+- Standardized first-party Markdown notes and ADRs on Obsidian-style YAML
+  frontmatter.
+- Renamed the HTTP handler module to http_api to distinguish transport code
+  from workspace domain behavior.
+
 ## v0.0.2 — Miku Note reader and frontend refresh (2026-07-15)
 
 ### Reader performance
 
-- Page links now swap a server-rendered reader fragment inside the persistent
-  shell; navigating between notes does not reload the document, shared CSS, or
-  shared JavaScript.
+- Page links swap the active reader inside the persistent React shell; navigating
+  between notes does not reload shared CSS or JavaScript.
 - Reader mode no longer opens an idle `/events` stream. The active page checks
   for freshness periodically and when the tab becomes visible again.
 - CodeMirror, Prism, Mermaid, and KaTeX are loaded only when the current page
   needs them.
 - Replaced the separate indexed-search and content-search page modes with one
   search model: Pages, Content, and Commands are tabs in the Cmd-K palette.
-- `/search` is now the full Markdown content-search page; embedded ripgrep is
-  the body-search source of truth, while the disposable index remains an
-  internal navigation and relationship accelerator.
+- Search is now a single quick-search panel over title, content, and combined
+  projections; it is opened from the persistent shell with Cmd-K.
 
 ### Reading experience
 
@@ -28,7 +46,7 @@ starting point and [[Features]] for the current product boundary. #release
   collapses only at the responsive breakpoint or in Full mode.
 - Simplified breadcrumbs and hid the internal `miku_docs/` root from user-facing
   labels.
-- Added scroll-triggered paging for `/tags` and `/tags/<tag>`; there is no
+- Added scroll-triggered paging for `/tags`; there is no
   visible “Load more” button.
 
 ### Markdown rendering

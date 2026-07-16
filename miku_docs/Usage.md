@@ -1,3 +1,11 @@
+---
+title: Using Miku Note
+type: guide
+status: active
+tags: [miku, guide, setup]
+updated: 2026-07-16
+---
+
 # Running Miku Note
 
 This page covers local setup, the content directory, and the commands used to
@@ -14,25 +22,17 @@ run Miku Note. #guide
 For the default local profile:
 
 ```bash
-make run
+make dev
 ```
 
 The server starts at `http://localhost:3000` and uses the Rust-built SQLite
 index at `miku_docs/.miku-index.sqlite`. The index is disposable; the Markdown
 files remain the source of truth.
 
-For native Postgres development:
+To verify the optional Postgres/Valkey stack:
 
 ```bash
-make db-up
-make dev
-```
-
-`make dev` selects the Postgres backend and uses the local cluster on port
-`55432`. To use the optional container stack instead:
-
-```bash
-make stack-up
+make compose-experiments
 ```
 
 The compose service uses Postgres and exposes Miku Note on port `3000`.
@@ -46,7 +46,7 @@ miku_docs/Features.md
 miku_docs/guides/Getting Started.md
 ```
 
-They are available at `/p/Features` and `/p/guides/Getting%20Started`.
+They are available at `/p/Features.md` and `/p/guides/Getting%20Started.md`.
 Wikilink matching is case-insensitive and supports aliases:
 `[[Features|What it does]]`.
 
@@ -68,9 +68,9 @@ See [[Sandbox]] for examples and [[Features]] for the complete current list.
 
 ## Editing and external changes
 
-Open a page at `/p/...` and choose **Edit** for the inline CodeMirror editor, or
-use `/p/<path>/edit` for the full editor. Saves are atomic and guarded by a
-content hash so an edit made elsewhere is not silently overwritten.
+Open a page at `/p/...` and choose **Edit** for the inline CodeMirror editor.
+Saves are atomic and guarded by a content hash so an edit made elsewhere is not
+silently overwritten.
 
 The filesystem watcher notices changes made by git, an editor, or scripts and
 updates the index in the background. Reader mode checks for a newer indexed
@@ -82,7 +82,7 @@ The index can always be rebuilt from the files:
 
 ```bash
 rm -f miku_docs/.miku-index.sqlite
-make run
+make dev
 ```
 
 For a Postgres deployment, drop or recreate the disposable database and start

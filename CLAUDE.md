@@ -1,60 +1,48 @@
 # CLAUDE.md
 
-## Project Overview
+## Project overview
 
-Miku (初音ミク / ミク) is a filesystem-owned personal Markdown wiki: a browser editor over plain `.md` files with server-side, background indexing for backlinks, tags, and full-text search.
+Miku Note is a filesystem-owned Markdown workspace. Markdown files and assets
+under miku_docs/ are the source of truth; indexes are disposable projections.
 
-## Tech Stack & Architecture
+## Technology
 
-- **Language:** Rust (edition 2021)
-- **Web:** axum + tokio + tower-http (serves `static/` + page/API routes)
-- **Index cache:** Postgres via sqlx (disposable; rebuildable from files)
-- **Markdown:** comrak (native wikilinks + GitHub `[!NOTE]` alerts + GFM)
-- **Filesystem watch:** notify (background indexer)
-- **Frontend (v0):** server-rendered HTML + plain `<textarea>` (no JS bundler)
-
-**Core invariant:** Markdown files + assets under `miku/` are the source of truth. Postgres holds only a disposable index (`pages`, `links`, `tags`, FTS) that is fully rebuildable from `miku/**/*.md`.
-See `miku_docs/architecture.md`.
-
-**Single-writer model:** HTTP handlers are read-only against Postgres; the background indexer is the sole writer. Saves are atomic (temp + rename) and the `notify` watcher is the _only_ index trigger
-— no double-indexing, no races.
+- Rust 2021 workspace with axum, tokio, notify, and SQLx.
+- miku-domain: backend-neutral records and projection contracts.
+- miku-vault: safe, atomic Markdown filesystem operations.
+- miku-app: application services and backend composition.
+- miku-web: React, TypeScript, Vite, Tailwind, and TanStack Query.
+- Markdown reader: React Markdown, GFM alerts, Prism, Mermaid, and KaTeX.
 
 ## Commands
 
-```bash
-make fmt          # Format all files (cargo fmt + prettier)
-make lint         # cargo clippy -D warnings
-make test         # cargo test
-make check        # fmt-check + lint + test (run before commit)
-make validate     # check + build (run before PR)
-make run          # run the server
-```
+~~~bash
+nix develop
+make dev
+make check
+make check-all-features
+make check-blackbox
+make check-ux-browser
+make validate
+~~~
 
-All daily operations go through `make <target>`. Tools come from the Nix devShell — enter with `nix develop`, or run one-off via `nix develop --command <cmd>` (the Makefile wraps commands
-automatically). Project scripting/automation is Python run via `uv run` (root `pyproject.toml`), not bash.
+All daily operations go through the Makefile. Python automation runs through
+uv and Rust/frontend tools come from the Nix devShell.
 
-## Coding Conventions
+## Architecture rules
 
-- Conventional commits: `feat:`, `fix:`, `chore:`, `deploy:` — no emojis
-- 4-space indent for Rust; 2-space for config files (TOML/JSON/YAML)
-- Errors via `anyhow`/`thiserror`; no manually wrapped prose in docs
-- Stage files explicitly (`git add <files>`) — never `git add -A`/`.`
+- Keep Markdown source independent from indexes and caches.
+- Keep HTTP handlers read-oriented; filesystem changes flow through the vault
+  and watcher.
+- Keep frontend code grouped by app, feature, component, and shared concerns.
+- Use Obsidian-style YAML frontmatter for first-party notes.
+- Add or update an ADR when changing a durable architectural boundary.
 
-## Quality Standards
+## Quality and commits
 
-- `make check` must pass before commit; `make validate` before PR
-- Never recompute the whole graph on a keystroke; index changed pages in the background; paginate/virtualize backlinks
+Run make check before committing and make validate before opening a PR. Use
+conventional commits and stage files explicitly. Never commit local indexes,
+runtime artifacts, screenshots, or secrets.
 
-## Rules
-
-- See `.claude/rules/core.md` for agent DO/DON'T rules
-- See `.claude/rules/config.md` for config / migration rules
-- See `.claude/rules/testing.md` for testing conventions (path-scoped)
-
-## Key Files
-
-- `src/main.rs` — binary entry point (axum server)
-- `src/lib.rs` — crate root
-- `migrations/` — sqlx Postgres migrations (index schema)
-- `miku_docs/architecture.md` — design, schema, save/index contract
-- `static/` — server-rendered assets
+See miku_docs/architecture.md, miku_docs/Features.md, and miku_docs/adr/ for
+the current product and architecture contracts.

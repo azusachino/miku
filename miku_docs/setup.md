@@ -1,3 +1,11 @@
+---
+title: Miku Development Setup
+type: guide
+status: active
+tags: [miku, setup, development]
+updated: 2026-07-16
+---
+
 # Setup
 
 ## Prerequisites
@@ -10,22 +18,13 @@
 The default path is SQLite durability with a MemoryIndex/Tantivy hot projection:
 
 ```bash
-make run
+make dev
 ```
 
-For the optional Postgres profile, run Postgres directly from the devShell against a project-local, disposable cluster (`.pgdata/`, gitignored) on port `55432`:
+The default runtime uses SQLite plus the in-memory/Tantivy projection. Postgres
+and Valkey are optional service-backed profiles.
 
-```bash
-make db-up        # init (first run) + start Postgres, create the miku database
-make dev          # start the DB if needed, then run the server (foreground)
-make dev-tmux     # same, in a tmux session (pane 0: server, pane 1: pg log)
-make db-psql      # open psql against the local cluster
-make db-down      # stop Postgres
-make db-reset     # stop + delete .pgdata (index is rebuilt from miku_docs/**/*.md)
-```
-
-The crate default features include both the rebuildable Rust-built MemoryIndex/Tantivy projection and SQLite. The runtime defaults to the composed SQLite + MemoryIndex tier. `MIKU_INDEX_BACKEND=memory` remains available for an explicit disposable run. `make dev` selects the explicit Postgres profile and sets `DATABASE_URL=postgres://miku@localhost:55432/miku`
-(trust auth, no password); migrations run on startup. Override with `MIKU_INDEX_BACKEND=…`, `MIKU_INDEX_PATH=…`, `PGPORT=…`, `PGDATA=…`, or `DATABASE_URL=…`.
+Override the backend with MIKU_INDEX_BACKEND, DATABASE_URL, or VALKEY_URL.
 
 ## Remote access (LAN / Tailscale)
 
@@ -49,8 +48,8 @@ export MIKU_INDEX_BACKEND=postgres
 
 ```bash
 nix develop       # enter the devShell (provisions all tools)
-make css          # build static/tailwind.generated.css via bun (bun run css)
-make run          # run the native local stack (default memory/Tantivy projection)
+make css          # build frontend CSS
+make dev          # run Rust backend and Vite frontend together
 make check                             # default fmt + lint + tests
 make check-all-features                # all Cargo features
 make check-integration                 # optional service-backed probes
@@ -74,7 +73,9 @@ written to `.artifacts/ux/` (ignored).
 
 ## Containers (Postgres/Valkey scale profile only)
 
-Containers are only for the service-backed **scale profile** — the default `memory` runtime is a pure local binary (`make run`), so it needs no image. Podman and Podman Compose are intentionally host-provided tools, not Nix prerequisites.
+Containers are only for the service-backed scale profile. The default local
+runtime is a native Rust binary and Vite frontend. Podman and Podman Compose
+are intentionally host-provided tools, not Nix prerequisites.
 
 The Compose profile runs PostgreSQL 18 and Valkey 9 with the `postgres-valkey` Miku feature set. Prepare Podman (including its VM on macOS) yourself, then run the complete lifecycle experiment through uv:
 

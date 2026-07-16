@@ -1,8 +1,10 @@
 ---
 id: ADR-0012
+type: adr
 title: ADR-0012 — Scale deployment tier with Postgres and Valkey
 slug: scale-tier-postgres-valkey
 status: Accepted
+updated: 2026-07-14
 date-proposed: 2026-07-14
 date-accepted: 2026-07-14
 deciders: [haru]

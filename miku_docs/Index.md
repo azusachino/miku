@@ -1,3 +1,11 @@
+---
+title: Miku Note
+type: index
+status: active
+tags: [miku, guide]
+updated: 2026-07-16
+---
+
 # Miku Note: Notes You Still Own
 
 Miku Note is a filesystem-owned personal Markdown wiki. Your notes stay as
@@ -13,8 +21,8 @@ rebuildable background index supplies links, tags, mentions, and search. #docs
   discovery turn a folder into a navigable knowledge network.
 - **Finds content** — embedded ripgrep searches Markdown source, while the
   disposable index keeps page switching, tags, and relationships fast.
-- **Reads quickly** — direct `/p/...` URLs are server-rendered, and switching
-  pages keeps the shell and shared assets mounted instead of reloading them.
+- **Reads quickly** — direct `/p/...` URLs open inside the persistent browser
+  shell, and switching pages keeps shared assets mounted.
 - **Renders Markdown well** — alerts, tables, code highlighting, Mermaid, and
   math are available without making every reader page pay their asset cost.
 
@@ -32,10 +40,8 @@ rebuildable background index supplies links, tags, mentions, and search. #docs
 - [[setup]] — local development, backends, and verification commands.
 - [[runtime-workflow]] — how filesystem changes become reader state.
 - [[product]] — product direction and UX constraints.
-- [[decisions]] — the ADR staging and decision history.
 - [[adr/README]] — verified ADR index; individual records live below `adr/`.
-- [[ux/quartz-uiux-plan]] — UX research and interaction direction.
-- [[roadmap-0.0.3-trilium-like-ux]] — current milestone roadmap.
+- [[api]] — current JSON and browser route contract.
 
 ## Core invariant
 

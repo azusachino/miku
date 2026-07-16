@@ -1,3 +1,11 @@
+---
+title: Runtime Workflow
+type: reference
+status: active
+tags: [miku, runtime, watcher, index]
+updated: 2026-07-16
+---
+
 # Runtime workflow
 
 This document describes the real local runtime when a browser is using Miku while the filesystem indexer is working. It is the contract for route behavior, background tasks, backend composition, and
@@ -73,12 +81,12 @@ No route owns or spawns a second indexer. `IndexerQueue::shutdown` aborts and aw
 The Rust tests cover backend contracts and driver-level concurrency. The uv suite covers the actual running application:
 
 ```bash
-make run                         # starts SQLite + background indexer
+make dev                         # starts Rust, Vite, and the background indexer
 make check-blackbox              # waits for /readyz index_ready=true
 MIKU_BLACKBOX_URL=... make check-blackbox
 ```
 
-The live blackbox sequence must exercise `/healthz`, `/readyz`, `/metrics`, `/`, `/p/{path}`, `/p/{path}/edit`, `/search`, `/tags`, and folder routes when the fixture has them. Once derived mentions
+The live blackbox sequence must exercise `/healthz`, `/readyz`, `/metrics`, `/`, `/p/{path}.md`, `/tags`, and folder routes when the fixture has them. Once derived mentions
 are implemented, it must also verify a visible mention, a false-positive exclusion, source/target changes, restart recovery, and page access while mention indexing is running. The blackbox must be run
 against a real process and corpus; helper-only tests are not sufficient proof of this workflow.
 

@@ -1,8 +1,10 @@
 ---
 id: ADR-0013
+type: adr
 title: ADR-0013 — crates.io release surface
 slug: crates-io-release-surface
 status: Accepted
+updated: 2026-07-14
 date-proposed: 2026-07-14
 date-accepted: 2026-07-14
 deciders: [haru]

@@ -46,19 +46,12 @@ The default development path uses SQLite as the durable projection and MemoryInd
 git clone https://github.com/azusachino/miku.git
 cd miku
 nix develop           # enter the devShell (rust, bun, uv, postgres, …)
-make run              # build the Tailwind CSS with bun, then run the server
+make dev              # run Rust backend and Vite frontend together
 ```
 
 The native local stack is started with `uv run python scripts/dev.py`, which launches Rust and Vite together. `bun` comes from the Nix devShell, so no separate Node/Bun install is needed.
 
 Open <http://127.0.0.1:3000>. The default content root is `miku_docs/`; put a Markdown file there and refresh the page after the watcher indexes it.
-
-To run the native Postgres profile instead:
-
-```bash
-make db-up
-make dev
-```
 
 See [`miku_docs/setup.md`](miku_docs/setup.md) for external Postgres, Tailscale/LAN access, containers, browser checks, and environment overrides.
 
@@ -98,7 +91,6 @@ The main browser routes are:
 
 - `/p/{path}` — read a Markdown page; `/p/{path}.md` is accepted as an alias.
 - `/p/{path}/edit` — edit a page.
-- `/search` — content search.
 - `/tags` and `/tags/{tag}` — browse tags with incremental loading.
 - `/healthz`, `/readyz`, and `/metrics` — local/runtime probes.
 

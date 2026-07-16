@@ -1,8 +1,10 @@
 ---
 id: ADR-0018
+type: adr
 title: ADR-0018 — Composed durable and hot projections
 slug: composed-projections
 status: Accepted
+updated: 2026-07-16
 date-proposed: 2026-07-16
 date-accepted: 2026-07-16
 deciders: [haru]

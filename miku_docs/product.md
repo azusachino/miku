@@ -1,3 +1,11 @@
+---
+title: Miku Product
+type: product
+status: active
+tags: [miku, product, local-first]
+updated: 2026-07-16
+---
+
 # Miku — Product & Positioning
 
 > Design rework written _before_ implementation. Personas drive scope; scope drives the build. See `architecture.md` for the technical contract.
@@ -111,7 +119,8 @@ plugins, while the files stay plainly, provably yours.
 
 **Adopted as native server features (no plugin system):**
 
-- **Themes** — swappable CSS in `static/` + a `theme` config key. Pure CSS.
+- **Themes** — a calm light/dark palette owned by the React/Vite frontend and
+  persisted per browser.
 - **Homepage** — a `home` config key naming the landing note.
 - **Admonitions / Callouts** — post-process blockquotes starting with `[!type]` into styled callouts (render + CSS only).
 

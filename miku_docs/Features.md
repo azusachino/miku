@@ -1,3 +1,11 @@
+---
+title: Miku Note Features
+type: guide
+status: active
+tags: [miku, features, markdown]
+updated: 2026-07-16
+---
+
 # Miku Note Features
 
 Miku Note is a filesystem-owned Markdown wiki with a thin browser reader and a
@@ -17,7 +25,7 @@ Markdown files remain the canonical copy of your content.
 ## Reader-first navigation
 
 The readonly reader is the primary experience. Direct page URLs use `/p/...`,
-so links, bookmarks, and server-rendered requests continue to work normally.
+so links, bookmarks, and direct browser routes continue to work normally.
 Switching between notes keeps the application shell mounted and swaps only the
 reader fragment; the document, shared JavaScript, and CSS remain loaded.
 
@@ -27,9 +35,9 @@ The reader includes:
 - breadcrumbs, backlinks, unlinked mentions, and page properties;
 - a Context panel with backlinks, tags, page properties, and a jumpable table
   of contents;
-- Thin, Wide, and Full reading-width modes;
-- light/dark themes, accent colors, compact spacing, and Zen mode;
-- a quick switcher and command palette (`Ctrl-K` / `Ctrl-Shift-P`).
+- a draggable workspace and Context panel;
+- light/dark themes with a Miku/Tolaria-inspired semantic palette;
+- a quick search panel opened by `Cmd-K` / `Ctrl-K`.
 
 ## Markdown and rich rendering
 
@@ -143,7 +151,7 @@ navigation and relationships; body search remains the dedicated full-text mode.
 
 ## File ownership boundary
 
-The file tree is read-only in v0.0.2. Miku does not move, rename, delete, or
+The file tree is read-only in the current release. Miku does not move, rename, delete, or
 trash pages. Use the editor for content changes and use your filesystem, editor,
 scripts, or git when changing paths or removing files; the watcher reconciles
 those external changes into the disposable index.

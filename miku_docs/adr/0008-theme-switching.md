@@ -1,48 +1,31 @@
 ---
 id: ADR-0008
-title: ADR-0008 — Theme switching (palette × mode)
-slug: theme-switching
+type: adr
+title: ADR-0008 — Theme switching
 status: Accepted
-date-proposed: 2026-06-26
-date-accepted: 2026-06-26
-deciders: [haru]
-mirror: asobi:miku:decision:theme-switching
-supersedes: []
-superseded-by:
-extends: [ADR-0007]
-relates-to: [ADR-0003, ADR-0007]
-impacts: [static/css/themes, src/templates, static/js]
-config-keys: [theme]
-tags: [frontend, themes, alpine, catppuccin, dark-mode]
+updated: 2026-07-16
+tags: [frontend, themes, tailwind, dark-mode]
+relates-to: [ADR-0017]
+impacts: [miku-web/src/styles.css, miku-web/src/shared/ui.ts]
 ---
 
-# ADR-0008 — Theme switching (palette × mode)
+# ADR-0008 — Theme switching
 
 ## Decision
 
-A theme switcher on **two orthogonal axes**, both persisted to `localStorage` (per-browser display prefs, not content):
-
-- **Palette:** `default` | `catppuccin` → `data-palette` on `<html>`.
-- **Mode:** `system` | `light` | `dark` → resolved to `data-mode` of `light`/`dark` on `<html>`. `system` reads `prefers-color-scheme`, with a `matchMedia` listener that live-updates on an OS flip.
-
-CSS is **custom-variable sets** selected by the attribute pair — four base combinations: `default+light`, `default+dark`, `catppuccin+light` (Latte), `catppuccin+dark` (Mocha). Selectors like
-`[data-palette="catppuccin"][data-mode="dark"]` override the `--vars`; all themed surfaces (callouts, links, code) read from the variables.
-
-**Default for a fresh visitor:** `default` palette + `system` mode. The ADR-7 `theme` config key supplies the server-side default when no `localStorage` pref exists; no new config keys.
+Miku provides light and dark themes as semantic roles rather than component
+specific colors. Theme choice is persisted per browser and applied to the
+workspace shell, reader, editor, syntax highlighting, Mermaid, and dialogs.
 
 ## Mechanics
 
-1. **Inline pre-paint script** in `<head>` sets `data-palette`/`data-mode` from `localStorage` before first paint — avoids the theme flash (FOUC). One small inline `<script>`, in the spirit of ADR-7's
-   client-JS budget.
-2. **Alpine** drives the dropdown, persistence, and the `matchMedia` listener.
-3. **Prism** code themes are swapped to match the resolved palette+mode (Catppuccin ships official Prism themes).
+- CSS variables define the palette roles for each theme.
+- Tailwind utilities consume the semantic roles for the shell.
+- Prism uses the matching official light or dark theme.
+- Mermaid receives the active theme when a diagram renders.
+- React owns the toggle and local persistence.
 
-## Why
+## Consequences
 
-Palette and mode are genuinely independent, and the Catppuccin family maps exactly onto the mode axis (Latte = light, Mocha = dark), so it inherits System/Light/Dark for free — "Catppuccin + System" =
-Latte by day, Mocha by night with zero extra UI. Fits the decided no-bundler + Alpine stance (ADR-7).
-
-## Trade-offs / Rejected
-
-Four CSS variable sets to maintain plus matching Prism themes. One new inline pre-paint `<script>` — justified by FOUC, kept minimal. `localStorage` is per-browser and **not synced** — acceptable for
-a display preference. Rejected: a flat single-list of themes (loses palette×mode independence); server-side per-user theme storage (no user system — ADR-3).
+Reader content remains legible when the theme changes, and the frontend does
+not depend on a server-side theme or a global user account.

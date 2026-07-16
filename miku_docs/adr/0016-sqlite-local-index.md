@@ -1,8 +1,10 @@
 ---
 id: ADR-0016
+type: adr
 title: ADR-0016 — SQLite (sqlx) local index
 slug: sqlite-local-index
 status: Accepted
+updated: 2026-07-15
 date-proposed: 2026-07-15
 date-accepted: 2026-07-15
 deciders: [haru]
@@ -139,7 +141,7 @@ Same tables as Postgres (`tb_pages`, `tb_links`, `tb_tags`, `tb_page_aliases`, `
 ## Verification checklist
 
 - `cargo test -p miku-index-sqlite` against a `tempfile` DB: page round-trip, backlinks, tags, FTS body search, mentions.
-- `MIKU_INDEX_BACKEND=sqlite make run`: a page indexes, `/search` returns FTS hits, restart persists (durable).
+- `MIKU_INDEX_BACKEND=sqlite make dev`: a page indexes, API search returns FTS hits, restart persists (durable).
 - `cargo tree -p miku --edges normal --prefix none | sort -u | wc -l` → current root normal dependency closure: 254 packages, down from 403 before this migration.
 - `rg '^name = ' Cargo.lock | wc -l` → current lockfile resolution: 312 package records, down from 482 before this migration.
 - `make check` and `make check-all-features` green.

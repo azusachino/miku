@@ -1,3 +1,11 @@
+---
+title: Miku Dataflow
+type: architecture
+status: active
+tags: [miku, architecture, dataflow, mermaid]
+updated: 2026-07-16
+---
+
 # Dataflow & Workflows
 
 All diagrams are Mermaid. See `miku_docs/architecture.md` for the prose design and schema. Watcher scaling (folder-scoped watching and fallbacks) is covered in §8.
@@ -36,15 +44,15 @@ The readonly rendered view is the **primary** mode; editing is opt-in. Classic w
 
 ```mermaid
 flowchart TD
-  V["GET /page/Foo"] --> X{"Foo.md exists?"}
+  V["GET /api/v1/note-context/Foo.md"] --> X{"Foo.md exists?"}
   X -- yes --> R["read Foo.md -> render md->HTML"] --> RO["readonly view"]
   X -- no --> NEW["offer: create Foo?"]
 
-  RO -->|"click Edit"| E["GET /page/Foo/edit"]
+  RO -->|"click Edit"| E["PUT /api/v1/notes/Foo.md"]
   E --> T["read Foo.md -> textarea"]
-  T -->|"Save"| P["POST /page/Foo"]
+  T -->|"Save"| P["PUT /api/v1/notes/Foo.md"]
   P --> S["atomic save"]
-  S --> RD["303 redirect to /page/Foo (view)"]
+  S --> RD["watcher reindexes Foo.md"]
   RD --> V
 ```
 
@@ -61,10 +69,10 @@ sequenceDiagram
   participant I as Indexer
   participant PG as Postgres
 
-  B->>H: POST /page/Foo (markdown body)
+  B->>H: PUT /api/v1/notes/Foo.md (markdown body + revision)
   H->>FS: write Foo.md.tmp + fsync (miku_docs/)
   H->>FS: rename to Foo.md (atomic, miku_docs/)
-  H-->>B: 303 redirect to /page/Foo (view)
+  H-->>B: 200 note response; watcher schedules reindex
   Note over H,PG: handler does NOT touch the index
   FS-->>W: modify event (Foo.md)
   W->>W: debounce ~200ms
@@ -125,9 +133,9 @@ Backlinks, tags, and search read **only** Postgres — never the filesystem — 
 ```mermaid
 flowchart LR
   subgraph Read["read-only endpoints"]
-    BL["GET /page/Foo/backlinks"]
-    TG["GET /tags/:tag"]
-    SR["GET /search?q="]
+    BL["GET /api/v1/note-context/Foo.md"]
+    TG["GET /api/v1/tags/:tag/notes"]
+    SR["GET /api/v1/search?q="]
   end
   BL -->|"links.target_id = Foo.id<br/>LIMIT/OFFSET"| PG[("Postgres")]
   TG -->|"tags.tag = :tag"| PG

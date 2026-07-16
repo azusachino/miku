@@ -2,7 +2,7 @@
 
 # Image for the service-backed scale profile ONLY (Postgres, optional Valkey).
 # The default memory/sqlite profile is a pure local binary — run it natively with
-# `make run`; it needs no image. Built with podman by default
+# make dev; it needs no image. Built with podman by default
 # (`podman build -t miku -f Containerfile .`); `docker build -f Containerfile .`
 # also works.
 

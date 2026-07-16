@@ -1,8 +1,10 @@
 ---
 id: ADR-0010
+type: adr
 title: ADR-0010 — Cargo workspace and crate boundaries
 slug: workspace-crate-boundaries
 status: Accepted
+updated: 2026-07-14
 date-proposed: 2026-07-14
 date-accepted: 2026-07-14
 deciders: [haru]

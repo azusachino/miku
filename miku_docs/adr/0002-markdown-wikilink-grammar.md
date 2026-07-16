@@ -1,8 +1,10 @@
 ---
 id: ADR-0002
+type: adr
 title: ADR-0002 — Markdown & wikilink grammar (comrak)
 slug: markdown-wikilink-grammar
 status: Accepted
+updated: 2026-06-26
 date-proposed: 2026-06-25
 date-accepted: 2026-06-26
 deciders: [haru]

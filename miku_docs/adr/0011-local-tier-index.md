@@ -1,8 +1,10 @@
 ---
 id: ADR-0011
+type: adr
 title: ADR-0011 — Local deployment tier
 slug: local-tier-index
 status: Superseded by ADR-0016
+updated: 2026-07-14
 date-proposed: 2026-07-14
 date-accepted: 2026-07-14
 deciders: [haru]

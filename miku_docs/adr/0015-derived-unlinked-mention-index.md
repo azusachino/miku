@@ -1,9 +1,12 @@
 ---
 id: ADR-0015
+type: adr
 title: ADR-0015 — Derived unlinked-mention index
 status: Accepted
+updated: 2026-07-14
 date-accepted: 2026-07-14
 mirror: asobi:miku:decision:derived-unlinked-mention-index
+tags: [index, links, mentions]
 ---
 
 # ADR-0015 — Derived unlinked-mention index

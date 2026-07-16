@@ -1,8 +1,10 @@
 ---
 id: ADR-0017
+type: adr
 title: ADR-0017 — Web Markdown workspace and file-based note graph
 slug: web-markdown-workspace
 status: Accepted
+updated: 2026-07-15
 date-proposed: 2026-07-15
 date-accepted: 2026-07-15
 deciders: [haru]
@@ -26,7 +28,7 @@ project. Rust remains responsible for the vault, HTTP API, Markdown parsing,
 filesystem watcher, indexing, search, relationship resolution, and safe file
 mutations.
 
-The current server-rendered templates and SQLite page-index model are
+The former server-rendered templates and SQLite page-index model are
 disposable migration scaffolding. They are not the product contract.
 
 The durable contract is:
@@ -140,7 +142,7 @@ workspace store client state: tabs, splits, panels, focus, selection
 URL             current note, placement, focus, heading/scroll location
 ```
 
-The initial editor is CodeMirror 6 with server-rendered Markdown preview and
+The initial editor is CodeMirror 6 with a React Markdown reader and
 optional split view. A block/WYSIWYG editor is deferred until round-trip tests
 prove that frontmatter and Markdown semantics are preserved.
 
@@ -243,14 +245,13 @@ Graph maps, scripting, AI panels, sync, encryption, collaboration, native
 mobile, collections, and WYSIWYG parity are not prerequisites for this
 milestone.
 
-The implementation plan and unresolved choices are tracked in
-`miku_docs/ux/0.0.3-decision-register.md`.
+The implementation is tracked in the frontend source and browser acceptance
+checks.
 
 ## Verification
 
-The design must pass the workflow simulation in
-`miku_docs/ux/0.0.3-workflow-simulation.md` before implementation is considered
-ready. The most important end-to-end proof is:
+The design must pass the live browser acceptance workflow before implementation
+is considered ready. The most important end-to-end proof is:
 
 ```text
 open vault → select tree note → open clone placement → edit Markdown
@@ -260,7 +261,7 @@ open vault → select tree note → open clone placement → edit Markdown
 
 ## Why
 
-Miku's current frontend already demonstrates that server-rendered HTML can
+The former frontend demonstrated that server-rendered HTML can
 display Markdown, but it does not provide the continuous tree-centered
 workspace that motivated the Trilium comparison. Its current `PageSummary` and
 SQLite tables also encode a flat page index rather than a note/placement model.

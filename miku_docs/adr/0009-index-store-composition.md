@@ -1,8 +1,10 @@
 ---
 id: ADR-0009
+type: adr
 title: ADR-0009 — Index store and cache composition
 slug: index-store-composition
 status: Accepted
+updated: 2026-07-14
 date-proposed: 2026-07-14
 date-accepted: 2026-07-14
 deciders: [haru]
