@@ -85,7 +85,7 @@ export const fixtureTree: FixtureTreeNode[] = fixtureNotes.flatMap((note) =>
 const wait = <T>(value: () => T): Promise<T> => new Promise((resolve) => window.setTimeout(() => resolve(value()), 80));
 
 export const fixtureApi = {
-  workspace: () => wait(() => ({ noteCount: fixtureNotes.length, placementCount: fixtureTree.length, readonly: true })),
+  workspace: () => wait(() => ({ noteCount: fixtureNotes.length, placementCount: fixtureTree.length, indexPhase: "Ready" as const, readonly: true })),
   tree: (parentId: string | null) => wait(() => fixtureTree.filter((node) => node.parentId === parentId)),
   note: (id: string) => wait(() => fixtureNotes.find((note) => note.id === id) ?? fixtureNotes[0]),
   search: (query: string) =>

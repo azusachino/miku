@@ -178,10 +178,11 @@ pub async fn run() -> Result<()> {
         .unwrap_or(false);
     let workspace: Arc<dyn WorkspaceService> =
         Arc::new(FileWorkspaceService::new(Arc::clone(&vault), readonly));
-    let application_service = Arc::new(FileMikuApplication::new(
+    let application_service = Arc::new(FileMikuApplication::with_index_readiness(
         Arc::clone(&vault),
         Arc::clone(&workspace),
         index.clone(),
+        indexer.ready_handle(),
     ));
     let application: Arc<dyn MikuApplication> = application_service.clone();
     let mut event_receiver = events.subscribe();

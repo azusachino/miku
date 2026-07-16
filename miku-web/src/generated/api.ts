@@ -274,6 +274,8 @@ export interface components {
     WorkspaceResponse: {
       /** @description Number of notes whose identity is currently derived from its path. */
       generated_identity_count: number;
+      /** @description Current durable and hot projection lifecycle state. */
+      index_phase: "Starting" | "Indexing" | "Ready" | "Degraded";
       /** @description Number of source notes discovered in the vault. */
       note_count: number;
       /** @description Number of derived tree placements. */

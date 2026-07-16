@@ -6,9 +6,15 @@ use crate::{
     VaultReader, VaultWriter, WorkspaceService, WorkspaceServiceError,
 };
 use async_trait::async_trait;
-use miku_domain::{workspace::NoteId, SearchHit, SearchRequest};
+use miku_domain::{workspace::NoteId, PageSummary, SearchHit, SearchRequest};
 use miku_vault::{Vault, VaultDocument};
-use std::{collections::BTreeMap, sync::Arc};
+use std::{
+    collections::BTreeMap,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+};
 use tokio::sync::RwLock;
 
 /// File-backed application service composed from the vault, workspace policy,
@@ -19,15 +25,27 @@ pub struct FileMikuApplication {
     workspace: Arc<dyn WorkspaceService>,
     index: IndexApi,
     documents_cache: Arc<RwLock<Option<Vec<VaultDocument>>>>,
+    index_ready: Arc<AtomicBool>,
 }
 
 impl FileMikuApplication {
     pub fn new(vault: Arc<Vault>, workspace: Arc<dyn WorkspaceService>, index: IndexApi) -> Self {
+        Self::with_index_readiness(vault, workspace, index, Arc::new(AtomicBool::new(true)))
+    }
+
+    /// Construct the application with the indexer's live readiness state.
+    pub fn with_index_readiness(
+        vault: Arc<Vault>,
+        workspace: Arc<dyn WorkspaceService>,
+        index: IndexApi,
+        index_ready: Arc<AtomicBool>,
+    ) -> Self {
         Self {
             vault,
             workspace,
             index,
             documents_cache: Arc::new(RwLock::new(None)),
+            index_ready,
         }
     }
 
@@ -100,16 +118,43 @@ impl FileMikuApplication {
         }
     }
 
-    fn tree_nodes(documents: &[VaultDocument], folder: &RelativePath) -> Vec<FileNode> {
+    fn summary_node(document: &VaultDocument) -> FileNode {
+        Self::file_node(document)
+    }
+
+    fn summary_file_node(page: &PageSummary) -> FileNode {
+        let path = RelativePath::new(&page.path).expect("indexed paths are canonical");
+        let name = path
+            .as_str()
+            .rsplit('/')
+            .next()
+            .unwrap_or(path.as_str())
+            .to_string();
+        let explicit_id = page
+            .frontmatter
+            .get("id")
+            .and_then(serde_json::Value::as_str)
+            .and_then(|id| NoteId::new(id.to_string()).ok());
+        FileNode {
+            kind: FileNodeKind::Markdown,
+            path,
+            note_id: explicit_id,
+            identity_generated: page.frontmatter.get("id").is_none(),
+            name,
+            title: Some(page.title.clone()),
+            has_children: false,
+        }
+    }
+
+    fn snapshot_tree_nodes(pages: &[PageSummary], folder: &RelativePath) -> Vec<FileNode> {
         let folder_path = folder.as_str();
         let mut folders = BTreeMap::<String, FileNode>::new();
         let mut files = BTreeMap::<String, FileNode>::new();
 
-        for document in documents {
-            let source = document.note.source_path.as_str();
+        for page in pages {
             let relative = if folder_path.is_empty() {
-                source
-            } else if let Some(value) = source.strip_prefix(&format!("{folder_path}/")) {
+                page.path.as_str()
+            } else if let Some(value) = page.path.strip_prefix(&format!("{folder_path}/")) {
                 value
             } else {
                 continue;
@@ -117,12 +162,10 @@ impl FileMikuApplication {
             let Some(first) = relative.split('/').next() else {
                 continue;
             };
-
             if !relative.contains('/') {
-                files.insert(first.to_string(), Self::file_node(document));
+                files.insert(first.to_string(), Self::summary_file_node(page));
                 continue;
             }
-
             let child_path = if folder_path.is_empty() {
                 first.to_string()
             } else {
@@ -135,37 +178,45 @@ impl FileMikuApplication {
 
         folders.into_values().chain(files.into_values()).collect()
     }
-
-    fn summary_node(document: &VaultDocument) -> FileNode {
-        Self::file_node(document)
-    }
 }
 
 #[async_trait]
 impl VaultReader for FileMikuApplication {
     async fn vault_info(&self) -> Result<VaultInfo, ApplicationError> {
-        let documents = self.documents().await?;
+        let pages = self
+            .index
+            .list_pages()
+            .await
+            .map_err(ApplicationError::from)?;
         Ok(VaultInfo {
             root: self.workspace.root(),
             readonly: self.workspace.readonly(),
-            index_phase: IndexPhase::Ready,
+            index_phase: if self.index_ready.load(Ordering::Acquire) {
+                IndexPhase::Ready
+            } else {
+                IndexPhase::Indexing
+            },
             capabilities: self.index.capabilities().await?,
-            note_count: documents.len(),
-            generated_identity_count: documents
+            note_count: pages.len(),
+            generated_identity_count: pages
                 .iter()
-                .filter(|document| document.identity_generated)
+                .filter(|page| page.frontmatter.get("id").is_none())
                 .count(),
-            first_note: documents
+            first_note: pages
                 .first()
-                .and_then(|document| crate::NotePath::new(&document.note.source_path).ok()),
+                .and_then(|page| crate::NotePath::new(&page.path).ok()),
         })
     }
 
     async fn file_tree(&self, request: FileTreeRequest) -> Result<FileTree, ApplicationError> {
-        let documents = self.documents().await?;
+        let pages = self
+            .index
+            .list_pages()
+            .await
+            .map_err(ApplicationError::from)?;
         Ok(FileTree {
             folder: request.folder.clone(),
-            nodes: Self::tree_nodes(&documents, &request.folder),
+            nodes: Self::snapshot_tree_nodes(&pages, &request.folder),
         })
     }
 
@@ -260,6 +311,7 @@ fn application_error(error: WorkspaceServiceError) -> ApplicationError {
 mod tests {
     use super::*;
     use crate::FileWorkspaceService;
+    use miku_domain::{DocumentSignals, IndexWriter, PageIndex, PageSummary};
     use miku_index_memory::MemoryIndex;
     use tempfile::tempdir;
 
@@ -275,7 +327,41 @@ mod tests {
             .expect("create root note");
         let workspace: Arc<dyn WorkspaceService> =
             Arc::new(FileWorkspaceService::new(Arc::clone(&vault), false));
-        let index = IndexApi::from_store(Arc::new(MemoryIndex::new()));
+        let memory = Arc::new(MemoryIndex::new());
+        memory
+            .replace_pages(vec![
+                PageIndex {
+                    summary: PageSummary {
+                        path: "Projects/Alpha.md".to_string(),
+                        title: "Alpha".to_string(),
+                        frontmatter: serde_json::json!({}),
+                        mtime: 1,
+                    },
+                    body: "# Alpha".to_string(),
+                    links: Vec::new(),
+                    tags: Vec::new(),
+                    aliases: Vec::new(),
+                    has_mermaid: false,
+                    signals: DocumentSignals::default(),
+                },
+                PageIndex {
+                    summary: PageSummary {
+                        path: "Inbox.md".to_string(),
+                        title: "Inbox".to_string(),
+                        frontmatter: serde_json::json!({}),
+                        mtime: 1,
+                    },
+                    body: "capture".to_string(),
+                    links: Vec::new(),
+                    tags: Vec::new(),
+                    aliases: Vec::new(),
+                    has_mermaid: false,
+                    signals: DocumentSignals::default(),
+                },
+            ])
+            .await
+            .expect("seed snapshot");
+        let index = IndexApi::from_store(memory);
         let application = FileMikuApplication::new(vault, workspace, index);
 
         let tree = application

@@ -35,6 +35,7 @@ export type WorkspaceModel = {
   noteCount: number;
   placementCount: number;
   legacyCount: number;
+  indexPhase: Schemas["WorkspaceResponse"]["index_phase"];
   readonly: boolean;
 };
 
@@ -134,7 +135,7 @@ export function createWorkspaceClient(onSource: (source: ApiSource) => void) {
     workspace: () =>
       live(async () => {
         const response = await request<Schemas["WorkspaceResponse"]>("/api/v1/workspace");
-        return { noteCount: response.note_count, placementCount: response.placement_count, generatedIdentityCount: response.generated_identity_count, readonly: response.readonly };
+        return { noteCount: response.note_count, placementCount: response.placement_count, generatedIdentityCount: response.generated_identity_count, indexPhase: response.index_phase, readonly: response.readonly };
       }),
     tree: (folder?: string) => live(() => liveTree(folder)),
     note: (id: string) => live(() => request<Schemas["NoteResponse"]>(`/api/v1/notes/${encodeURIComponent(id)}`).then(normalizeNote)),

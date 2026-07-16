@@ -22,6 +22,8 @@ pub struct WorkspaceResponse {
     pub root: String,
     /// This release exposes no mutation routes in this API group.
     pub readonly: bool,
+    /// Current durable and hot projection lifecycle state.
+    pub index_phase: String,
     /// Number of source notes discovered in the vault.
     pub note_count: usize,
     /// Number of derived tree placements.
@@ -181,6 +183,7 @@ pub async fn workspace(State(state): State<AppState>) -> Result<Json<WorkspaceRe
     Ok(Json(WorkspaceResponse {
         root: info.root,
         readonly: info.readonly,
+        index_phase: format!("{:?}", info.index_phase),
         note_count: info.note_count,
         placement_count: info.note_count,
         generated_identity_count: info.generated_identity_count,
