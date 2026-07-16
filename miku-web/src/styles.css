@@ -582,6 +582,10 @@ input:focus-visible {
   line-height: 1.8;
 }
 .note-meta-list li::marker { color: var(--accent); }
+.note-meta-list .note-meta-tags {
+  margin-left: -18px;
+  list-style: none;
+}
 .note-meta-list code {
   color: var(--faint);
   font: inherit;
