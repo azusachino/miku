@@ -19,11 +19,11 @@ def test_react_frontend_uses_path_routes_and_stable_note_selection() -> None:
     assert "useMemo(" in source
 
 
-def test_frontend_keeps_editing_opt_in() -> None:
+def test_frontend_keeps_source_mode_opt_in() -> None:
     source = frontend_source()
     assert "MarkdownEditor" in source
-    assert "editing" in source
-    assert "setEditing(false)" in source
+    assert "sourceMode" in source
+    assert "setSourceMode(false)" in source
 
 
 def test_validate_ready_accepts_capabilities_payload() -> None:
