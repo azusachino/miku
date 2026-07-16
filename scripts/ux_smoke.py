@@ -10,8 +10,6 @@ import urllib.parse
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 
-from reader_shell_contract import validate_reader_page_payload
-
 BASE_URL = os.environ.get("MIKU_BLACKBOX_URL", "http://127.0.0.1:3000").rstrip("/")
 TIMEOUT = float(os.environ.get("MIKU_UX_SMOKE_TIMEOUT_SECONDS", "10"))
 
@@ -44,54 +42,40 @@ def main() -> int:
     expect(get("/readyz")[0], {200, 503}, "/readyz")
     expect(get("/metrics")[0], {200}, "/metrics")
 
-    status, content_type, favicon = get("/static/miku.svg")
-    expect(status, {200}, "/static/miku.svg")
-    if "image/svg+xml" not in content_type or "<svg" not in favicon:
-        raise AssertionError("favicon asset is not a valid SVG response")
+    status, content_type, body = get("/api/v1/workspace")
+    expect(status, {200}, "/api/v1/workspace")
+    workspace = json.loads(body)
+    if workspace["root"] != "miku_docs" or workspace["note_count"] <= 0:
+        raise AssertionError(f"workspace bootstrap is not corpus-backed: {workspace}")
 
-    page_paths = [
-        "Index",
-        "Changelog",
-        "Features",
-        "dedao-docs/README",
-        "geektime-docs/README",
-        "dedao-docs/docs/法律/《正义的慈悲》- 齐生解读",
-    ]
-    for page in page_paths:
-        status, content_type, body = get(encoded_page(page))
-        expect(status, {200}, encoded_page(page))
-        if "text/html" not in content_type or '<link rel="icon"' not in body:
-            raise AssertionError(f"{page}: rendered page is missing HTML/favicon contract")
+    status, _, body = get("/api/v1/tree")
+    expect(status, {200}, "/api/v1/tree")
+    if not json.loads(body)["nodes"]:
+        raise AssertionError("workspace tree has no root nodes")
+    expect(get("/api/v1/tree?folder=dedao-docs")[0], {200}, "/api/v1/tree folder")
 
-    status, content_type, body = get("/api/v1/pages/Index")
-    expect(status, {200}, "/api/v1/pages/Index")
-    if "application/json" not in content_type:
-        raise AssertionError("reader page API must return JSON")
-    validate_reader_page_payload(json.loads(body))
+    status, content_type, body = get("/api/v1/notes/Index.md")
+    expect(status, {200}, "/api/v1/notes/Index.md")
+    if "application/json" not in content_type or json.loads(body)["title"] != "Index":
+        raise AssertionError("note API did not return the Index contract")
 
-    expect(get("/p/__miku_missing_smoke_page__")[0], {200}, "/p/missing")
-    expect(get("/p/%2E%2E/%2E%2E/Cargo.toml")[0], {400, 404}, "/p/traversal")
+    search_queries = {"all": "Miku", "title": "Index", "content": "Miku"}
+    for scope, query in search_queries.items():
+        query_string = urllib.parse.urlencode({"q": query, "scope": scope})
+        status, _, body = get(f"/api/v1/search?{query_string}")
+        expect(status, {200}, f"/api/v1/search scope={scope}")
+        if not json.loads(body)["results"]:
+            raise AssertionError(f"search scope={scope} returned no corpus results")
+    expect(get("/api/v1/tags")[0], {200}, "/api/v1/tags")
+    expect(get("/api/openapi.json")[0], {200}, "/api/openapi.json")
 
-    for scope in ("all", "title", "body"):
-        status, _, body = get(f"/search?q=Miku&scope={scope}")
-        expect(status, {200}, f"/search scope={scope}")
-        if "Search Notes" not in body:
-            raise AssertionError(f"/search scope={scope}: missing rendered search view")
-    expect(get("/search?q=%E4%B8%AD%E6%96%87&scope=all")[0], {200}, "/search unicode")
-
-    for query in ("", "Index", "Miku"):
-        encoded_query = urllib.parse.urlencode({"q": query})
-        expect(get(f"/api/v1/quickswitch?{encoded_query}")[0], {200}, "/api/v1/quickswitch")
-    status, _, body = get("/api/v1/quickswitch?q=jvm")
-    expect(status, {200}, "/api/v1/quickswitch?q=jvm")
-    if not json.loads(body):
-        raise AssertionError("quick switcher did not find the corpus query 'jvm'")
-    expect(get("/api/v1/nav/children?dir=dedao-docs")[0], {200}, "/api/v1/nav/children")
-    expect(get("/folders/dedao-docs")[0], {200}, "/folders/dedao-docs")
+    page_paths = ["Index.md", "Changelog.md", "Features.md", "Usage.md"]
 
     started = time.monotonic()
     with ThreadPoolExecutor(max_workers=6) as pool:
-        statuses = list(pool.map(lambda page: get(encoded_page(page))[0], page_paths))
+        statuses = list(
+            pool.map(lambda page: get(f"/api/v1/notes/{urllib.parse.quote(page)}")[0], page_paths)
+        )
     elapsed = time.monotonic() - started
     if statuses != [200] * len(page_paths):
         raise AssertionError(f"concurrent navigation returned statuses={statuses}")

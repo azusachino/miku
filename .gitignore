@@ -42,6 +42,7 @@ __pycache__/
 
 # Frontend dependency cache
 node_modules/
+miku-web/dist/
 
 # Local SQLite/Turso-compatible index projection
 miku_docs/.miku-index.sqlite*

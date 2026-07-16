@@ -1,0 +1,20 @@
+[package]
+name = "miku-vault"
+version = "0.0.3"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Atomic file-backed Markdown vault operations for Miku"
+
+[dependencies]
+miku-domain = { version = "0.0.3", path = "../miku-domain" }
+miku-markdown = { version = "0.0.3", path = "../miku-markdown" }
+serde.workspace = true
+serde_json.workspace = true
+serde_yaml.workspace = true
+sha2 = "0.10"
+thiserror.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+tempfile = "3"

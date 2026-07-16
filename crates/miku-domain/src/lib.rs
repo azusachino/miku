@@ -6,6 +6,8 @@
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
+pub mod workspace;
+
 /// Result type used by the index-store contract.
 pub type StoreResult<T> = Result<T, StoreError>;
 
@@ -263,6 +265,12 @@ pub trait IndexWriter: Send + Sync {
         Ok(events)
     }
 
+    /// Populate a rebuildable hot projection from the authoritative source
+    /// without changing the durable projection.
+    async fn hydrate_hot_pages(&self, _pages: Vec<PageIndex>) -> StoreResult<()> {
+        Ok(())
+    }
+
     /// Rebuild any derived full-text structures after a bulk projection load.
     ///
     /// Stores without a separate derived search structure can keep the default
@@ -337,6 +345,28 @@ pub trait IndexWriter: Send + Sync {
 pub trait IndexStore: IndexReader + IndexWriter {}
 
 impl<T> IndexStore for T where T: IndexReader + IndexWriter {}
+
+/// A rebuildable or remote projection whose committed state survives the
+/// current process according to its backend contract.
+pub trait DurableProjection: IndexStore + Send + Sync {}
+
+/// A low-latency projection populated from `miku_docs` and/or a durable
+/// projection. It is derived state and may be rebuilt without data loss.
+pub trait HotProjection: IndexStore + Send + Sync {}
+
+/// Best-effort serialized result cache. Cache failures must not invalidate the
+/// filesystem source or durable projection.
+#[async_trait]
+pub trait ResultCache: Send + Sync {
+    /// Load a previously cached serialized result.
+    async fn get(&self, key: &str) -> StoreResult<Option<Vec<u8>>>;
+
+    /// Store a serialized result for a bounded lifetime.
+    async fn put(&self, key: &str, value: Vec<u8>, ttl_seconds: u64) -> StoreResult<()>;
+
+    /// Invalidate all results owned by this cache namespace.
+    async fn clear(&self) -> StoreResult<()>;
+}
 
 #[cfg(test)]
 mod tests {

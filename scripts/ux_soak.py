@@ -16,13 +16,10 @@ TIMEOUT = float(os.environ.get("MIKU_UX_SOAK_TIMEOUT_SECONDS", "10"))
 MAX_P95 = float(os.environ.get("MIKU_UX_SOAK_MAX_P95_SECONDS", "5"))
 
 PAGE_PATHS = (
-    "Index",
-    "Changelog",
-    "Features",
-    "dedao-docs/README",
-    "geektime-docs/README",
-    "dedao-docs/docs/法律/《正义的慈悲》- 齐生解读",
-    "__miku_soak_new_page__",
+    "Index.md",
+    "Changelog.md",
+    "Features.md",
+    "Usage.md",
 )
 
 
@@ -40,19 +37,18 @@ def get(path: str) -> tuple[int, float]:
 
 
 def page_path(path: str) -> str:
-    return f"/p/{urllib.parse.quote(path, safe='/')}"
+    return f"/api/v1/notes/{urllib.parse.quote(path)}"
 
 
 def action_paths(round_number: int) -> list[str]:
     page = PAGE_PATHS[round_number % len(PAGE_PATHS)]
-    search_scope = ("all", "title", "body")[round_number % 3]
+    search_scope = ("all", "title", "content")[round_number % 3]
     search_query = ("Miku", "Index", "中文")[round_number % 3]
     return [
         page_path(page),
-        f"/search?{urllib.parse.urlencode({'q': search_query, 'scope': search_scope})}",
-        f"/api/v1/quickswitch?{urllib.parse.urlencode({'q': search_query})}",
-        "/api/v1/nav/children?dir=dedao-docs",
-        "/folders/dedao-docs",
+        f"/api/v1/search?{urllib.parse.urlencode({'q': search_query, 'scope': search_scope})}",
+        "/api/v1/tree?folder=dedao-docs",
+        "/api/v1/tags",
     ]
 
 

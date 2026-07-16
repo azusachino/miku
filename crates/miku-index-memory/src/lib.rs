@@ -1,31 +1,53 @@
-//! Deterministic in-memory [`miku_domain::IndexStore`] implementation.
+//! Deterministic in-memory graph and Tantivy [`miku_domain::IndexStore`] implementation.
 //!
 //! This is the reference behavior for contract tests and disposable
 //! development. It is not a durable deployment backend.
 
 use async_trait::async_trait;
 use miku_domain::{
-    Backlink, IndexCapabilities, IndexEvent, IndexReader, IndexWriter, MentionRecord, PageIndex,
-    PageSummary, SearchHit, SearchRequest, StoreError, StoreResult, TagCount,
+    Backlink, HotProjection, IndexCapabilities, IndexEvent, IndexReader, IndexWriter,
+    MentionRecord, PageIndex, PageSummary, SearchHit, SearchRequest, StoreError, StoreResult,
+    TagCount,
 };
 use std::collections::BTreeMap;
 use std::sync::{Arc, RwLock};
+
+mod search;
+
+use search::SearchProjection;
 
 type MentionKey = (String, String, String);
 type MentionMap = BTreeMap<MentionKey, MentionRecord>;
 
 /// An in-memory index keyed by source-relative page path.
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct MemoryIndex {
     pages: Arc<RwLock<BTreeMap<String, PageIndex>>>,
+    backlinks: Arc<RwLock<BTreeMap<String, Vec<Backlink>>>>,
     mentions: Arc<RwLock<MentionMap>>,
+    search: Arc<RwLock<SearchProjection>>,
+}
+
+impl HotProjection for MemoryIndex {}
+
+impl Default for MemoryIndex {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl MemoryIndex {
     /// Create an empty reference index.
     #[must_use]
     pub fn new() -> Self {
-        Self::default()
+        Self {
+            pages: Arc::new(RwLock::new(BTreeMap::new())),
+            backlinks: Arc::new(RwLock::new(BTreeMap::new())),
+            mentions: Arc::new(RwLock::new(BTreeMap::new())),
+            search: Arc::new(RwLock::new(
+                SearchProjection::new().expect("in-memory Tantivy projection must initialize"),
+            )),
+        }
     }
 
     fn read_pages(
@@ -42,6 +64,58 @@ impl MemoryIndex {
         self.pages
             .write()
             .map_err(|_| StoreError::Operation("memory index lock poisoned".to_string()))
+    }
+
+    fn rebuild_search(&self) -> StoreResult<()> {
+        let pages = self
+            .pages
+            .read()
+            .map_err(|_| StoreError::Operation("memory index lock poisoned".to_string()))?;
+        self.search
+            .write()
+            .map_err(|_| StoreError::Operation("memory search lock poisoned".to_string()))?
+            .rebuild(&pages.values().cloned().collect::<Vec<_>>())
+    }
+
+    fn rebuild_backlinks(&self) -> StoreResult<()> {
+        let pages = self.read_pages()?;
+        let summaries = pages
+            .values()
+            .map(|page| page.summary.clone())
+            .collect::<Vec<_>>();
+        let mut reverse = BTreeMap::<String, Vec<Backlink>>::new();
+        for page in pages.values() {
+            for link in &page.links {
+                if link.kind != miku_domain::LinkKind::Page {
+                    continue;
+                }
+                let Some(target) = miku_indexer::resolve_link_path(&link.target_norm, &summaries)
+                else {
+                    continue;
+                };
+                if target == page.summary.path {
+                    continue;
+                }
+                reverse.entry(target).or_default().push(Backlink {
+                    path: page.summary.path.clone(),
+                    title: page.summary.title.clone(),
+                });
+            }
+        }
+        for entries in reverse.values_mut() {
+            entries.sort_by(|left, right| {
+                left.title
+                    .cmp(&right.title)
+                    .then(left.path.cmp(&right.path))
+            });
+            entries.dedup_by(|left, right| left.path == right.path);
+        }
+        *self
+            .backlinks
+            .write()
+            .map_err(|_| StoreError::Operation("memory backlinks lock poisoned".to_string()))? =
+            reverse;
+        Ok(())
     }
 }
 
@@ -73,54 +147,20 @@ impl IndexReader for MemoryIndex {
     }
 
     async fn search(&self, request: SearchRequest) -> StoreResult<Vec<SearchHit>> {
-        let query = request.query.trim().to_lowercase();
-        if query.is_empty() || request.limit == 0 {
-            return Ok(Vec::new());
-        }
-
-        let terms: Vec<&str> = query.split_whitespace().collect();
-        let mut hits = self
-            .read_pages()?
-            .values()
-            .filter_map(|page| {
-                let path = page.summary.path.to_lowercase();
-                let title = page.summary.title.to_lowercase();
-                let body = page.body.to_lowercase();
-                let haystack = match request.scope {
-                    miku_domain::SearchScope::All => format!("{path} {title} {body}"),
-                    miku_domain::SearchScope::Title => format!("{path} {title}"),
-                    miku_domain::SearchScope::Body => body.clone(),
-                };
-                terms
-                    .iter()
-                    .all(|term| haystack.contains(term))
-                    .then(|| SearchHit {
-                        path: page.summary.path.clone(),
-                        title: page.summary.title.clone(),
-                        snippet: snippet(&page.body, &query),
-                    })
-            })
-            .collect::<Vec<_>>();
-        hits.truncate(request.limit);
-        Ok(hits)
+        self.search
+            .read()
+            .map_err(|_| StoreError::Operation("memory search lock poisoned".to_string()))?
+            .search(&request)
     }
 
     async fn backlinks(&self, path: &str) -> StoreResult<Vec<Backlink>> {
-        let target = miku_indexer::page_slug(path);
         Ok(self
-            .read_pages()?
-            .values()
-            .filter(|page| {
-                page.summary.path != path
-                    && page.links.iter().any(|link| {
-                        link.kind == miku_domain::LinkKind::Page && link.target_norm == target
-                    })
-            })
-            .map(|page| Backlink {
-                path: page.summary.path.clone(),
-                title: page.summary.title.clone(),
-            })
-            .collect())
+            .backlinks
+            .read()
+            .map_err(|_| StoreError::Operation("memory backlinks lock poisoned".to_string()))?
+            .get(path)
+            .cloned()
+            .unwrap_or_default())
     }
 
     async fn mentions_for_target(&self, path: &str) -> StoreResult<Vec<MentionRecord>> {
@@ -166,7 +206,14 @@ impl IndexWriter for MemoryIndex {
     async fn replace_page(&self, page: PageIndex) -> StoreResult<IndexEvent> {
         let path = page.summary.path.clone();
         self.write_pages()?.insert(path.clone(), page);
+        self.rebuild_search()?;
+        self.rebuild_backlinks()?;
         Ok(IndexEvent::PageIndexed { path })
+    }
+
+    async fn rebuild_search_index(&self) -> StoreResult<()> {
+        self.rebuild_search()?;
+        self.rebuild_backlinks()
     }
 
     async fn replace_pages(&self, pages: Vec<PageIndex>) -> StoreResult<Vec<IndexEvent>> {
@@ -183,7 +230,15 @@ impl IndexWriter for MemoryIndex {
         for page in pages {
             indexed.insert(page.summary.path.clone(), page);
         }
+        drop(indexed);
+        // Bulk callers rebuild the search projection once after all batches
+        // have been loaded. Rebuilding here would make a full reconcile
+        // quadratic in the number of batches.
         Ok(events)
+    }
+
+    async fn hydrate_hot_pages(&self, pages: Vec<PageIndex>) -> StoreResult<()> {
+        self.replace_pages(pages).await.map(|_| ())
     }
 
     async fn replace_mentions_for_source(
@@ -263,20 +318,12 @@ impl IndexWriter for MemoryIndex {
 
     async fn delete_page(&self, path: &str) -> StoreResult<IndexEvent> {
         self.write_pages()?.remove(path);
+        self.rebuild_search()?;
+        self.rebuild_backlinks()?;
         Ok(IndexEvent::PageDeleted {
             path: path.to_string(),
         })
     }
-}
-
-fn snippet(body: &str, query: &str) -> String {
-    let lower = body.to_lowercase();
-    let start = query
-        .split_whitespace()
-        .find_map(|term| lower.find(term))
-        .unwrap_or(0);
-    let start_chars = lower[..start].chars().count();
-    body.chars().skip(start_chars).take(160).collect()
 }
 
 #[cfg(test)]
@@ -358,5 +405,100 @@ mod tests {
             1
         );
         assert_eq!(index.tags().await.expect("tags")[0].count, 2);
+    }
+
+    #[tokio::test]
+    async fn backlinks_cover_same_layer_cross_layer_and_global_conflicts() {
+        let unique = MemoryIndex::new();
+        let mut same_source = page("same/Source.md", "Source", "[[Target]]");
+        same_source.links.push(LinkRecord {
+            target: "Target".to_string(),
+            target_norm: "target".to_string(),
+            alias: None,
+            kind: LinkKind::Page,
+            is_embed: false,
+        });
+        unique.replace_page(same_source).await.expect("same source");
+        unique
+            .replace_page(page("same/Target.md", "Target", "target"))
+            .await
+            .expect("same target");
+        assert_eq!(unique.backlinks("same/Target.md").await.unwrap().len(), 1);
+
+        let conflict = MemoryIndex::new();
+        let mut explicit_source = page("same/Explicit.md", "Explicit", "[[other/Target]]");
+        explicit_source.links.push(LinkRecord {
+            target: "other/Target".to_string(),
+            target_norm: "other/target".to_string(),
+            alias: None,
+            kind: LinkKind::Page,
+            is_embed: false,
+        });
+        conflict
+            .replace_page(explicit_source)
+            .await
+            .expect("explicit source");
+        let mut ambiguous_source = page("same/Ambiguous.md", "Ambiguous", "[[Target]]");
+        ambiguous_source.links.push(LinkRecord {
+            target: "Target".to_string(),
+            target_norm: "target".to_string(),
+            alias: None,
+            kind: LinkKind::Page,
+            is_embed: false,
+        });
+        conflict
+            .replace_page(ambiguous_source)
+            .await
+            .expect("ambiguous source");
+        conflict
+            .replace_page(page("same/Target.md", "Target", "target"))
+            .await
+            .expect("same target");
+        conflict
+            .replace_page(page("other/Target.md", "Target", "target"))
+            .await
+            .expect("other target");
+
+        assert!(conflict
+            .backlinks("same/Target.md")
+            .await
+            .unwrap()
+            .is_empty());
+        let cross_layer = conflict.backlinks("other/Target.md").await.unwrap();
+        assert_eq!(cross_layer.len(), 1);
+        assert_eq!(cross_layer[0].path, "same/Explicit.md");
+    }
+
+    #[tokio::test]
+    async fn rebuild_removes_deleted_documents_from_tantivy() {
+        let index = MemoryIndex::new();
+        index
+            .replace_page(page("Gone.md", "Gone", "ephemeral content"))
+            .await
+            .expect("index document");
+        assert_eq!(
+            index
+                .search(SearchRequest {
+                    query: "ephemeral".to_string(),
+                    scope: SearchScope::Body,
+                    limit: 10,
+                })
+                .await
+                .expect("search before delete")
+                .len(),
+            1
+        );
+
+        index.delete_page("Gone.md").await.expect("delete document");
+        index.rebuild_search_index().await.expect("rebuild search");
+        assert!(index
+            .search(SearchRequest {
+                query: "ephemeral".to_string(),
+                scope: SearchScope::Body,
+                limit: 10,
+            })
+            .await
+            .expect("search after delete")
+            .is_empty());
     }
 }

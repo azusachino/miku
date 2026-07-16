@@ -22,59 +22,52 @@ Miku Note is a personal wiki with a deliberately small persistence model:
 - The index is derived state. Delete it and Miku can rebuild it from Markdown.
 - Reading is the primary experience: switching pages keeps the shell, styles, and JavaScript in place.
 - Editing is explicit, with atomic saves and a background filesystem watcher.
-- The server is written in Rust and the frontend is server-rendered HTML with a small amount of progressive enhancement.
+- The server is written in Rust and the frontend is a separate React/Vite project.
 
 This makes the vault easy to inspect, back up, version, or edit with another tool. Miku does not require a hosted account or a proprietary data format.
 
 ## Features
 
-| Area            | What is included                                                                                       |
-| --------------- | ------------------------------------------------------------------------------------------------------ |
-| Markdown        | CommonMark rendering, fenced code blocks, math, Mermaid, callouts, and wikilinks                       |
-| Navigation      | Folder tree, breadcrumbs, page quick-switch, hash links, and a page-local table of contents            |
-| Knowledge graph | Backlinks, linked mentions, tags, and paginated tag views                                              |
-| Search          | Metadata quick-switch plus embedded full-text content search powered by Rust's grep/ignore crates      |
-| Editing         | Browser editor, inline reader editing, preview, atomic writes, and conflict-aware saves                |
-| Runtime         | Local SQLite index by default; optional Postgres and Valkey composition for larger deployments         |
-| UX              | Light/dark themes, reading-width modes, lazy editor/highlighter loading, and a focused command palette |
+| Area            | What is included                                                                                           |
+| --------------- | ---------------------------------------------------------------------------------------------------------- |
+| Markdown        | CommonMark rendering, fenced code blocks, math, Mermaid, callouts, and wikilinks                           |
+| Navigation      | Folder tree, breadcrumbs, page quick-switch, hash links, and a page-local table of contents                |
+| Knowledge graph | Backlinks, linked mentions, tags, and paginated tag views                                                  |
+| Search          | Metadata quick-switch plus embedded full-text content search powered by Rust's grep/ignore crates          |
+| Editing         | Browser editor, inline reader editing, preview, atomic writes, and conflict-aware saves                    |
+| Runtime         | MemoryIndex/Tantivy hot projection by default; optional SQLite/Postgres durability and Valkey shared cache |
+| UX              | Light/dark themes, reading-width modes, lazy editor/highlighter loading, and a focused command palette     |
 
 ## Quick start
 
-The default development path needs Nix with flakes. It uses the local SQLite index and does not need Postgres.
+The default development path uses SQLite as the durable projection and MemoryIndex/Tantivy as the hot projection. PostgreSQL and Valkey are optional infrastructure layers; Valkey is a shared cache,
+not a replacement for Tantivy.
 
 ```bash
 git clone https://github.com/azusachino/miku.git
 cd miku
 nix develop           # enter the devShell (rust, bun, uv, postgres, …)
-make run              # build the Tailwind CSS with bun, then run the server
+make dev              # run Rust backend and Vite frontend together
 ```
 
-`make run` depends on the `css` target: it runs `bun install --frozen-lockfile` and `bun run css` to compile `static/tailwind.input.css` → `static/tailwind.generated.css` before `cargo run`. `bun`
-comes from the Nix devShell, so no separate Node/Bun install is needed. The generated stylesheet is committed, so a plain `cargo run` also works if you have not changed any CSS.
+The native local stack is started with `uv run python scripts/dev.py`, which launches Rust and Vite together. `bun` comes from the Nix devShell, so no separate Node/Bun install is needed.
 
 Open <http://127.0.0.1:3000>. The default content root is `miku_docs/`; put a Markdown file there and refresh the page after the watcher indexes it.
 
-To run the native Postgres profile instead:
-
-```bash
-make db-up
-make dev
-```
-
-See [`docs/setup.md`](docs/setup.md) for external Postgres, Tailscale/LAN access, containers, browser checks, and environment overrides.
+See [`miku_docs/setup.md`](miku_docs/setup.md) for external Postgres, Tailscale/LAN access, containers, browser checks, and environment overrides.
 
 ## Configuration
 
 The useful local switches are:
 
-| Variable             | Default                        | Purpose                                                    |
-| -------------------- | ------------------------------ | ---------------------------------------------------------- |
-| `MIKU_INDEX_BACKEND` | `sqlite`                       | Select the local or service-backed index implementation    |
-| `MIKU_INDEX_PATH`    | `miku_docs/.miku-index.sqlite` | Location of the local derived index                        |
-| `MIKU_BIND`          | `0.0.0.0:3000`                 | Address exposed by the HTTP server                         |
-| `MIKU_READONLY`      | unset                          | Deploy the reader without write operations                 |
-| `DATABASE_URL`       | unset                          | Postgres connection string when using the Postgres profile |
-| `VALKEY_URL`         | unset                          | Optional Valkey endpoint for the scale profile             |
+| Variable             | Default                        | Purpose                                                       |
+| -------------------- | ------------------------------ | ------------------------------------------------------------- |
+| `MIKU_INDEX_BACKEND` | `sqlite`                       | Select the durable SQLite/Postgres or explicit memory backend |
+| `MIKU_INDEX_PATH`    | `miku_docs/.miku-index.sqlite` | Location of the local derived index                           |
+| `MIKU_BIND`          | `0.0.0.0:3000`                 | Address exposed by the HTTP server                            |
+| `MIKU_READONLY`      | unset                          | Deploy the reader without write operations                    |
+| `DATABASE_URL`       | unset                          | Postgres connection string when using the Postgres profile    |
+| `VALKEY_URL`         | unset                          | Optional Valkey endpoint for the scale profile                |
 
 The vault is intentionally single-user and login-less at this stage. If the server is reachable beyond a trusted machine, put it behind the network or identity boundary appropriate for your
 deployment.
@@ -84,7 +77,7 @@ deployment.
 ```text
 Markdown files + assets
           │
-          ├── reader/editor ──> server-rendered HTML ──> browser shell
+          ├── reader/editor ──> React/Vite browser shell
           │
           └── filesystem watcher ──> derived index
                                       ├── links and backlinks
@@ -99,11 +92,11 @@ The main browser routes are:
 
 - `/p/{path}` — read a Markdown page; `/p/{path}.md` is accepted as an alias.
 - `/p/{path}/edit` — edit a page.
-- `/search` — content search.
 - `/tags` and `/tags/{tag}` — browse tags with incremental loading.
 - `/healthz`, `/readyz`, and `/metrics` — local/runtime probes.
 
-More detail lives in [`docs/architecture.md`](docs/architecture.md), [`docs/runtime-workflow.md`](docs/runtime-workflow.md), and the decision records under [`docs/adr/`](docs/adr/).
+More detail lives in [`miku_docs/architecture.md`](miku_docs/architecture.md), [`miku_docs/runtime-workflow.md`](miku_docs/runtime-workflow.md), and the decision records under
+[`miku_docs/adr/`](miku_docs/adr/).
 
 ## Development
 
@@ -124,7 +117,7 @@ Before opening a pull request, run `make check`. Keep user content, local indexe
 
 ## Project status
 
-Miku Note is an early, actively evolving project. The current milestone is `v0.0.2`; the user-facing changelog is [`miku_docs/Changelog.md`](miku_docs/Changelog.md). APIs, templates, and configuration
+Miku Note is an early, actively evolving project. The current milestone is `v0.0.3`; the user-facing changelog is [`miku_docs/Changelog.md`](miku_docs/Changelog.md). APIs, templates, and configuration
 may change while the core filesystem-first invariant remains stable.
 
 ## Contributing

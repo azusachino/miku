@@ -324,7 +324,14 @@ fn render_admonition(
     };
 
     format!(
-        "<div class=\"admonition ad-{} border-l-4 p-3.5 my-4 {} rounded-r\">\n  <div class=\"admonition-title font-bold text-sm mb-1.5 {} flex items-center gap-1.5 select-none\">\n    <span>{}</span> {}</div>\n  <div class=\"admonition-content text-[13px] leading-relaxed\">\n    {}\n  </div>\n</div>",
+        concat!(
+            "<div class=\"admonition ad-{} border-l-4 p-3.5 my-4 {} rounded-r\">\n",
+            "  <div class=\"admonition-title font-bold text-sm mb-1.5 {} ",
+            "flex items-center gap-1.5 select-none\">\n",
+            "    <span>{}</span> {}</div>\n",
+            "  <div class=\"admonition-content text-[13px] leading-relaxed\">\n",
+            "    {}\n  </div>\n</div>"
+        ),
         ad_type,
         border_class,
         title_class,

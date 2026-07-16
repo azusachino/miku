@@ -1,6 +1,6 @@
 [package]
 name = "miku-app"
-version = "0.0.2"
+version = "0.0.3"
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
@@ -8,15 +8,17 @@ description = "Backend-neutral application index API for Miku"
 
 [dependencies]
 async-trait.workspace = true
-miku-domain = { version = "0.0.2", path = "../miku-domain" }
-miku-index-memory = { version = "0.0.2", path = "../miku-index-memory", optional = true }
-miku-index-postgres = { version = "0.0.2", path = "../miku-index-postgres", optional = true }
-miku-index-sqlite = { version = "0.0.2", path = "../miku-index-sqlite", optional = true }
-miku-cache-valkey = { version = "0.0.2", path = "../miku-cache-valkey", optional = true }
+miku-domain = { version = "0.0.3", path = "../miku-domain" }
+miku-vault = { version = "0.0.3", path = "../miku-vault" }
+miku-index-memory = { version = "0.0.3", path = "../miku-index-memory", optional = true }
+miku-index-postgres = { version = "0.0.3", path = "../miku-index-postgres", optional = true }
+miku-index-sqlite = { version = "0.0.3", path = "../miku-index-sqlite", optional = true }
+miku-cache-valkey = { version = "0.0.3", path = "../miku-cache-valkey", optional = true }
 sqlx = { version = "0.8.6", optional = true, features = ["postgres", "runtime-tokio-rustls"] }
 serde.workspace = true
 serde_json.workspace = true
 tokio.workspace = true
+thiserror = "2"
 
 [features]
 default = ["memory", "sqlite"]
@@ -26,5 +28,6 @@ postgres = ["dep:miku-index-postgres", "dep:sqlx"]
 valkey = ["dep:miku-cache-valkey"]
 
 [dev-dependencies]
-miku-index-memory = { version = "0.0.2", path = "../miku-index-memory" }
+miku-index-memory = { version = "0.0.3", path = "../miku-index-memory" }
+tempfile = "3"
 tokio.workspace = true

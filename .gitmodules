@@ -4,3 +4,13 @@
 [submodule "miku_docs/geektime-docs"]
 	path = miku_docs/geektime-docs
 	url = https://github.com/uaxe/geektime-docs.git
+	ignore = all
+[submodule "vendor/tolaria"]
+	path = vendor/tolaria
+	url = https://github.com/refactoringhq/tolaria.git
+[submodule "vendor/trilium"]
+	path = vendor/trilium
+	url = https://github.com/TriliumNext/Trilium.git
+[submodule "vendor/silverbullet"]
+	path = vendor/silverbullet
+	url = https://github.com/silverbulletmd/silverbullet.git

@@ -1,3 +1,11 @@
+---
+title: Markdown Sandbox
+type: sandbox
+status: active
+tags: [miku, demo, markdown]
+updated: 2026-07-16
+---
+
 # Sandbox: Miku Note Markdown Playground
 
 Welcome to the Sandbox! This page demonstrates Miku Note's Markdown support and wikilink behavior. #demo
@@ -6,11 +14,9 @@ Welcome to the Sandbox! This page demonstrates Miku Note's Markdown support and 
 
 ### GitHub Alerts
 
-> [!NOTE]
-> This is a note alert. Miku renders GitHub alert syntax (`[!NOTE]`, `[!WARNING]`, `[!IMPORTANT]`) natively using comrak.
+> [!NOTE] This is a note alert. Miku renders GitHub alert syntax (`[!NOTE]`, `[!WARNING]`, `[!IMPORTANT]`) natively using comrak.
 
-> [!WARNING]
-> This is a warning. Use it to highlight potential pitfalls or precautions.
+> [!WARNING] This is a warning. Use it to highlight potential pitfalls or precautions.
 
 ### Code Blocks
 
@@ -37,13 +43,13 @@ flowchart LR
 
 ### Tables
 
-| Feature | Status | Notes |
-|---------|--------|-------|
-| Wikilinks | Stable | Bi-directional backlinks included |
-| Content Search | Stable | Embedded ripgrep search over Markdown source |
-| Tag Index | Stable | Hashtag-based filtering |
-| Atomic Saves | Stable | Guarantees consistency |
-| Background Indexer | Stable | Single-writer, incremental updates |
+| Feature            | Status | Notes                                        |
+| ------------------ | ------ | -------------------------------------------- |
+| Wikilinks          | Stable | Bi-directional backlinks included            |
+| Content Search     | Stable | Embedded ripgrep search over Markdown source |
+| Tag Index          | Stable | Hashtag-based filtering                      |
+| Atomic Saves       | Stable | Guarantees consistency                       |
+| Background Indexer | Stable | Single-writer, incremental updates           |
 
 ### Math
 
@@ -66,13 +72,15 @@ You can also use link text overrides: [[Index|Back to Home]] displays as "Back t
 
 ## Tags in Context
 
-This page uses the #demo tag to mark it as a playground for new users. Other pages use #feature, #guide, #docs, and #release to organize content by type. Browse the tag index to see how pages cluster. #demo
+This page uses the #demo tag to mark it as a playground for new users. Other pages use #feature, #guide, #docs, and #release to organize content by type. Browse the tag index to see how pages cluster.
+#demo
 
 The [[Features]] page discusses tags in detail — how they're extracted, indexed, and used to filter and explore your wiki.
 
 ## What Next?
 
 Explore the wiki:
+
 1. Click through the wikilinks above to see backlinks in action.
 2. Use content search (top of the page) to find phrases like "atomic saves" or "background indexer". The same search is available in the Content tab of `Cmd-K`.
 3. Browse the [[Index]] to see the wiki structure.
