@@ -47,6 +47,7 @@
   --focus-ring: 0 0 0 3px rgba(120, 164, 255, 0.2);
   --surface-deep: #191814;
   --surface-code: #161616;
+  --code-text: #d6d3cc;
   --border-strong: #46433b;
   --text-strong: #f1ece3;
   --text-soft: #b8b1a6;
@@ -694,6 +695,16 @@ input:focus-visible {
 }
 .markdown-reader pre code[class*="language-"] {
   background: transparent !important;
+}
+.markdown-reader pre[class*="language-"] {
+  color: var(--code-text);
+  background: var(--surface-code) !important;
+  text-shadow: none !important;
+}
+.markdown-reader pre[class*="language-"] > code[class*="language-"] {
+  color: var(--code-text);
+  background: transparent !important;
+  text-shadow: none !important;
 }
 .markdown-reader .markdown-alert {
   position: relative;
@@ -1523,6 +1534,7 @@ input:focus-visible {
   --focus-ring: 0 0 0 3px rgba(21, 93, 255, 0.2);
   --surface-deep: #f7f6f3;
   --surface-code: #f7f6f3;
+  --code-text: #37352f;
   --border-strong: #d9d9d6;
   --text-strong: #37352f;
   --text-soft: #787774;
