@@ -73,19 +73,19 @@ pub struct VaultDocument {
     /// Revision observed when the document was read.
     pub revision: RevisionToken,
     /// True when the source had no workspace `id` field and needs migration.
-    pub legacy: bool,
+    pub identity_generated: bool,
 }
 
-/// One legacy document that can receive a stable ID through explicit migration.
+/// One document without an explicit identity that can receive one through migration.
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct MigrationCandidate {
     /// Canonical source path.
     pub path: VaultPath,
-    /// Deterministic temporary identity derived from the legacy path.
+    /// Deterministic identity derived from the source path.
     pub proposed_id: NoteId,
 }
 
-/// Non-destructive migration plan for legacy documents.
+/// Non-destructive migration plan for documents with generated identities.
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct MigrationPlan {
     /// Documents missing a workspace ID.
@@ -134,7 +134,7 @@ impl Vault {
         &self.root
     }
 
-    /// Reads one document without modifying a legacy source file.
+    /// Reads one document without modifying a source file.
     pub fn read(&self, path: &str) -> Result<VaultDocument, VaultError> {
         let path = VaultPath::new(path)?;
         let file_path = self.file_path(&path);
@@ -184,7 +184,7 @@ impl Vault {
             note,
             body: body.into(),
             revision: RevisionToken::new("pending", 0)?,
-            legacy: false,
+            identity_generated: false,
         };
         let revision = self.write(&document)?;
         Ok(VaultDocument {
@@ -223,10 +223,10 @@ impl Vault {
         let mut candidates = Vec::new();
         let mut ids = HashMap::<NoteId, usize>::new();
         for document in documents {
-            if document.legacy {
+            if document.identity_generated {
                 candidates.push(MigrationCandidate {
                     path: VaultPath::new(&document.note.source_path)?,
-                    proposed_id: legacy_id(&document.note.source_path),
+                    proposed_id: path_identity(&document.note.source_path),
                 });
             }
             *ids.entry(document.note.id).or_default() += 1;
@@ -266,7 +266,7 @@ impl Vault {
 fn parse_document(path: &VaultPath, raw: &str, mtime: i64) -> Result<VaultDocument, VaultError> {
     let (frontmatter, body) = parse_frontmatter(raw);
     let title = extract_title(path.as_str(), frontmatter.as_ref(), body);
-    let (workspace, legacy, properties) = match frontmatter {
+    let (workspace, identity_generated, properties) = match frontmatter {
         Some(value) => {
             let workspace: WorkspaceFrontmatter = serde_json::from_value(value.clone())
                 .map_err(|error| VaultError::InvalidFrontmatter(error.to_string()))?;
@@ -274,8 +274,8 @@ fn parse_document(path: &VaultPath, raw: &str, mtime: i64) -> Result<VaultDocume
             if let Some(value) = value.get("title") {
                 properties.insert("title".to_string(), value.clone());
             }
-            let legacy = workspace.id.is_none();
-            (workspace, legacy, properties)
+            let identity_generated = workspace.id.is_none();
+            (workspace, identity_generated, properties)
         }
         None => (
             WorkspaceFrontmatter {
@@ -288,7 +288,7 @@ fn parse_document(path: &VaultPath, raw: &str, mtime: i64) -> Result<VaultDocume
             BTreeMap::new(),
         ),
     };
-    let id = workspace.id.unwrap_or_else(|| legacy_id(path.as_str()));
+    let id = workspace.id.unwrap_or_else(|| path_identity(path.as_str()));
     let note = Note::new(
         id,
         path.as_str(),
@@ -301,7 +301,7 @@ fn parse_document(path: &VaultPath, raw: &str, mtime: i64) -> Result<VaultDocume
         note,
         body: body.to_string(),
         revision: RevisionToken::new(content_hash(raw), mtime)?,
-        legacy,
+        identity_generated,
     })
 }
 
@@ -408,10 +408,10 @@ fn content_hash(contents: &str) -> String {
     format!("{:x}", hasher.finalize())
 }
 
-fn legacy_id(path: &str) -> NoteId {
+fn path_identity(path: &str) -> NoteId {
     let mut hasher = Sha256::new();
     hasher.update(path.as_bytes());
-    NoteId::new(format!("legacy-{:x}", hasher.finalize())).expect("legacy digest is non-empty")
+    NoteId::new(format!("path-{:x}", hasher.finalize())).expect("path digest is non-empty")
 }
 
 #[cfg(test)]
@@ -454,7 +454,7 @@ mod tests {
         assert_eq!(loaded.note.id, document.note.id);
         assert_eq!(loaded.note.source_path, "Notes/Today.md");
         assert_eq!(loaded.body, "# Body\n");
-        assert!(!loaded.legacy);
+        assert!(!loaded.identity_generated);
         assert!(loaded.revision.content_hash != "pending");
         assert!(root.path().join("Notes/Today.md").exists());
     }
@@ -473,7 +473,7 @@ mod tests {
     }
 
     #[test]
-    fn legacy_scan_and_explicit_migration_do_not_rewrite_during_planning() {
+    fn generated_identity_scan_and_explicit_migration_do_not_rewrite_during_planning() {
         let root = tempfile::tempdir().unwrap();
         let path = root.path().join("Legacy.md");
         fs::write(&path, "---\ntitle: Legacy\n---\nbody\n").unwrap();
@@ -486,7 +486,7 @@ mod tests {
 
         assert_eq!(vault.apply_migration(&plan).unwrap(), 1);
         let migrated = vault.read("Legacy").unwrap();
-        assert!(!migrated.legacy);
+        assert!(!migrated.identity_generated);
         assert_eq!(migrated.note.id, plan.candidates[0].proposed_id);
     }
 

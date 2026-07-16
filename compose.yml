@@ -6,15 +6,30 @@ services:
       POSTGRES_USER: miku
       POSTGRES_PASSWORD: miku
       POSTGRES_DB: miku
-    # No host port mapping: the miku service reaches Postgres over the compose
-    # network (postgres:5432) and runs its own embedded migrations. Expose a
-    # host port ad hoc (e.g. 127.0.0.1:5433:5432) only when you need psql.
+    # The host port is only for the service experiment script and local
+    # inspection. Miku still reaches Postgres over the compose network.
+    ports:
+      - "127.0.0.1:5433:5432"
     volumes:
       # PG18+ images expect the mount at /var/lib/postgresql (data lands in a
       # major-version subdir), not the legacy /var/lib/postgresql/data.
       - miku-pgdata:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U miku -d miku"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+
+  valkey:
+    image: docker.io/valkey/valkey:9-alpine
+    container_name: miku-valkey
+    command: ["valkey-server", "--appendonly", "yes"]
+    ports:
+      - "127.0.0.1:6380:6379"
+    volumes:
+      - miku-valkeydata:/data
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
       interval: 3s
       timeout: 3s
       retries: 10
@@ -35,10 +50,14 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      valkey:
+        condition: service_healthy
     environment:
       # Host is the compose service name, not localhost.
-      MIKU_INDEX_BACKEND: postgres
+      MIKU_INDEX_BACKEND: postgres-valkey
       DATABASE_URL: postgres://miku:miku@postgres:5432/miku
+      VALKEY_URL: redis://valkey:6379
+      MIKU_VALKEY_NAMESPACE: miku
     ports:
       - "0.0.0.0:3000:3000"
     volumes:
@@ -48,3 +67,4 @@ services:
 
 volumes:
   miku-pgdata:
+  miku-valkeydata:

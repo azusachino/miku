@@ -9,11 +9,11 @@ describe("workspace reducer", () => {
     expect(reopened.tabs.filter((id) => id === "workspace")).toHaveLength(1);
   });
 
-  it("keeps a recoverable tab when the last tab closes", () => {
+  it("allows the tab strip to become empty when the last live note closes", () => {
     const onlyTab = { ...initialWorkspaceState, tabs: ["roadmap"], activeId: "roadmap" };
     const next = workspaceReducer(onlyTab, { type: "close", id: "roadmap" });
-    expect(next.tabs).toEqual(["welcome"]);
-    expect(next.activeId).toBe("welcome");
+    expect(next.tabs).toEqual([]);
+    expect(next.activeId).toBe("");
   });
 
   it("toggles split, context, and hoist independently", () => {

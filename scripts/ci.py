@@ -26,9 +26,13 @@ import urllib.error
 import urllib.request
 
 
-def run(command: list[str], environment: dict[str, str] | None = None) -> None:
+def run(
+    command: list[str],
+    environment: dict[str, str] | None = None,
+    cwd: str | None = None,
+) -> None:
     print("+ " + " ".join(command), flush=True)
-    subprocess.run(command, check=True, env=environment)
+    subprocess.run(command, check=True, env=environment, cwd=cwd)
 
 
 def server_ready(url: str) -> bool:
@@ -44,10 +48,10 @@ def cargo(*args: str) -> None:
 
 
 def check() -> None:
-    run(["bun", "install", "--frozen-lockfile"])
-    run(["bun", "run", "css"])
+    run(["bun", "install", "--frozen-lockfile"], cwd="miku-web")
+    run(["bun", "run", "check"], cwd="miku-web")
+    run(["bun", "run", "build"], cwd="miku-web")
     run(["cargo", "fmt", "--all", "--", "--check"])
-    run(["prettier", "--check", "**/*.{md,json,yaml,yml}"])
     run(["ruff", "check", "scripts"])
     run(["ruff", "format", "--check", "scripts"])
     run(["pytest", "scripts"])

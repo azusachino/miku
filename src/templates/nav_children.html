@@ -1,5 +1,0 @@
-{# Partial returned by GET /api/v1/nav/children?dir=... — the direct children of one
-   folder, rendered with the shared nav_node macro. Each child folder is itself
-   lazy (its grandchildren are not rendered until expanded). #}
-{% from "_nav_macro.html" import nav_node %}
-{% for node in nodes %}{{ nav_node(node, prefix, "") }}{% endfor %}

@@ -4,381 +4,518 @@
  */
 
 export interface paths {
-    "/api/v1/notes/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Returns one note by stable identity. */
-        get: operations["note"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+  "/api/v1/note-children/{id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/api/v1/notes/{id}/children": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Returns direct children for one note. */
-        get: operations["note_children"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** Returns direct children for one note. */
+    get: operations["note_children"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/note-context/{id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/api/v1/notes/{id}/context": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Returns note, parents, children, and indexed backlinks. */
-        get: operations["note_context"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** Returns note, parents, children, and indexed backlinks. */
+    get: operations["note_context"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/notes/{id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/api/v1/search": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Searches the current read projection. */
-        get: operations["search"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** Returns one note by stable identity. */
+    get: operations["note"];
+    put: operations["save_note"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/search": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/api/v1/tree": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Returns root or parent-filtered tree placements. */
-        get: operations["tree"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** Searches the current read projection. */
+    get: operations["search"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/tags": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/api/v1/workspace": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Returns workspace bootstrap metadata. */
-        get: operations["workspace"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    get: operations["tags"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/tags/{tag}/notes": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
+    get: operations["tag_notes"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/tree": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Returns root or parent-filtered tree placements. */
+    get: operations["tree"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/workspace": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Returns workspace bootstrap metadata. */
+    get: operations["workspace"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
 }
 export type webhooks = Record<string, never>;
 export interface components {
-    schemas: {
-        /** @description A source note that links to the selected note. */
-        BacklinkResponse: {
-            /** @description Source path. */
-            path: string;
-            /** @description Source title. */
-            title: string;
-        };
-        /** @description Context assembled for the Trilium-like note workspace. */
-        ContextResponse: {
-            /** @description Indexed backlinks. */
-            backlinks: components["schemas"]["BacklinkResponse"][];
-            /** @description Direct child placements. */
-            children: components["schemas"]["TreeNode"][];
-            /** @description Selected note. */
-            note: components["schemas"]["NoteResponse"];
-            /** @description Parent notes declared by the selected note. */
-            parents: components["schemas"]["NoteSummary"][];
-        };
-        /** @description Full note payload returned to the editor/context panel. */
-        NoteResponse: {
-            /** @description Markdown body without frontmatter delimiters. */
-            body: string;
-            /** @description Workspace and user frontmatter as written by the source file. */
-            frontmatter: unknown;
-            /** @description Whether migration has not yet written a stable ID. */
-            legacy: boolean;
-            /** @description Stable note identity. */
-            note_id: string;
-            /** @description Canonical Markdown source path. */
-            path: string;
-            /** @description Optimistic read revision. */
-            revision: components["schemas"]["RevisionResponse"];
-            /** @description Display title. */
-            title: string;
-        };
-        /** @description Compact note identity used in tree, parent, and child responses. */
-        NoteSummary: {
-            /** @description Whether this note still uses a path-derived legacy identity. */
-            legacy: boolean;
-            /** @description Stable note identity. */
-            note_id: string;
-            /**
-             * Format: int64
-             * @description Sibling ordering from frontmatter.
-             */
-            order?: number | null;
-            /** @description Canonical Markdown source path. */
-            path: string;
-            /** @description Display title. */
-            title: string;
-        };
-        /** @description File revision exposed to the frontend for later conflict-safe writes. */
-        RevisionResponse: {
-            /** @description SHA-256 digest of the complete source file. */
-            content_hash: string;
-            /**
-             * Format: int64
-             * @description Source modification time as Unix seconds.
-             */
-            mtime: number;
-        };
-        /** @description Search query accepted by the workspace frontend. */
-        SearchQuery: {
-            /** @description Maximum result count, capped by the server. */
-            limit?: number | null;
-            /** @description Full-text query. */
-            q: string;
-        };
-        /** @description Search response envelope. */
-        SearchResponse: {
-            /** @description Normalized query sent to the index. */
-            query: string;
-            /** @description Ranked results. */
-            results: components["schemas"]["SearchResult"][];
-        };
-        /** @description Search result returned by the read API. */
-        SearchResult: {
-            /** @description Canonical Markdown source path. */
-            path: string;
-            /** @description Backend-provided context excerpt. */
-            snippet: string;
-            /** @description Display title. */
-            title: string;
-        };
-        /** @description One visible placement in the tree. */
-        TreeNode: {
-            /** @description Note summary shown by the tree shell. */
-            note: components["schemas"]["NoteSummary"];
-            /** @description Stable note content identity. */
-            note_id: string;
-            /** @description Parent note identity, absent for a root placement. */
-            parent_id?: string | null;
-            /** @description Stable placement identity derived from note and parent identities. */
-            placement_id: string;
-        };
-        TreeQuery: {
-            /** @description Parent note identity; omitted means root placements. */
-            parent_id?: string | null;
-        };
-        /** @description Tree response filtered to one parent, or root placements when absent. */
-        TreeResponse: {
-            /** @description Ordered visible placements. */
-            nodes: components["schemas"]["TreeNode"][];
-            /** @description Requested parent filter. */
-            parent_id?: string | null;
-        };
-        /** @description Workspace bootstrap payload for the separate browser frontend. */
-        WorkspaceResponse: {
-            /** @description Number of path-addressed legacy notes awaiting migration. */
-            legacy_count: number;
-            /** @description Number of source notes discovered in the vault. */
-            note_count: number;
-            /** @description Number of derived tree placements. */
-            placement_count: number;
-            /** @description This release exposes no mutation routes in this API group. */
-            readonly: boolean;
-            /** @description Publicly displayed vault root label. */
-            root: string;
-        };
+  schemas: {
+    /** @description A source note that links to the selected note. */
+    BacklinkResponse: {
+      /** @description Source path. */
+      path: string;
+      /** @description Source title. */
+      title: string;
     };
-    responses: never;
-    parameters: never;
-    requestBodies: never;
-    headers: never;
-    pathItems: never;
+    /** @description Context assembled for the Trilium-like note workspace. */
+    ContextResponse: {
+      /** @description Indexed backlinks. */
+      backlinks: components["schemas"]["BacklinkResponse"][];
+      /** @description Direct child placements. */
+      children: components["schemas"]["TreeNode"][];
+      /** @description Selected note. */
+      note: components["schemas"]["NoteResponse"];
+      /** @description Parent notes declared by the selected note. */
+      parents: components["schemas"]["NoteSummary"][];
+    };
+    /** @description Full note payload returned to the editor/context panel. */
+    NoteResponse: {
+      /** @description Markdown body without frontmatter delimiters. */
+      body: string;
+      /** @description Workspace and user frontmatter as written by the source file. */
+      frontmatter: unknown;
+      /** @description Whether the source still lacks an explicit identity. */
+      identity_generated: boolean;
+      /** @description Stable note identity. */
+      note_id: string;
+      /** @description Canonical Markdown source path. */
+      path: string;
+      /** @description Optimistic read revision. */
+      revision: components["schemas"]["RevisionResponse"];
+      /** @description Display title. */
+      title: string;
+    };
+    /** @description Compact note identity used in tree, parent, and child responses. */
+    NoteSummary: {
+      /** @description Whether this note still uses a path-derived generated identity. */
+      identity_generated: boolean;
+      /** @description Stable note identity. */
+      note_id: string;
+      /**
+       * Format: int64
+       * @description Sibling ordering from frontmatter.
+       */
+      order?: number | null;
+      /** @description Canonical Markdown source path. */
+      path: string;
+      /** @description Display title. */
+      title: string;
+    };
+    /** @description File revision exposed to the frontend for later conflict-safe writes. */
+    RevisionResponse: {
+      /** @description SHA-256 digest of the complete source file. */
+      content_hash: string;
+      /**
+       * Format: int64
+       * @description Source modification time as Unix seconds.
+       */
+      mtime: number;
+    };
+    SaveNoteRequest: {
+      body: string;
+      expected_revision: components["schemas"]["RevisionResponse"];
+      title: string;
+    };
+    /** @description Search query accepted by the workspace frontend. */
+    SearchQuery: {
+      /** @description Maximum result count, capped by the server. */
+      limit?: number | null;
+      /** @description Full-text query. */
+      q: string;
+    };
+    /** @description Search response envelope. */
+    SearchResponse: {
+      /** @description Normalized query sent to the index. */
+      query: string;
+      /** @description Ranked results. */
+      results: components["schemas"]["SearchResult"][];
+    };
+    /** @description Search result returned by the read API. */
+    SearchResult: {
+      /** @description Canonical Markdown source path. */
+      path: string;
+      /** @description Backend-provided context excerpt. */
+      snippet: string;
+      /** @description Display title. */
+      title: string;
+    };
+    TagNoteResponse: {
+      /** Format: int64 */
+      mtime: number;
+      path: string;
+      title: string;
+    };
+    TagResponse: {
+      /** Format: int64 */
+      count: number;
+      tag: string;
+    };
+    /** @description One visible placement in the tree. */
+    TreeNode: {
+      /** @description Whether a folder contains another level of entries. */
+      has_children: boolean;
+      /** @description Whether this node is a filesystem folder or Markdown document. */
+      kind: string;
+      /** @description Note summary shown by the tree shell. */
+      note: components["schemas"]["NoteSummary"];
+      /** @description Stable note content identity. */
+      note_id: string;
+      /** @description Parent note identity, absent for a root placement. */
+      parent_id?: string | null;
+      /** @description Stable placement identity derived from note and parent identities. */
+      placement_id: string;
+    };
+    TreeQuery: {
+      /** @description Relative folder path; omitted means the vault root. */
+      folder?: string | null;
+      /** @description Deprecated note-parent filter retained for compatibility. */
+      parent_id?: string | null;
+    };
+    /** @description Tree response filtered to one parent, or root placements when absent. */
+    TreeResponse: {
+      /** @description Ordered visible placements. */
+      nodes: components["schemas"]["TreeNode"][];
+      /** @description Requested parent filter. */
+      parent_id?: string | null;
+    };
+    /** @description Workspace bootstrap payload for the separate browser frontend. */
+    WorkspaceResponse: {
+      /** @description Number of notes whose identity is currently derived from its path. */
+      generated_identity_count: number;
+      /** @description Number of source notes discovered in the vault. */
+      note_count: number;
+      /** @description Number of derived tree placements. */
+      placement_count: number;
+      /** @description This release exposes no mutation routes in this API group. */
+      readonly: boolean;
+      /** @description Publicly displayed vault root label. */
+      root: string;
+    };
+  };
+  responses: never;
+  parameters: never;
+  requestBodies: never;
+  headers: never;
+  pathItems: never;
 }
 export type $defs = Record<string, never>;
 export interface operations {
-    note: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["NoteResponse"];
-                };
-            };
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
+  note_children: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
     };
-    note_children: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
         };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["TreeResponse"];
-                };
-            };
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
+        content: {
+          "application/json": components["schemas"]["TreeResponse"];
         };
+      };
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
     };
-    note_context: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ContextResponse"];
-                };
-            };
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
+  };
+  note_context: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
     };
-    search: {
-        parameters: {
-            query: {
-                q: string;
-                limit?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
         };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SearchResponse"];
-                };
-            };
+        content: {
+          "application/json": components["schemas"]["ContextResponse"];
         };
+      };
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
     };
-    tree: {
-        parameters: {
-            query?: {
-                parent_id?: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["TreeResponse"];
-                };
-            };
-        };
+  };
+  note: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
     };
-    workspace: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
         };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["WorkspaceResponse"];
-                };
-            };
+        content: {
+          "application/json": components["schemas"]["NoteResponse"];
         };
+      };
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
     };
+  };
+  save_note: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["SaveNoteRequest"];
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["NoteResponse"];
+        };
+      };
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  search: {
+    parameters: {
+      query: {
+        q: string;
+        limit?: number;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SearchResponse"];
+        };
+      };
+    };
+  };
+  tags: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["TagResponse"][];
+        };
+      };
+    };
+  };
+  tag_notes: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        tag: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["TagNoteResponse"][];
+        };
+      };
+    };
+  };
+  tree: {
+    parameters: {
+      query?: {
+        parent_id?: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["TreeResponse"];
+        };
+      };
+    };
+  };
+  workspace: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["WorkspaceResponse"];
+        };
+      };
+    };
+  };
 }

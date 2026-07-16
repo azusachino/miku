@@ -6,7 +6,7 @@ import { App } from "./app";
 import "./styles.css";
 
 const queryClient = new QueryClient({
-  defaultOptions: { queries: { staleTime: 30_000, refetchOnWindowFocus: false } },
+  defaultOptions: { queries: { staleTime: 30_000, refetchOnWindowFocus: false } }
 });
 
 createRoot(document.getElementById("root")!).render(
@@ -16,5 +16,5 @@ createRoot(document.getElementById("root")!).render(
         <App />
       </BrowserRouter>
     </QueryClientProvider>
-  </StrictMode>,
+  </StrictMode>
 );

@@ -8,20 +8,15 @@ export type WorkspaceState = {
 };
 
 export type WorkspaceAction =
-  | { type: "open"; id: string }
-  | { type: "close"; id: string }
-  | { type: "toggle-split" }
-  | { type: "toggle-context" }
-  | { type: "toggle-hoist" }
-  | { type: "focus"; target: WorkspaceState["focus"] };
+  { type: "open"; id: string } | { type: "close"; id: string } | { type: "toggle-split" } | { type: "toggle-context" } | { type: "toggle-hoist" } | { type: "focus"; target: WorkspaceState["focus"] };
 
 export const initialWorkspaceState: WorkspaceState = {
-  tabs: ["welcome", "roadmap"],
-  activeId: "roadmap",
+  tabs: [],
+  activeId: "",
   split: false,
   contextOpen: true,
   hoisted: false,
-  focus: "note",
+  focus: "note"
 };
 
 export function workspaceReducer(state: WorkspaceState, action: WorkspaceAction): WorkspaceState {
@@ -31,11 +26,11 @@ export function workspaceReducer(state: WorkspaceState, action: WorkspaceAction)
         ...state,
         tabs: state.tabs.includes(action.id) ? state.tabs : [...state.tabs, action.id],
         activeId: action.id,
-        focus: "note",
+        focus: "note"
       };
     case "close": {
       const tabs = state.tabs.filter((tab) => tab !== action.id);
-      if (!tabs.length) return { ...state, tabs: ["welcome"], activeId: "welcome" };
+      if (!tabs.length) return { ...state, tabs: [], activeId: "" };
       return { ...state, tabs, activeId: state.activeId === action.id ? tabs.at(-1)! : state.activeId };
     }
     case "toggle-split":

@@ -1,8 +1,7 @@
 import type { components } from "./generated/api";
-import { fixtureApi, fixtureNotes, fixtureTree, type FixtureNote } from "./fixtures";
 
 type Schemas = components["schemas"];
-export type ApiSource = "connecting" | "live" | "fixtures";
+export type ApiSource = "connecting" | "live" | "offline";
 
 export type NoteModel = {
   id: string;
@@ -14,16 +13,23 @@ export type NoteModel = {
   body: string;
   backlinks: string[];
   tags: string[];
-  legacy: boolean;
+  identityGenerated: boolean;
   revision?: Schemas["RevisionResponse"];
 };
 
 export type TreeNodeModel = {
+  kind: "folder" | "markdown";
+  path: string;
+  hasChildren: boolean;
   placementId: string;
   noteId: string;
   parentId: string | null;
-  note: Pick<NoteModel, "id" | "path" | "title" | "legacy" | "parents"> & { order?: number | null };
+  note: Pick<NoteModel, "id" | "path" | "title" | "identityGenerated" | "parents"> & { order?: number | null };
 };
+
+type ApiTreeNode = Schemas["TreeNode"];
+
+type ApiTreeResponse = { parent_id: string | null; nodes: ApiTreeNode[] };
 
 export type WorkspaceModel = {
   noteCount: number;
@@ -40,9 +46,16 @@ export type ContextModel = {
 };
 
 export type SearchItem = { id: string; path: string; title: string; icon: string; snippet: string };
+export type TagModel = { tag: string; count: number };
+export type TagNoteModel = { path: string; title: string; mtime: number };
+export type SaveNoteInput = { body: string; title: string; expectedRevision: NonNullable<NoteModel["revision"]> };
 
 class ApiRequestError extends Error {
-  constructor(message: string, readonly network: boolean, readonly status?: number) {
+  constructor(
+    message: string,
+    readonly network: boolean,
+    readonly status?: number
+  ) {
     super(message);
   }
 }
@@ -58,114 +71,101 @@ async function request<T>(path: string): Promise<T> {
   }
 }
 
-function fixtureNote(note: FixtureNote): NoteModel {
-  return { ...note, legacy: false };
-}
-
 function normalizeNote(note: Schemas["NoteResponse"]): NoteModel {
-  const frontmatter = note.frontmatter && typeof note.frontmatter === "object" ? note.frontmatter as Record<string, unknown> : {};
+  const frontmatter = note.frontmatter && typeof note.frontmatter === "object" ? (note.frontmatter as Record<string, unknown>) : {};
   const tags = Array.isArray(frontmatter.tags) ? frontmatter.tags.filter((tag): tag is string => typeof tag === "string") : [];
   return {
-    id: note.note_id,
+    id: note.path,
     path: note.path,
     title: note.title,
-    icon: typeof frontmatter.icon === "string" ? frontmatter.icon : "•",
+    icon: typeof frontmatter.icon === "string" ? frontmatter.icon : "□",
     parents: Array.isArray(frontmatter.parents) ? frontmatter.parents.filter((parent): parent is string => typeof parent === "string") : [],
     updated: note.revision.mtime ? new Date(note.revision.mtime * 1000).toLocaleString() : "unknown",
     body: note.body,
     backlinks: [],
     tags,
-    legacy: note.legacy,
-    revision: note.revision,
+    identityGenerated: note.identity_generated,
+    revision: note.revision
   };
 }
 
-function normalizeTreeNode(node: Schemas["TreeNode"]): TreeNodeModel {
+function normalizeTreeNode(node: ApiTreeNode): TreeNodeModel {
   return {
+    kind: node.kind === "folder" ? "folder" : "markdown",
+    path: node.note.path,
+    hasChildren: node.has_children,
     placementId: node.placement_id,
     noteId: node.note_id,
     parentId: node.parent_id ?? null,
     note: {
-      id: node.note.note_id,
+      id: node.note.path,
       path: node.note.path,
       title: node.note.title,
-      legacy: node.note.legacy,
+      identityGenerated: node.note.identity_generated,
       parents: [],
-      order: node.note.order,
-    },
+      order: node.note.order
+    }
   };
-}
-
-function fallbackTree(): TreeNodeModel[] {
-  return fixtureTree.map((node) => {
-    const note = fixtureNotes.find((item) => item.id === node.noteId)!;
-    return {
-      placementId: node.placementId,
-      noteId: node.noteId,
-      parentId: node.parentId,
-      note: { id: note.id, path: note.path, title: note.title, legacy: false, parents: note.parents },
-    };
-  });
 }
 
 export function createWorkspaceClient(onSource: (source: ApiSource) => void) {
-  const withFallback = async <T,>(live: () => Promise<T>, fallback: () => Promise<T>): Promise<T> => {
+  const live = async <T>(requestLive: () => Promise<T>): Promise<T> => {
     try {
-      const result = await live();
+      const result = await requestLive();
       onSource("live");
       return result;
     } catch (error) {
-      if (!(error instanceof ApiRequestError) || !error.network) throw error;
-      onSource("fixtures");
-      return fallback();
+      if (error instanceof ApiRequestError && error.network) onSource("offline");
+      throw error;
     }
   };
 
-  const liveTree = async (): Promise<TreeNodeModel[]> => {
+  const liveTree = async (folder?: string): Promise<TreeNodeModel[]> => {
     // The tree endpoint is intentionally lazy. Fetching every descendant here
-    // would turn a large legacy vault into one request per note; the active
+    // would turn a large vault into one request per note; the active
     // note's children arrive through its context query and later expansion
     // work will request a specific parent.
-    const response = await request<Schemas["TreeResponse"]>("/api/v1/tree");
+    const query = folder ? `?folder=${encodeURIComponent(folder)}` : "";
+    const response = await request<ApiTreeResponse>(`/api/v1/tree${query}`);
     return response.nodes.map(normalizeTreeNode);
   };
 
   return {
-    workspace: () => withFallback(
-      async () => {
+    workspace: () =>
+      live(async () => {
         const response = await request<Schemas["WorkspaceResponse"]>("/api/v1/workspace");
-        return { noteCount: response.note_count, placementCount: response.placement_count, legacyCount: response.legacy_count, readonly: response.readonly };
-      },
-      async () => { const response = await fixtureApi.workspace(); return { ...response, legacyCount: 0 }; },
-    ),
-    tree: () => withFallback(liveTree, async () => fallbackTree()),
-    note: (id: string) => withFallback(
-      async () => normalizeNote(await request<Schemas["NoteResponse"]>(`/api/v1/notes/${encodeURIComponent(id)}`)),
-      async () => fixtureNote(await fixtureApi.note(id)),
-    ),
-    context: (id: string) => withFallback(
-      async () => {
-        const response = await request<Schemas["ContextResponse"]>(`/api/v1/notes/${encodeURIComponent(id)}/context`);
+        return { noteCount: response.note_count, placementCount: response.placement_count, generatedIdentityCount: response.generated_identity_count, readonly: response.readonly };
+      }),
+    tree: (folder?: string) => live(() => liveTree(folder)),
+    note: (id: string) => live(() => request<Schemas["NoteResponse"]>(`/api/v1/notes/${encodeURIComponent(id)}`).then(normalizeNote)),
+    saveNote: async (id: string, input: SaveNoteInput): Promise<NoteModel> => {
+      const response = await fetch(`/api/v1/notes/${encodeURIComponent(id)}`, {
+        method: "PUT",
+        headers: { Accept: "application/json", "Content-Type": "application/json" },
+        body: JSON.stringify({ body: input.body, title: input.title, expected_revision: input.expectedRevision })
+      });
+      if (!response.ok) throw new ApiRequestError(`${response.status} ${response.statusText}`, false, response.status);
+      onSource("live");
+      return normalizeNote((await response.json()) as Schemas["NoteResponse"]);
+    },
+    context: (id: string) =>
+      live(async () => {
+        const response = await request<Schemas["ContextResponse"]>(`/api/v1/note-context/${encodeURIComponent(id)}`);
         return {
           note: normalizeNote(response.note),
-          parents: response.parents.map((parent) => ({ id: parent.note_id, path: parent.path, title: parent.title, legacy: parent.legacy, parents: [], order: parent.order })),
-          children: response.children.map(normalizeTreeNode),
-          backlinks: response.backlinks.map((backlink) => backlink.path),
+          parents: response.parents.map((parent) => ({ id: parent.path, path: parent.path, title: parent.title, identityGenerated: parent.identity_generated, parents: [], order: parent.order })),
+          children: response.children.map((node) => normalizeTreeNode(node as ApiTreeNode)),
+          backlinks: response.backlinks.map((backlink) => backlink.path)
         } satisfies ContextModel;
-      },
-      async () => {
-        const note = fixtureNote(await fixtureApi.note(id));
-        return { note, parents: [], children: fallbackTree().filter((child) => child.parentId === id), backlinks: note.backlinks };
-      },
-    ),
-    search: (query: string): Promise<SearchItem[]> => withFallback(
-      async () => {
+      }),
+    search: (query: string): Promise<SearchItem[]> =>
+      live(async () => {
         const params = new URLSearchParams({ q: query, limit: "20" });
         const response = await request<Schemas["SearchResponse"]>(`/api/v1/search?${params}`);
-        return response.results.map((result) => ({ ...result, id: result.path, icon: "•" }));
-      },
-      async () => (await fixtureApi.search(query)).map((note) => ({ id: note.id, path: note.path, title: note.title, icon: note.icon, snippet: note.body })),
-    ),
+        return response.results.map((result) => ({ ...result, id: result.path, icon: "□" }));
+      }),
+    tags: (): Promise<TagModel[]> => live(() => request<Schemas["TagResponse"][]>("/api/v1/tags")),
+    tagNotes: (tag: string): Promise<TagNoteModel[]> => live(() => request<Schemas["TagNoteResponse"][]>(`/api/v1/tags/${encodeURIComponent(tag)}/notes`))
   };
 }
 

@@ -16,9 +16,12 @@ use crate::workspace_api;
         workspace_api::workspace,
         workspace_api::tree,
         workspace_api::note,
+        workspace_api::save_note,
         workspace_api::note_context,
         workspace_api::note_children,
-        workspace_api::search
+        workspace_api::search,
+        workspace_api::tags,
+        workspace_api::tag_notes
     ),
     components(schemas(
         workspace_api::WorkspaceResponse,
@@ -27,11 +30,14 @@ use crate::workspace_api;
         workspace_api::TreeResponse,
         workspace_api::NoteResponse,
         workspace_api::RevisionResponse,
+        workspace_api::SaveNoteRequest,
         workspace_api::ContextResponse,
         workspace_api::BacklinkResponse,
         workspace_api::SearchQuery,
         workspace_api::SearchResult,
         workspace_api::SearchResponse,
+        workspace_api::TagResponse,
+        workspace_api::TagNoteResponse,
         workspace_api::TreeQuery
     ))
 )]
@@ -57,7 +63,7 @@ mod tests {
         let paths = &document.paths.paths;
         assert!(paths.contains_key("/api/v1/workspace"));
         assert!(paths.contains_key("/api/v1/tree"));
-        assert!(paths.contains_key("/api/v1/notes/{id}/context"));
+        assert!(paths.contains_key("/api/v1/note-context/{id}"));
         assert!(paths.contains_key("/api/v1/search"));
         assert!(paths.values().all(|path| path.post.is_none()));
     }

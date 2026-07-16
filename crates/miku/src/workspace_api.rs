@@ -4,10 +4,13 @@ use axum::{
     extract::{Path, Query, State},
     Json,
 };
-use miku_domain::{Backlink, SearchRequest, SearchScope};
+use miku_app::{
+    ApplicationError, FileNode, FileNodeKind, FileTreeRequest, NotePath, NoteRef, RelativePath,
+    SaveNoteCommand,
+};
+use miku_domain::{workspace::NoteId, Backlink, SearchRequest, SearchScope};
 use miku_vault::VaultDocument;
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
 use utoipa::ToSchema;
 
 use crate::{AppError, AppState};
@@ -23,8 +26,8 @@ pub struct WorkspaceResponse {
     pub note_count: usize,
     /// Number of derived tree placements.
     pub placement_count: usize,
-    /// Number of path-addressed legacy notes awaiting migration.
-    pub legacy_count: usize,
+    /// Number of notes whose identity is currently derived from its path.
+    pub generated_identity_count: usize,
 }
 
 /// Compact note identity used in tree, parent, and child responses.
@@ -38,13 +41,15 @@ pub struct NoteSummary {
     pub title: String,
     /// Sibling ordering from frontmatter.
     pub order: Option<i64>,
-    /// Whether this note still uses a path-derived legacy identity.
-    pub legacy: bool,
+    /// Whether this note still uses a path-derived generated identity.
+    pub identity_generated: bool,
 }
 
 /// One visible placement in the tree.
 #[derive(Debug, Clone, Serialize, ToSchema)]
 pub struct TreeNode {
+    /// Whether this node is a filesystem folder or Markdown document.
+    pub kind: String,
     /// Stable placement identity derived from note and parent identities.
     pub placement_id: String,
     /// Stable note content identity.
@@ -53,6 +58,8 @@ pub struct TreeNode {
     pub parent_id: Option<String>,
     /// Note summary shown by the tree shell.
     pub note: NoteSummary,
+    /// Whether a folder contains another level of entries.
+    pub has_children: bool,
 }
 
 /// Tree response filtered to one parent, or root placements when absent.
@@ -79,12 +86,12 @@ pub struct NoteResponse {
     pub frontmatter: serde_json::Value,
     /// Optimistic read revision.
     pub revision: RevisionResponse,
-    /// Whether migration has not yet written a stable ID.
-    pub legacy: bool,
+    /// Whether the source still lacks an explicit identity.
+    pub identity_generated: bool,
 }
 
 /// File revision exposed to the frontend for later conflict-safe writes.
-#[derive(Debug, Serialize, ToSchema)]
+#[derive(Debug, Deserialize, Serialize, ToSchema)]
 pub struct RevisionResponse {
     /// SHA-256 digest of the complete source file.
     pub content_hash: String,
@@ -143,17 +150,40 @@ pub struct SearchResponse {
     pub results: Vec<SearchResult>,
 }
 
+#[derive(Debug, Serialize, ToSchema)]
+pub struct TagResponse {
+    pub tag: String,
+    pub count: i64,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct TagNoteResponse {
+    pub path: String,
+    pub title: String,
+    pub mtime: i64,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct SaveNoteRequest {
+    pub body: String,
+    pub title: String,
+    pub expected_revision: RevisionResponse,
+}
+
 /// Returns workspace bootstrap metadata.
 #[utoipa::path(get, path = "/api/v1/workspace", responses((status = 200, body = WorkspaceResponse)))]
 pub async fn workspace(State(state): State<AppState>) -> Result<Json<WorkspaceResponse>, AppError> {
-    let documents = scan(&state)?;
-    let placement_count = documents.iter().map(placement_count).sum();
+    let info = state
+        .application
+        .vault_info()
+        .await
+        .map_err(application_error)?;
     Ok(Json(WorkspaceResponse {
-        root: state.vault.root().display().to_string(),
-        readonly: true,
-        note_count: documents.len(),
-        placement_count,
-        legacy_count: documents.iter().filter(|document| document.legacy).count(),
+        root: info.root,
+        readonly: info.readonly,
+        note_count: info.note_count,
+        placement_count: info.note_count,
+        generated_identity_count: info.generated_identity_count,
     }))
 }
 
@@ -163,10 +193,21 @@ pub async fn tree(
     Query(query): Query<TreeQuery>,
     State(state): State<AppState>,
 ) -> Result<Json<TreeResponse>, AppError> {
-    let documents = scan(&state)?;
+    let folder = query
+        .folder
+        .as_deref()
+        .map(RelativePath::new)
+        .transpose()
+        .map_err(application_error)?
+        .unwrap_or_else(RelativePath::root);
+    let tree = state
+        .application
+        .file_tree(FileTreeRequest { folder })
+        .await
+        .map_err(application_error)?;
     Ok(Json(TreeResponse {
         parent_id: query.parent_id.clone(),
-        nodes: tree_nodes(&documents, query.parent_id.as_deref()),
+        nodes: tree.nodes.into_iter().map(tree_node).collect(),
     }))
 }
 
@@ -176,67 +217,74 @@ pub async fn note(
     Path(id): Path<String>,
     State(state): State<AppState>,
 ) -> Result<Json<NoteResponse>, AppError> {
-    let document = scan(&state)?
-        .into_iter()
-        .find(|document| document.note.id.as_str() == id)
-        .ok_or_else(|| AppError::not_found(anyhow::anyhow!("note not found: {id}")))?;
+    let document = state
+        .application
+        .read_note(note_ref(&id).map_err(application_error)?)
+        .await
+        .map_err(application_error)?;
+    Ok(Json(note_response(&document)))
+}
+
+#[utoipa::path(put, path = "/api/v1/notes/{id}", params(("id" = String, Path)), request_body = SaveNoteRequest, responses((status = 200, body = NoteResponse), (status = 403), (status = 404), (status = 409)))]
+pub async fn save_note(
+    Path(id): Path<String>,
+    State(state): State<AppState>,
+    Json(request): Json<SaveNoteRequest>,
+) -> Result<Json<NoteResponse>, AppError> {
+    let expected_revision = miku_domain::workspace::RevisionToken::new(
+        request.expected_revision.content_hash,
+        request.expected_revision.mtime,
+    )?;
+    let document = state
+        .application
+        .save_note(SaveNoteCommand {
+            note: note_ref(&id).map_err(application_error)?,
+            title: request.title,
+            body: request.body,
+            expected_revision,
+        })
+        .await
+        .map_err(application_error)?;
     Ok(Json(note_response(&document)))
 }
 
 /// Returns note, parents, children, and indexed backlinks.
-#[utoipa::path(get, path = "/api/v1/notes/{id}/context", params(("id" = String, Path)), responses((status = 200, body = ContextResponse), (status = 404)))]
+#[utoipa::path(get, path = "/api/v1/note-context/{id}", params(("id" = String, Path)), responses((status = 200, body = ContextResponse), (status = 404)))]
 pub async fn note_context(
     Path(id): Path<String>,
     State(state): State<AppState>,
 ) -> Result<Json<ContextResponse>, AppError> {
-    let documents = scan(&state)?;
-    let document = documents
-        .iter()
-        .find(|document| document.note.id.as_str() == id)
-        .ok_or_else(|| AppError::not_found(anyhow::anyhow!("note not found: {id}")))?;
-    let parents = document
-        .note
-        .parents
-        .iter()
-        .filter_map(|parent_id| {
-            documents
-                .iter()
-                .find(|candidate| candidate.note.id == *parent_id)
-        })
-        .map(note_summary)
-        .collect();
-    let backlinks = state
-        .index
-        .backlinks(&document.note.source_path)
+    let context = state
+        .application
+        .note_context(note_ref(&id).map_err(application_error)?)
         .await
-        .map_err(|error| anyhow::anyhow!(error))?
-        .into_iter()
-        .map(backlink_response)
-        .collect();
+        .map_err(application_error)?;
     Ok(Json(ContextResponse {
-        note: note_response(document),
-        parents,
-        children: tree_nodes(&documents, Some(document.note.id.as_str())),
-        backlinks,
+        note: note_response(&context.note),
+        parents: context.parents.into_iter().map(note_summary_node).collect(),
+        children: context.children.into_iter().map(tree_node).collect(),
+        backlinks: context
+            .backlinks
+            .into_iter()
+            .map(backlink_response)
+            .collect(),
     }))
 }
 
 /// Returns direct children for one note.
-#[utoipa::path(get, path = "/api/v1/notes/{id}/children", params(("id" = String, Path)), responses((status = 200, body = TreeResponse), (status = 404)))]
+#[utoipa::path(get, path = "/api/v1/note-children/{id}", params(("id" = String, Path)), responses((status = 200, body = TreeResponse), (status = 404)))]
 pub async fn note_children(
     Path(id): Path<String>,
     State(state): State<AppState>,
 ) -> Result<Json<TreeResponse>, AppError> {
-    let documents = scan(&state)?;
-    if !documents
-        .iter()
-        .any(|document| document.note.id.as_str() == id)
-    {
-        return Err(AppError::not_found(anyhow::anyhow!("note not found: {id}")));
-    }
+    let context = state
+        .application
+        .note_context(note_ref(&id).map_err(application_error)?)
+        .await
+        .map_err(application_error)?;
     Ok(Json(TreeResponse {
         parent_id: Some(id.clone()),
-        nodes: tree_nodes(&documents, Some(&id)),
+        nodes: context.children.into_iter().map(tree_node).collect(),
     }))
 }
 
@@ -249,14 +297,14 @@ pub async fn search(
     let query_text = query.q.trim().to_string();
     let limit = query.limit.unwrap_or(50).clamp(1, 100);
     let hits = state
-        .index
+        .application
         .search(SearchRequest {
             query: query_text.clone(),
             scope: SearchScope::All,
             limit,
         })
         .await
-        .map_err(|error| anyhow::anyhow!(error))?;
+        .map_err(application_error)?;
     Ok(Json(SearchResponse {
         query: query_text,
         results: hits
@@ -270,68 +318,112 @@ pub async fn search(
     }))
 }
 
+#[utoipa::path(get, path = "/api/v1/tags", responses((status = 200, body = [TagResponse])))]
+pub async fn tags(State(state): State<AppState>) -> Result<Json<Vec<TagResponse>>, AppError> {
+    let tags = state.application.tags().await.map_err(application_error)?;
+    Ok(Json(
+        tags.into_iter()
+            .map(|tag| TagResponse {
+                tag: tag.tag,
+                count: tag.count,
+            })
+            .collect(),
+    ))
+}
+
+#[utoipa::path(get, path = "/api/v1/tags/{tag}/notes", params(("tag" = String, Path)), responses((status = 200, body = [TagNoteResponse])))]
+pub async fn tag_notes(
+    Path(tag): Path<String>,
+    State(state): State<AppState>,
+) -> Result<Json<Vec<TagNoteResponse>>, AppError> {
+    let tag = tag.trim_start_matches('#').to_string();
+    let notes = state
+        .application
+        .notes_with_tag(tag)
+        .await
+        .map_err(application_error)?;
+    Ok(Json(
+        notes
+            .into_iter()
+            .map(|note| TagNoteResponse {
+                path: note.path,
+                title: note.title,
+                mtime: note.mtime,
+            })
+            .collect(),
+    ))
+}
+
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct TreeQuery {
-    /// Parent note identity; omitted means root placements.
+    /// Relative folder path; omitted means the vault root.
+    pub folder: Option<String>,
+    /// Deprecated note-parent filter retained for compatibility.
     pub parent_id: Option<String>,
 }
 
-fn scan(state: &AppState) -> Result<Vec<VaultDocument>, AppError> {
-    state
-        .vault
-        .scan()
-        .map_err(|error| anyhow::anyhow!(error))
-        .map_err(AppError::from)
+fn application_error(error: ApplicationError) -> AppError {
+    match error {
+        ApplicationError::Readonly => AppError::forbidden(anyhow::anyhow!(error)),
+        ApplicationError::Conflict => AppError::conflict(anyhow::anyhow!(error)),
+        ApplicationError::NotFound(_) | ApplicationError::InvalidPath(_) => {
+            AppError::not_found(anyhow::anyhow!(error))
+        }
+        error => AppError::from(anyhow::anyhow!(error)),
+    }
 }
 
-fn placement_count(document: &VaultDocument) -> usize {
-    document.note.parents.len().max(1)
+fn tree_node(node: FileNode) -> TreeNode {
+    let note_id = node
+        .note_id
+        .as_ref()
+        .map(|id| id.as_str().to_string())
+        .unwrap_or_else(|| node.path.as_str().to_string());
+    let title = node.title.clone().unwrap_or_else(|| node.name.clone());
+    TreeNode {
+        kind: match node.kind {
+            FileNodeKind::Folder => "folder".to_string(),
+            FileNodeKind::Markdown => "markdown".to_string(),
+            _ => "unknown".to_string(),
+        },
+        placement_id: format!("path:{}", node.path),
+        note_id,
+        parent_id: None,
+        note: NoteSummary {
+            note_id: node_id(&node),
+            path: node.path.as_str().to_string(),
+            title,
+            order: None,
+            identity_generated: node.identity_generated,
+        },
+        has_children: node.has_children,
+    }
 }
 
-fn tree_nodes(documents: &[VaultDocument], parent_id: Option<&str>) -> Vec<TreeNode> {
-    let mut nodes = documents
-        .iter()
-        .flat_map(|document| {
-            let parents = if document.note.parents.is_empty() {
-                vec![None]
-            } else {
-                document
-                    .note
-                    .parents
-                    .iter()
-                    .map(|parent| Some(parent.as_str()))
-                    .collect()
-            };
-            parents.into_iter().filter_map(move |candidate_parent| {
-                if candidate_parent != parent_id {
-                    return None;
-                }
-                Some(TreeNode {
-                    placement_id: placement_identity(document.note.id.as_str(), candidate_parent),
-                    note_id: document.note.id.as_str().to_string(),
-                    parent_id: candidate_parent.map(ToOwned::to_owned),
-                    note: note_summary(document),
-                })
-            })
-        })
-        .collect::<Vec<_>>();
-    nodes.sort_by(|left, right| {
-        left.note
-            .order
-            .unwrap_or(i64::MAX)
-            .cmp(&right.note.order.unwrap_or(i64::MAX))
-            .then_with(|| left.note.path.cmp(&right.note.path))
-    });
-    nodes
+fn node_id(node: &FileNode) -> String {
+    node.note_id
+        .as_ref()
+        .map(|id| id.as_str().to_string())
+        .unwrap_or_else(|| node.path.as_str().to_string())
 }
 
-fn note_summary(document: &VaultDocument) -> NoteSummary {
+fn note_summary_node(node: FileNode) -> NoteSummary {
     NoteSummary {
-        note_id: document.note.id.as_str().to_string(),
-        path: document.note.source_path.clone(),
-        title: document.note.title.clone(),
-        order: document.note.order,
-        legacy: document.legacy,
+        note_id: node_id(&node),
+        path: node.path.as_str().to_string(),
+        title: node.title.unwrap_or(node.name),
+        order: None,
+        identity_generated: node.identity_generated,
+    }
+}
+
+fn note_ref(id: &str) -> Result<NoteRef, ApplicationError> {
+    if id.ends_with(".md") {
+        Ok(NoteRef::Path(NotePath::new(id.to_string())?))
+    } else {
+        Ok(NoteRef::Id(
+            NoteId::new(id.to_string()).map_err(ApplicationError::Workspace)?,
+        ))
     }
 }
 
@@ -368,7 +460,7 @@ fn note_response(document: &VaultDocument) -> NoteResponse {
             content_hash: document.revision.content_hash.clone(),
             mtime: document.revision.mtime,
         },
-        legacy: document.legacy,
+        identity_generated: document.identity_generated,
     }
 }
 
@@ -377,14 +469,6 @@ fn backlink_response(backlink: Backlink) -> BacklinkResponse {
         path: backlink.path,
         title: backlink.title,
     }
-}
-
-fn placement_identity(note_id: &str, parent_id: Option<&str>) -> String {
-    let mut hasher = Sha256::new();
-    hasher.update(parent_id.unwrap_or("root").as_bytes());
-    hasher.update([0]);
-    hasher.update(note_id.as_bytes());
-    format!("placement-{:x}", hasher.finalize())
 }
 
 #[cfg(test)]
@@ -406,26 +490,8 @@ mod tests {
             .unwrap(),
             body: String::new(),
             revision: RevisionToken::new("hash", 1).unwrap(),
-            legacy: false,
+            identity_generated: false,
         }
-    }
-
-    #[test]
-    fn tree_exposes_root_and_cloned_parent_placements() {
-        let root = document("root", "Root.md", Vec::new(), Some(0));
-        let child = document(
-            "child",
-            "Child.md",
-            vec![root.note.id.clone(), NoteId::new("other").unwrap()],
-            Some(1),
-        );
-
-        assert_eq!(tree_nodes(&[root.clone(), child.clone()], None).len(), 1);
-        assert_eq!(tree_nodes(&[root, child], Some("root")).len(), 1);
-        assert_ne!(
-            placement_identity("child", Some("root")),
-            placement_identity("child", Some("other"))
-        );
     }
 
     #[test]
