@@ -33,6 +33,7 @@ tags, mentions, and search. #docs #feature
 - [[setup]] — local development, backends, and verification commands.
 - [[runtime-workflow]] — how filesystem changes become reader state.
 - [[product]] — product direction and UX constraints.
+- [[topcoat-investigation]] — evidence and parity gate for a possible Topcoat web-layer refactor.
 - [[adr/README]] — verified ADR index; individual records live below `adr/`.
 - [[api]] — current JSON and browser route contract.
 
