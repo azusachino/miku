@@ -116,38 +116,81 @@ impl FileMikuApplication {
     }
 
     async fn resolve_document(&self, note: NoteRef) -> Result<VaultDocument, ApplicationError> {
-        match note {
-            NoteRef::Path(path) => {
-                if self.index_ready.load(Ordering::Acquire)
-                    && self.index.page(path.as_str()).await?.is_none()
-                {
-                    return Err(ApplicationError::NotFound(path.as_str().to_string()));
-                }
-                self.read_document_path(path.as_str()).await
+        let requested_str = match &note {
+            NoteRef::Path(path) => path.as_str().to_string(),
+            NoteRef::Id(id) => id.as_str().to_string(),
+        };
+
+        let direct_path = if requested_str.ends_with(".md") {
+            requested_str.clone()
+        } else {
+            format!("{requested_str}.md")
+        };
+
+        if let Ok(doc) = self.read_document_path(&direct_path).await {
+            return Ok(doc);
+        }
+        if let Ok(doc) = self.read_document_path(&requested_str).await {
+            return Ok(doc);
+        }
+
+        let target_slug = requested_str
+            .split('/')
+            .last()
+            .unwrap_or(&requested_str)
+            .trim_end_matches(".md");
+
+        let pages = self.index.list_pages().await?;
+        if let Some(matched_path) = self.resolve_slug_path(target_slug, &pages) {
+            if let Ok(doc) = self.read_document_path(&matched_path).await {
+                return Ok(doc);
             }
-            NoteRef::Id(id) => {
-                let path_with_ext = format!("{}.md", id.as_str());
-                if self.index_ready.load(Ordering::Acquire)
-                    && self.index.page(&path_with_ext).await?.is_some()
-                {
-                    return self.read_document_path(&path_with_ext).await;
-                }
-                let pages = self.index.list_pages().await?;
-                let path = pages
-                    .into_iter()
-                    .find(|page| {
-                        page.path == id.as_str()
-                            || page.path == path_with_ext
-                            || page
-                                .frontmatter
-                                .get("id")
-                                .and_then(serde_json::Value::as_str)
-                                == Some(id.as_str())
-                    })
-                    .map(|page| page.path)
-                    .ok_or_else(|| ApplicationError::NotFound(id.as_str().to_string()))?;
-                self.read_document_path(&path).await
-            }
+        }
+
+        let target_lower = target_slug.to_lowercase();
+        let matched_page = pages.into_iter().find(|page| {
+            page.path == requested_str
+                || page.path == direct_path
+                || page.path.split('/').last().unwrap_or(&page.path).trim_end_matches(".md").to_lowercase() == target_lower
+                || page
+                    .frontmatter
+                    .get("id")
+                    .and_then(serde_json::Value::as_str)
+                    == Some(requested_str.as_str())
+        });
+
+        if let Some(page) = matched_page {
+            return self.read_document_path(&page.path).await;
+        }
+
+        Err(ApplicationError::NotFound(requested_str))
+    }
+
+    fn resolve_slug_path(&self, target_slug: &str, pages: &[PageSummary]) -> Option<String> {
+        let target_lower = target_slug.to_lowercase();
+        let matches: Vec<_> = pages
+            .iter()
+            .filter(|page| {
+                let slug = page
+                    .path
+                    .split('/')
+                    .last()
+                    .unwrap_or(&page.path)
+                    .trim_end_matches(".md")
+                    .to_lowercase();
+                slug == target_lower
+            })
+            .collect();
+
+        if matches.len() == 1 {
+            Some(matches[0].path.clone())
+        } else if !matches.is_empty() {
+            // Sort by path depth/length as fallback
+            let mut sorted = matches;
+            sorted.sort_by(|a, b| a.path.len().cmp(&b.path.len()).then_with(|| a.path.cmp(&b.path)));
+            Some(sorted[0].path.clone())
+        } else {
+            None
         }
     }
 
