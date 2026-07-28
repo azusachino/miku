@@ -390,6 +390,11 @@ fn application_error(error: ApplicationError) -> AppError {
         ApplicationError::NotFound(_) | ApplicationError::InvalidPath(_) => {
             AppError::not_found(anyhow::anyhow!(error))
         }
+        ApplicationError::Vault(miku_vault::VaultError::Io(err))
+            if err.kind() == std::io::ErrorKind::NotFound =>
+        {
+            AppError::not_found(anyhow::anyhow!(err))
+        }
         error => AppError::from(anyhow::anyhow!(error)),
     }
 }

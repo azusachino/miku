@@ -162,13 +162,24 @@ pub enum ApplicationError {
     #[error("index operation failed: {0}")]
     Index(#[from] StoreError),
     #[error("vault operation failed: {0}")]
-    Vault(#[from] VaultError),
+    Vault(VaultError),
     #[error("note not found: {0}")]
     NotFound(String),
     #[error("workspace is readonly")]
     Readonly,
     #[error("note changed on disk")]
     Conflict,
+}
+
+impl From<VaultError> for ApplicationError {
+    fn from(error: VaultError) -> Self {
+        match error {
+            VaultError::Io(err) if err.kind() == std::io::ErrorKind::NotFound => {
+                ApplicationError::NotFound(err.to_string())
+            }
+            other => ApplicationError::Vault(other),
+        }
+    }
 }
 
 #[async_trait]
