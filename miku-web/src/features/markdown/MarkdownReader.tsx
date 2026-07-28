@@ -63,7 +63,7 @@ export function resolveAssetSrc(src: string, currentPath: string): string {
 export type NoteCandidate = { id?: string; path: string; title?: string };
 export type TargetResolver = (target: string) => string | null;
 
-export function createTargetResolver(notes: NoteCandidate[]): TargetResolver {
+export function createTargetResolver(notes: NoteCandidate[], currentPath?: string): TargetResolver {
   const pathMap = new Map<string, string>();
   const slugMap = new Map<string, string[]>();
 
@@ -89,9 +89,17 @@ export function createTargetResolver(notes: NoteCandidate[]): TargetResolver {
       return pathMap.get(lower)!;
     }
 
-    // 2. Exact slug match (prefer top-level / shortest path if ambiguous)
+    // 2. Exact slug match
     const matches = slugMap.get(lower);
     if (matches && matches.length > 0) {
+      if (matches.length === 1) return matches[0];
+      // Same-directory locality priority if ambiguous
+      if (currentPath) {
+        const folderDir = currentPath.split("/").slice(0, -1).join("/").toLowerCase();
+        const localMatch = matches.find((m) => m.toLowerCase().startsWith(folderDir + "/"));
+        if (localMatch) return localMatch;
+      }
+      // Top-level / Shortest path fallback
       const sorted = [...matches].sort((a, b) => a.length - b.length || a.localeCompare(b));
       return sorted[0];
     }
@@ -100,6 +108,12 @@ export function createTargetResolver(notes: NoteCandidate[]): TargetResolver {
     const altSlug = lower.endsWith("s") ? lower.slice(0, -1) : `${lower}s`;
     const altMatches = slugMap.get(altSlug);
     if (altMatches && altMatches.length > 0) {
+      if (altMatches.length === 1) return altMatches[0];
+      if (currentPath) {
+        const folderDir = currentPath.split("/").slice(0, -1).join("/").toLowerCase();
+        const localMatch = altMatches.find((m) => m.toLowerCase().startsWith(folderDir + "/"));
+        if (localMatch) return localMatch;
+      }
       const sorted = [...altMatches].sort((a, b) => a.length - b.length || a.localeCompare(b));
       return sorted[0];
     }
@@ -290,7 +304,7 @@ export function MarkdownReader({
   resolveLink?: TargetResolver;
 }) {
   const navigate = useNavigate();
-  const resolver = useMemo(() => resolveLink ?? (notes ? createTargetResolver(notes) : undefined), [resolveLink, notes]);
+  const resolver = useMemo(() => resolveLink ?? (notes ? createTargetResolver(notes, path) : undefined), [resolveLink, notes, path]);
 
   return (
     <article className={`markdown-reader prose prose-stone max-w-none ${theme === "dark" ? "prose-invert" : ""}`}>
