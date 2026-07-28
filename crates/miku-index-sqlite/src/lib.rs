@@ -467,18 +467,25 @@ async fn replace_page_conn(
 
 async fn resolve_links_conn(conn: &mut sqlx::SqliteConnection) -> StoreResult<()> {
     sqlx::query(
-        "UPDATE tb_links
-         SET target_id = (
-           SELECT target.id FROM tb_pages target
-           WHERE (
-             (instr(tb_links.target_norm, '/') > 0
-               AND lower(replace(target.path, '.md', '')) = tb_links.target_norm)
-             OR
-             (instr(tb_links.target_norm, '/') = 0
-               AND target.slug = tb_links.target_norm
-               AND (SELECT COUNT(*) FROM tb_pages candidate WHERE candidate.slug = target.slug) = 1)
-           )
+        "WITH unique_slugs AS (
+           SELECT slug, MIN(id) AS id
+           FROM tb_pages
+           GROUP BY slug
+           HAVING COUNT(*) = 1
+         ),
+         path_pages AS (
+           SELECT lower(replace(path, '.md', '')) AS norm_path, id
+           FROM tb_pages
          )
+         UPDATE tb_links
+         SET target_id = CASE
+           WHEN instr(target_norm, '/') > 0 THEN (
+             SELECT id FROM path_pages WHERE norm_path = tb_links.target_norm
+           )
+           ELSE (
+             SELECT id FROM unique_slugs WHERE slug = tb_links.target_norm
+           )
+         END
          WHERE tb_links.kind = 'page'",
     )
     .execute(&mut *conn)
