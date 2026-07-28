@@ -45,7 +45,14 @@ export function WorkspaceScreen() {
   const workspace = useQuery({ queryKey: ["workspace"], queryFn: client.workspace });
   const tree = useQuery({ queryKey: ["tree"], queryFn: () => client.tree() });
   const folder = useQuery({ queryKey: ["folder", folderPath], queryFn: () => client.tree(folderPath), enabled: Boolean(folderPath) });
-  const context = useQuery({ queryKey: ["context", activeId], queryFn: () => client.context(activeId), enabled: Boolean(activeId) });
+  const context = useQuery({
+    queryKey: ["context", activeId],
+    queryFn: () => client.context(activeId),
+    enabled: Boolean(activeId),
+    placeholderData: (previousData) => {
+      return queryClient.getQueryData(["context", activeId]) ?? previousData;
+    }
+  });
   const results = useQuery({ queryKey: ["search", query, searchScope], queryFn: () => client.search(query, searchScope), enabled: searchOpen });
   const isWorkspaceRoot = location.pathname === "/";
   const visibleTree = useMemo(() => [...(tree.data ?? []), ...(context.data?.children ?? [])], [context.data?.children, tree.data]);
@@ -170,6 +177,7 @@ export function WorkspaceScreen() {
 
   const select = (id: string) => {
     const targetId = normalizeNotePath(id);
+    void queryClient.prefetchQuery({ queryKey: ["context", targetId], queryFn: () => client.context(targetId) });
     dispatch({ type: "open", id: targetId });
     navigate(`/p/${targetId}`);
     setSearchOpen(false);
