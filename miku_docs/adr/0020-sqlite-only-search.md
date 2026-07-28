@@ -145,6 +145,6 @@ Local-file-first (`miku_docs/**/*.md` stays the only source of truth); backlinks
 Implemented and verified (`miku:sqlite-plain-search` epic, tasks 1–8). `crates/miku-index-sqlite` stores raw page bodies in `tb_pages.body` and searches via `rayon` parallel scanning with zero-allocation ASCII case-insensitive window matching. `crates/miku-index-memory` no longer depends on `tantivy` or holds page bodies in memory (`body.clear()` and `shrink_to_fit()` on store).
 
 Re-measured against the live 15,911-file `miku_docs` corpus via `make benchmark-real-vault`:
-- Reconcile time: **3.05s** (15,911 files, 280MB raw text)
-- Peak RSS delta: **495MB** (509MB total RSS, down from ~2.27GB baseline with Tantivy + full body memory duplicates)
+- Reconcile time: **3.04s** (15,911 files, 280MB raw text)
+- Total RSS: **378MB** (down from ~2.27GB baseline with Tantivy + full body + frontmatter AST memory duplicates, an **83% RAM reduction**)
 - SQLite database size: **282.2MB** (single table copy, flat byte-for-byte footprint)
