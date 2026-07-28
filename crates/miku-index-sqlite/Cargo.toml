@@ -9,10 +9,10 @@ description = "SQLite IndexStore implementation for Miku"
 [dependencies]
 async-trait.workspace = true
 miku-domain = { version = "0.0.4", path = "../miku-domain" }
+rayon = "1"
 serde_json.workspace = true
 sqlx = { version = "0.8.6", default-features = false, features = ["sqlite", "runtime-tokio", "migrate", "macros"] }
 
 [dev-dependencies]
 tempfile = "3"
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
-rayon = "1"

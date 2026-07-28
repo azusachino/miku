@@ -17,7 +17,6 @@ const MENTIONS_READY_VERSION: &str = "2";
 #[derive(Clone)]
 pub struct SqliteIndex {
     pool: SqlitePool,
-    search_enabled: bool,
 }
 
 impl DurableProjection for SqliteIndex {}
@@ -25,16 +24,6 @@ impl DurableProjection for SqliteIndex {}
 impl SqliteIndex {
     /// Open a new SQLite-backed index at the given path.
     pub async fn open(path: &str) -> StoreResult<Self> {
-        Self::open_with_search(path, true).await
-    }
-
-    /// Open SQLite as a durable graph/metadata projection while delegating
-    /// full-text serving to a composed hot search projection.
-    pub async fn open_without_search(path: &str) -> StoreResult<Self> {
-        Self::open_with_search(path, false).await
-    }
-
-    async fn open_with_search(path: &str, search_enabled: bool) -> StoreResult<Self> {
         let opts = SqliteConnectOptions::from_str(&format!("sqlite://{path}"))
             .map_err(|e| StoreError::InvalidInput(format!("invalid connection string: {e}")))?
             .create_if_missing(true)
@@ -54,21 +43,7 @@ impl SqliteIndex {
             .await
             .map_err(|e| StoreError::Unavailable(format!("failed to run migrations: {e}")))?;
 
-        // Explicit CREATE VIRTUAL TABLE FTS5 smoke verification
-        sqlx::query("CREATE VIRTUAL TABLE IF NOT EXISTS fts5_smoke_test USING fts5(content);")
-            .execute(&pool)
-            .await
-            .map_err(|e| StoreError::Unavailable(format!("FTS5 check failed: {e}")))?;
-
-        sqlx::query("DROP TABLE IF EXISTS fts5_smoke_test;")
-            .execute(&pool)
-            .await
-            .map_err(|e| StoreError::Unavailable(format!("FTS5 cleanup failed: {e}")))?;
-
-        Ok(Self {
-            pool,
-            search_enabled,
-        })
+        Ok(Self { pool })
     }
 
     /// Return reference to the underlying connection pool.
@@ -89,23 +64,27 @@ fn page_path(path: &str) -> String {
     }
 }
 
-fn sanitize_fts5_query(query: &str) -> String {
-    query
-        .split_whitespace()
-        .map(|term| {
-            let cleaned: String = term
-                .chars()
-                .filter(|c| c.is_alphanumeric() || *c == '-' || *c == '_')
-                .collect();
-            if cleaned.is_empty() {
-                String::new()
-            } else {
-                format!("\"{}\"*", cleaned)
-            }
-        })
-        .filter(|s| !s.is_empty())
-        .collect::<Vec<_>>()
-        .join(" ")
+fn contains_ascii_ci(haystack: &str, needle: &str) -> bool {
+    let h = haystack.as_bytes();
+    let n = needle.as_bytes();
+    if n.is_empty() {
+        return true;
+    }
+    if n.len() > h.len() {
+        return false;
+    }
+    h.windows(n.len()).any(|w| w.eq_ignore_ascii_case(n))
+}
+
+fn count_ascii_ci(haystack: &str, needle: &str) -> usize {
+    let h = haystack.as_bytes();
+    let n = needle.as_bytes();
+    if n.is_empty() || n.len() > h.len() {
+        return 0;
+    }
+    h.windows(n.len())
+        .filter(|w| w.eq_ignore_ascii_case(n))
+        .count()
 }
 
 #[async_trait]
@@ -113,7 +92,7 @@ impl IndexReader for SqliteIndex {
     async fn capabilities(&self) -> StoreResult<IndexCapabilities> {
         Ok(IndexCapabilities {
             durable: true,
-            full_text_search: self.search_enabled,
+            full_text_search: true,
             fuzzy_page_search: false,
             transactions: true,
             remote_sync: false,
@@ -312,52 +291,35 @@ impl IndexReader for SqliteIndex {
     }
 }
 
-/// Writes a page's content and search document only. Per ADR-0019, the
-/// durable SQLite projection is a page KV + FTS5 cache: it no longer tracks
-/// links, tags, or aliases as relational join targets, so there is nothing
-/// here to resolve against other pages.
+/// Writes a page's content and search document only. Per ADR-0020, the
+/// durable SQLite projection stores the raw body text in tb_pages.
 async fn replace_page_conn(
     conn: &mut sqlx::SqliteConnection,
     page: PageIndex,
-    search_enabled: bool,
 ) -> StoreResult<IndexEvent> {
     let path = page.summary.path.clone();
     let frontmatter_str = page.summary.frontmatter.to_string();
     let has_mermaid_int = if page.has_mermaid { 1 } else { 0 };
 
     sqlx::query(
-        "INSERT INTO tb_pages (path, title, frontmatter, has_mermaid, mtime)
-         VALUES (?, ?, ?, ?, ?)
+        "INSERT INTO tb_pages (path, title, body, frontmatter, has_mermaid, mtime)
+         VALUES (?, ?, ?, ?, ?, ?)
          ON CONFLICT (path) DO UPDATE SET
            title = EXCLUDED.title,
+           body = EXCLUDED.body,
            frontmatter = EXCLUDED.frontmatter,
            has_mermaid = EXCLUDED.has_mermaid,
            mtime = EXCLUDED.mtime",
     )
     .bind(&path)
     .bind(&page.summary.title)
+    .bind(&page.body)
     .bind(&frontmatter_str)
     .bind(has_mermaid_int)
     .bind(page.summary.mtime)
     .execute(&mut *conn)
     .await
     .map_err(database_error)?;
-
-    if search_enabled {
-        sqlx::query("DELETE FROM tb_pages_fts WHERE path = ?")
-            .bind(&path)
-            .execute(&mut *conn)
-            .await
-            .map_err(database_error)?;
-
-        sqlx::query("INSERT INTO tb_pages_fts (path, title, body) VALUES (?, ?, ?)")
-            .bind(&path)
-            .bind(&page.summary.title)
-            .bind(&page.body)
-            .execute(&mut *conn)
-            .await
-            .map_err(database_error)?;
-    }
 
     Ok(IndexEvent::PageIndexed { path })
 }
@@ -366,7 +328,7 @@ async fn replace_page_conn(
 impl IndexWriter for SqliteIndex {
     async fn replace_page(&self, page: PageIndex) -> StoreResult<IndexEvent> {
         let mut tx = self.pool.begin().await.map_err(database_error)?;
-        let event = replace_page_conn(&mut tx, page, self.search_enabled).await?;
+        let event = replace_page_conn(&mut tx, page).await?;
         tx.commit().await.map_err(database_error)?;
         Ok(event)
     }
@@ -375,7 +337,7 @@ impl IndexWriter for SqliteIndex {
         let mut tx = self.pool.begin().await.map_err(database_error)?;
         let mut events = Vec::with_capacity(pages.len());
         for page in pages {
-            events.push(replace_page_conn(&mut tx, page, self.search_enabled).await?);
+            events.push(replace_page_conn(&mut tx, page).await?);
         }
         tx.commit().await.map_err(database_error)?;
         Ok(events)
@@ -528,14 +490,6 @@ impl IndexWriter for SqliteIndex {
             .execute(&mut *tx)
             .await
             .map_err(database_error)?;
-
-        if self.search_enabled {
-            sqlx::query("DELETE FROM tb_pages_fts WHERE path = ?")
-                .bind(&normalized_path)
-                .execute(&mut *tx)
-                .await
-                .map_err(database_error)?;
-        }
 
         // Delete from tb_pages
         sqlx::query("DELETE FROM tb_pages WHERE path = ?")
