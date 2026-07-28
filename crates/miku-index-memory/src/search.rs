@@ -39,6 +39,27 @@ impl SearchProjection {
         })
     }
 
+    /// Updates or inserts a single document in Tantivy without wiping the index.
+    pub fn update_page(&mut self, page: &PageIndex) -> StoreResult<()> {
+        let mut writer = self
+            .index
+            .writer(SEARCH_WRITER_MEMORY_BYTES)
+            .map_err(|error| StoreError::Operation(format!("tantivy writer: {error}")))?;
+        let _ = writer.delete_term(tantivy::Term::from_field_text(self.path, &page.summary.path));
+        let _ = writer.add_document(doc!(
+            self.path => page.summary.path.clone(),
+            self.title => page.summary.title.clone(),
+            self.body => page.body.clone(),
+        ));
+        writer
+            .commit()
+            .map_err(|error| StoreError::Operation(format!("tantivy commit: {error}")))?;
+        self.reader
+            .reload()
+            .map_err(|error| StoreError::Operation(format!("tantivy reload: {error}")))?;
+        Ok(())
+    }
+
     /// Deletes all search documents and rebuilds from the current page graph.
     pub fn rebuild(&mut self, pages: &[PageIndex]) -> StoreResult<()> {
         let mut writer = self

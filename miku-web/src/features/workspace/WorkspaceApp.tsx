@@ -169,11 +169,12 @@ export function WorkspaceScreen() {
   }, [results.data]);
 
   const select = (id: string) => {
-    dispatch({ type: "open", id });
-    navigate(`/p/${id}`);
+    const targetId = normalizeNotePath(id);
+    dispatch({ type: "open", id: targetId });
+    navigate(`/p/${targetId}`);
     setSearchOpen(false);
     const recent = JSON.parse(localStorage.getItem("miku-recent") ?? "[]") as string[];
-    localStorage.setItem("miku-recent", JSON.stringify([id, ...recent.filter((path) => path !== id)].slice(0, 20)));
+    localStorage.setItem("miku-recent", JSON.stringify([targetId, ...recent.filter((path) => path !== targetId)].slice(0, 20)));
   };
   const closeTab = (id: string) => {
     const remaining = state.tabs.filter((tab) => tab !== id);
@@ -204,8 +205,7 @@ export function WorkspaceScreen() {
     navigate(`/tags/${encodeURIComponent(tag)}`);
   };
   const navigateContextPath = (path: string) => {
-    if (path.endsWith(".md")) select(path);
-    else openBreadcrumbPath(path);
+    select(path);
   };
   const openSearch = () => {
     setSearchSelection(-1);
@@ -221,6 +221,21 @@ export function WorkspaceScreen() {
       writeTheme(next);
       return next;
     });
+  const handleSaveNote = (updated: NoteModel) => {
+    queryClient.setQueryData(["context", activeId], (old: unknown) =>
+      old && typeof old === "object" ? { ...old, note: updated } : old
+    );
+    if (updated.path) {
+      queryClient.setQueryData(["context", updated.path], (old: unknown) =>
+        old && typeof old === "object" ? { ...old, note: updated } : old
+      );
+    }
+    setNoteCache((current) => ({
+      ...current,
+      [updated.id]: updated,
+      ...(updated.path ? { [updated.path]: updated } : {})
+    }));
+  };
   const status = useMemo(() => (workspace.data ? `${workspace.data.noteCount} notes` : "Loading workspace"), [workspace.data]);
 
   const secondaryNote = notes.find((candidate) => candidate.id === (state.tabs.find((tab) => tab !== activeId) ?? "welcome")) ?? activeNote;
@@ -351,6 +366,7 @@ export function WorkspaceScreen() {
                   client={client}
                   onTagSearch={searchTag}
                   onNavigatePath={openBreadcrumbPath}
+                  onSaveNote={handleSaveNote}
                   theme={theme}
                 />
                 {state.split && (
@@ -363,6 +379,7 @@ export function WorkspaceScreen() {
                     client={client}
                     onTagSearch={searchTag}
                     onNavigatePath={openBreadcrumbPath}
+                    onSaveNote={handleSaveNote}
                     theme={theme}
                   />
                 )}

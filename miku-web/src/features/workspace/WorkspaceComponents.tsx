@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate, useParams } from "react-router-dom";
 import { createWorkspaceClient, sortTreeNodes, type BacklinkModel, type NoteModel, type TreeNodeModel } from "./api";
+import { normalizeNotePath } from "./noteRoute";
 import { ActionIcon, NoteIcon } from "../../components/workspace/icons";
 import { WorkspaceTree } from "../../components/workspace/WorkspaceTree";
 import { headingSlug, shellRegions, type Theme } from "../../shared/ui";
@@ -152,6 +153,7 @@ export function NotePane({
   client,
   onTagSearch,
   onNavigatePath,
+  onSaveNote,
   theme
 }: {
   note: NoteModel;
@@ -162,6 +164,7 @@ export function NotePane({
   client: ReturnType<typeof createWorkspaceClient>;
   onTagSearch: (tag: string) => void;
   onNavigatePath: (path: string) => void;
+  onSaveNote?: (note: NoteModel) => void;
   theme: Theme;
 }) {
   const [draft, setDraft] = useState(note.body);
@@ -176,7 +179,8 @@ export function NotePane({
     if (readonly || !note.revision) return;
     setSaveState("saving…");
     try {
-      await client.saveNote(note.id, { body: draft, title: note.title, expectedRevision: note.revision });
+      const updated = await client.saveNote(note.id, { body: draft, title: note.title, expectedRevision: note.revision });
+      onSaveNote?.(updated);
       setSaveState("saved");
       setSourceMode(false);
     } catch (error) {
@@ -206,14 +210,26 @@ export function NotePane({
             {split ? "Single pane" : "Split pane"}
           </button>
           {!readonly && (
-            <div className="view-switch" role="tablist" aria-label="Note view">
-              <button className={!sourceMode ? "is-active" : ""} onClick={() => setSourceMode(false)} role="tab" aria-selected={!sourceMode}>
-                Reader
-              </button>
-              <button className={sourceMode ? "is-active" : ""} onClick={() => setSourceMode(true)} role="tab" aria-selected={sourceMode}>
-                Source
-              </button>
-            </div>
+            <>
+              {sourceMode && (
+                <button
+                  className={`toolbar-button save-button ${saveState === "unsaved" ? "is-dirty" : ""}`}
+                  disabled={readonly || !note.revision || saveState === "saving…" || saveState === "saved"}
+                  onClick={save}
+                  title="Save changes (Cmd+S)"
+                >
+                  {saveState === "saving…" ? "Saving…" : saveState === "unsaved" ? "Save" : "Saved"}
+                </button>
+              )}
+              <div className="view-switch" role="tablist" aria-label="Note view">
+                <button className={!sourceMode ? "is-active" : ""} onClick={() => setSourceMode(false)} role="tab" aria-selected={!sourceMode}>
+                  Reader
+                </button>
+                <button className={sourceMode ? "is-active" : ""} onClick={() => setSourceMode(true)} role="tab" aria-selected={sourceMode}>
+                  Source
+                </button>
+              </div>
+            </>
           )}
         </div>
       </div>
@@ -262,20 +278,13 @@ export function NotePane({
                 setDraft(value);
                 setSaveState("unsaved");
               }}
+              onSave={save}
             />
           </Suspense>
         ) : (
           <Suspense fallback={<div className="markdown-editor-loading">Rendering Markdown…</div>}>
             <MarkdownReader value={note.body} path={note.path} theme={theme} />
           </Suspense>
-        )}
-        {sourceMode && (
-          <div className="note-footer">
-            <span>Markdown source · changes stay local until saved</span>
-            <button className="toolbar-button" disabled={readonly || !note.revision || saveState === "saving…"} onClick={save}>
-              Save
-            </button>
-          </div>
         )}
       </div>
     </section>
@@ -432,7 +441,7 @@ export function WorkspaceUtility({
         <div className="utility-list">
           {recent.length ? (
             recent.map((path) => (
-              <button className="utility-row" key={path} onClick={() => navigate(`/p/${path}`)}>
+              <button className="utility-row" key={path} onClick={() => navigate(`/p/${normalizeNotePath(path)}`)}>
                 <strong>{path.split("/").pop()}</strong>
                 <small>{path}</small>
               </button>
@@ -449,7 +458,7 @@ export function WorkspaceUtility({
               <p>Loading notes…</p>
             ) : (
               tagNotes.data?.map((note) => (
-                <button className="utility-row" key={note.path} onClick={() => navigate(`/p/${note.path}`)}>
+                <button className="utility-row" key={note.path} onClick={() => navigate(`/p/${normalizeNotePath(note.path)}`)}>
                   <strong>{note.title}</strong>
                   <small>{note.path}</small>
                 </button>

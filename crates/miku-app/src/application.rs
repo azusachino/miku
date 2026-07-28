@@ -119,14 +119,22 @@ impl FileMikuApplication {
                 self.read_document_path(path.as_str()).await
             }
             NoteRef::Id(id) => {
+                let path_with_ext = format!("{}.md", id.as_str());
+                if self.index_ready.load(Ordering::Acquire)
+                    && self.index.page(&path_with_ext).await?.is_some()
+                {
+                    return self.read_document_path(&path_with_ext).await;
+                }
                 let pages = self.index.list_pages().await?;
                 let path = pages
                     .into_iter()
                     .find(|page| {
-                        page.frontmatter
-                            .get("id")
-                            .and_then(serde_json::Value::as_str)
-                            == Some(id.as_str())
+                        page.path == id.as_str()
+                            || page.path == path_with_ext
+                            || page.frontmatter
+                                .get("id")
+                                .and_then(serde_json::Value::as_str)
+                                == Some(id.as_str())
                     })
                     .map(|page| page.path)
                     .ok_or_else(|| ApplicationError::NotFound(id.as_str().to_string()))?;
@@ -298,21 +306,19 @@ impl VaultReader for FileMikuApplication {
 impl VaultWriter for FileMikuApplication {
     async fn save_note(&self, command: SaveNoteCommand) -> Result<VaultDocument, ApplicationError> {
         let document = self.resolve_document(command.note).await?;
-        let id: NoteId = document.note.id;
         let saved = self
             .workspace
             .save_note(
-                id.as_str(),
+                &document.note.source_path,
                 command.title,
                 command.body,
                 command.expected_revision,
             )
             .await
             .map_err(application_error)?;
-        self.documents_cache
-            .write()
-            .await
-            .insert(saved.note.source_path.clone(), saved.clone());
+        let mut cache = self.documents_cache.write().await;
+        cache.insert(saved.note.source_path.clone(), saved.clone());
+        cache.insert(saved.note.id.as_str().to_string(), saved.clone());
         Ok(saved)
     }
 }

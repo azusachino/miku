@@ -1,10 +1,7 @@
 use anyhow::Result;
 use miku_domain::{DocumentSignals, IndexReader, IndexWriter, PageIndex, PageSummary};
 use miku_indexer::{build_page_index, MentionMatcher};
-use notify::{
-    event::{EventKind, ModifyKind},
-    Watcher,
-};
+use notify::Watcher;
 use std::collections::{HashMap, HashSet};
 use std::env;
 use std::fs;
@@ -188,14 +185,17 @@ async fn reconcile_store(
         batches += 1;
         write_duration += flush_reconcile_batch(writer, events, pages, batches).await?;
     }
+    let is_already_ready = ready.load(Ordering::Acquire);
     let mut hot_hydrated = false;
-    for source_batch in unchanged_files.chunks(batch_size) {
-        let parse_started = Instant::now();
-        let pages = build_page_batch(content_root, source_batch, parse_concurrency).await?;
-        parse_duration += parse_started.elapsed();
-        if !pages.is_empty() {
-            writer.hydrate_hot_pages(pages).await?;
-            hot_hydrated = true;
+    if !is_already_ready {
+        for source_batch in unchanged_files.chunks(batch_size) {
+            let parse_started = Instant::now();
+            let pages = build_page_batch(content_root, source_batch, parse_concurrency).await?;
+            parse_duration += parse_started.elapsed();
+            if !pages.is_empty() {
+                writer.hydrate_hot_pages(pages).await?;
+                hot_hydrated = true;
+            }
         }
     }
     let mut deleted = false;
@@ -214,7 +214,7 @@ async fn reconcile_store(
     if deleted {
         let _ = events.send(BULK_INDEX_REFRESH.to_string());
     }
-    let search_rebuilt = indexed_pages > 0 || deleted_pages > 0 || hot_hydrated;
+    let search_rebuilt = indexed_pages > 0 || deleted_pages > 0 || (!is_already_ready && hot_hydrated);
     if search_rebuilt {
         writer.rebuild_search_index().await?;
     }
@@ -540,10 +540,13 @@ impl IndexerQueue {
         let mut watcher = notify::RecommendedWatcher::new(
             move |result: Result<notify::Event, notify::Error>| match result {
                 Ok(event) => {
-                    let needs_reconcile = event.kind.is_remove()
-                        || matches!(event.kind, EventKind::Modify(ModifyKind::Name(_)))
-                        || event.paths.iter().any(|path| path.extension().is_none());
-                    if needs_reconcile {
+                    let is_dir_or_removal = event.kind.is_remove()
+                        || event.paths.iter().any(|path| {
+                            path.is_dir()
+                                || (path.extension().is_none()
+                                    && !path.to_string_lossy().contains(".miku-tmp"))
+                        });
+                    if is_dir_or_removal {
                         IndexerQueue::try_queue_reconcile(
                             &sender_for_watcher,
                             &reconcile_flag_for_watcher,
@@ -552,7 +555,7 @@ impl IndexerQueue {
                     }
                     for path in event.paths {
                         if path.extension().is_some_and(|extension| extension == "md")
-                            && !path.to_string_lossy().ends_with(".tmp")
+                            && !path.to_string_lossy().contains(".miku-tmp")
                         {
                             let Some(relative) = path.strip_prefix(&root_for_watcher).ok() else {
                                 continue;

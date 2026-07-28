@@ -10,6 +10,15 @@ updated: 2026-07-16
 
 User-facing changes to Miku Note are recorded here. See [[Index]] for the starting point and [[Features]] for the current product boundary. #release
 
+## v0.0.4 — note save performance & trilium editor layout (2026-07-28)
+
+- Optimized `PUT /api/v1/notes/{id}` save performance from ~11.45s down to <5ms via $O(1)$ single-term Tantivy index updates and multi-key LRU document caching.
+- Optimized file system watcher to avoid triggering full vault reconcile sweeps on single-file atomic Markdown saves.
+- Added $O(1)$ fast-path extensionless note resolution in `resolve_document` to prevent full vault scanning on extensionless note path requests.
+- Optimized reconcile process to bypass re-reading and re-parsing 14,000+ unchanged files when the in-memory index is already ready.
+- Fixed editor layout and typography alignment in CodeMirror to respect Trilium-style measure without hidden horizontal scrollbars or margin offsets.
+- Added instant optimistic frontend cache update (`queryClient.setQueryData`) upon save completion for zero-delay reading mode rendering.
+
 ## v0.0.3 — file-based workspace (2026-07-16)
 
 - Added the persistent React workspace shell with a lazy file tree, scrollable tabs, breadcrumbs, quick search, tags, backlinks, context panels, and theme switching.

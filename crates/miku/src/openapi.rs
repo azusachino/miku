@@ -9,7 +9,7 @@ use crate::http_api;
 #[openapi(
     info(
         title = "Miku Workspace API",
-        version = "0.0.3",
+        version = "0.0.4",
         description = "Read-only workspace contract for the file-backed Markdown UI"
     ),
     paths(

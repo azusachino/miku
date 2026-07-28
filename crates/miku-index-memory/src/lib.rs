@@ -66,6 +66,13 @@ impl MemoryIndex {
             .map_err(|_| StoreError::Operation("memory index lock poisoned".to_string()))
     }
 
+    fn update_search_page(&self, page: &PageIndex) -> StoreResult<()> {
+        self.search
+            .write()
+            .map_err(|_| StoreError::Operation("memory search lock poisoned".to_string()))?
+            .update_page(page)
+    }
+
     fn rebuild_search(&self) -> StoreResult<()> {
         let pages = self
             .pages
@@ -205,8 +212,8 @@ impl IndexReader for MemoryIndex {
 impl IndexWriter for MemoryIndex {
     async fn replace_page(&self, page: PageIndex) -> StoreResult<IndexEvent> {
         let path = page.summary.path.clone();
-        self.write_pages()?.insert(path.clone(), page);
-        self.rebuild_search()?;
+        self.write_pages()?.insert(path.clone(), page.clone());
+        self.update_search_page(&page)?;
         self.rebuild_backlinks()?;
         Ok(IndexEvent::PageIndexed { path })
     }
