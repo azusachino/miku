@@ -1348,6 +1348,7 @@ version = "0.0.4"
 dependencies = [
  "async-trait",
  "miku-domain",
+ "rayon",
  "serde_json",
  "sqlx",
  "tempfile",

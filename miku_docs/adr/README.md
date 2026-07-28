@@ -66,7 +66,8 @@ this folder.
 | [0015](0015-derived-unlinked-mention-index.md) | Derived unlinked-mention index                   | Accepted   | 2026-07-14 |
 | [0016](0016-sqlite-local-index.md)             | SQLite (sqlx) local index                        | Superseded | 2026-07-15 |
 | [0017](0017-web-markdown-workspace.md)         | Web Markdown workspace and file-based note graph | Accepted   | 2026-07-15 |
-| [0018](0018-composed-projections.md)           | Composed durable and hot projections             | Accepted   | 2026-07-16 |
+| [0018](0018-composed-projections.md)           | Composed durable and hot projections             | Superseded | 2026-07-16 |
 | [0019](0019-document-graph-index.md)           | In-memory document-graph index                   | Accepted   | 2026-07-28 |
+| [0020](0020-sqlite-only-search.md)             | SQLite plain-content search, no FTS5, no Tantivy | Accepted   | 2026-07-28 |
 
 There is no separate staging file. New decisions should be added as a numbered ADR once the boundary is clear enough to implement.
