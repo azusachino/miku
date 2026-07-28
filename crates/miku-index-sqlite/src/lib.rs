@@ -1,6 +1,7 @@
 //! SQLite implementation of Miku's backend-neutral index contract.
 
 use async_trait::async_trait;
+use rayon::prelude::*;
 use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions};
 use sqlx::SqlitePool;
 use std::str::FromStr;
@@ -87,6 +88,19 @@ fn count_ascii_ci(haystack: &str, needle: &str) -> usize {
         .count()
 }
 
+fn snippet(body: &str, terms: &[&str]) -> String {
+    if body.is_empty() {
+        return String::new();
+    }
+    let lower = body.to_lowercase();
+    let start = terms
+        .iter()
+        .find_map(|term| lower.find(&term.to_lowercase()))
+        .unwrap_or(0);
+    let start_chars = lower[..start].chars().count();
+    body.chars().skip(start_chars).take(160).collect()
+}
+
 #[async_trait]
 impl IndexReader for SqliteIndex {
     async fn capabilities(&self) -> StoreResult<IndexCapabilities> {
@@ -150,78 +164,69 @@ impl IndexReader for SqliteIndex {
             return Ok(Vec::new());
         }
 
-        let like = format!("%{}%", query.replace('%', "\\%").replace('_', "\\_"));
-        let fts_query = sanitize_fts5_query(query);
+        let terms: Vec<&str> = query.split_whitespace().collect();
+        if terms.is_empty() {
+            return Ok(Vec::new());
+        }
 
-        let rows = match request.scope {
-            SearchScope::Body => {
-                if fts_query.is_empty() {
-                    return Ok(Vec::new());
-                }
-                sqlx::query_as::<_, (String, String)>(
-                    "SELECT p.path, p.title FROM tb_pages p
-                     JOIN tb_pages_fts f ON f.path = p.path
-                     WHERE tb_pages_fts MATCH ?
-                     ORDER BY bm25(tb_pages_fts, 10.0, 1.0) ASC, p.title
-                     LIMIT ?",
-                )
-                .bind(fts_query)
-                .bind(request.limit as i64)
-                .fetch_all(self.pool())
-                .await
-            }
-            SearchScope::Title => {
-                sqlx::query_as::<_, (String, String)>(
-                    "SELECT path, title FROM tb_pages
-                     WHERE title LIKE ? ESCAPE '\\' OR path LIKE ? ESCAPE '\\'
-                     ORDER BY title, path LIMIT ?",
-                )
-                .bind(&like)
-                .bind(&like)
-                .bind(request.limit as i64)
-                .fetch_all(self.pool())
-                .await
-            }
-            SearchScope::All => {
-                if fts_query.is_empty() {
-                    sqlx::query_as::<_, (String, String)>(
-                        "SELECT path, title FROM tb_pages
-                         WHERE title LIKE ? ESCAPE '\\' OR path LIKE ? ESCAPE '\\'
-                         ORDER BY title, path LIMIT ?",
-                    )
-                    .bind(&like)
-                    .bind(&like)
-                    .bind(request.limit as i64)
-                    .fetch_all(self.pool())
-                    .await
-                } else {
-                    sqlx::query_as::<_, (String, String)>(
-                        "SELECT path, title FROM tb_pages
-                         WHERE path IN (SELECT path FROM tb_pages_fts WHERE tb_pages_fts MATCH ?)
-                            OR title LIKE ? ESCAPE '\\'
-                            OR path LIKE ? ESCAPE '\\'
-                         ORDER BY title, path LIMIT ?",
-                    )
-                    .bind(fts_query)
-                    .bind(&like)
-                    .bind(&like)
-                    .bind(request.limit as i64)
-                    .fetch_all(self.pool())
-                    .await
-                }
-            }
-        };
+        let rows = sqlx::query_as::<_, (String, String, String)>(
+            "SELECT path, title, body FROM tb_pages",
+        )
+        .fetch_all(self.pool())
+        .await
+        .map_err(database_error)?;
 
-        rows.map(|rows| {
-            rows.into_iter()
-                .map(|(path, title)| SearchHit {
-                    path,
-                    title,
-                    snippet: String::new(),
-                })
-                .collect()
-        })
-        .map_err(database_error)
+        let mut hits: Vec<(f64, SearchHit)> = rows
+            .into_par_iter()
+            .filter_map(|(path, title, body)| {
+                let title_match = terms
+                    .iter()
+                    .all(|t| contains_ascii_ci(&title, t) || contains_ascii_ci(&path, t));
+                let body_match = terms.iter().all(|t| contains_ascii_ci(&body, t));
+
+                let is_match = match request.scope {
+                    SearchScope::Title => title_match,
+                    SearchScope::Body => body_match,
+                    SearchScope::All => title_match || body_match,
+                };
+
+                if !is_match {
+                    return None;
+                }
+
+                let mut score = 0.0;
+                if title_match {
+                    score += 10.0;
+                }
+                for t in &terms {
+                    let occurrences = count_ascii_ci(&body, t);
+                    score += (occurrences.min(20) as f64) * 0.5;
+                }
+
+                let snip = snippet(&body, &terms);
+
+                Some((
+                    score,
+                    SearchHit {
+                        path,
+                        title,
+                        snippet: snip,
+                    },
+                ))
+            })
+            .collect();
+
+        hits.sort_by(|(score_a, hit_a), (score_b, hit_b)| {
+            score_b
+                .partial_cmp(score_a)
+                .unwrap_or(std::cmp::Ordering::Equal)
+                .then_with(|| hit_a.title.cmp(&hit_b.title))
+                .then_with(|| hit_a.path.cmp(&hit_b.path))
+        });
+
+        hits.truncate(request.limit);
+
+        Ok(hits.into_iter().map(|(_, hit)| hit).collect())
     }
 
     /// Link-graph resolution now lives entirely in the hot `MemoryIndex`
