@@ -131,7 +131,8 @@ impl FileMikuApplication {
                     .find(|page| {
                         page.path == id.as_str()
                             || page.path == path_with_ext
-                            || page.frontmatter
+                            || page
+                                .frontmatter
                                 .get("id")
                                 .and_then(serde_json::Value::as_str)
                                 == Some(id.as_str())

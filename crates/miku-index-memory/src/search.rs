@@ -45,7 +45,10 @@ impl SearchProjection {
             .index
             .writer(SEARCH_WRITER_MEMORY_BYTES)
             .map_err(|error| StoreError::Operation(format!("tantivy writer: {error}")))?;
-        let _ = writer.delete_term(tantivy::Term::from_field_text(self.path, &page.summary.path));
+        let _ = writer.delete_term(tantivy::Term::from_field_text(
+            self.path,
+            &page.summary.path,
+        ));
         let _ = writer.add_document(doc!(
             self.path => page.summary.path.clone(),
             self.title => page.summary.title.clone(),
