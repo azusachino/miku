@@ -361,7 +361,7 @@ async fn replace_page_conn(
     conn: &mut sqlx::SqliteConnection,
     page: PageIndex,
     search_enabled: bool,
-) -> StoreResult<IndexEvent> {
+) -> StoreResult<(IndexEvent, i64, String, String)> {
     let path = page.summary.path.clone();
     let slug = page_slug(&path);
     let frontmatter_str = page.summary.frontmatter.to_string();
@@ -462,35 +462,118 @@ async fn replace_page_conn(
         .map_err(database_error)?;
     }
 
-    Ok(IndexEvent::PageIndexed { path })
+    Ok((
+        IndexEvent::PageIndexed { path: path.clone() },
+        page_id,
+        path,
+        slug,
+    ))
+}
+
+async fn resolve_links_conn_for_page(
+    conn: &mut sqlx::SqliteConnection,
+    page_id: i64,
+    path: &str,
+    slug: &str,
+) -> StoreResult<()> {
+    // 1. Resolve outbound path-based links from this page
+    sqlx::query(
+        "UPDATE tb_links
+         SET target_id = (
+           SELECT p.id FROM tb_pages p
+           WHERE lower(p.path) = tb_links.target_norm || '.md'
+         )
+         WHERE src_id = ? AND kind = 'page' AND instr(target_norm, '/') > 0",
+    )
+    .bind(page_id)
+    .execute(&mut *conn)
+    .await
+    .map_err(database_error)?;
+
+    // 2. Resolve outbound slug-based links from this page
+    sqlx::query(
+        "UPDATE tb_links
+         SET target_id = (
+           SELECT p.id FROM tb_pages p
+           WHERE p.slug = tb_links.target_norm
+           GROUP BY p.slug HAVING COUNT(*) = 1
+         )
+         WHERE src_id = ? AND kind = 'page' AND instr(target_norm, '/') = 0",
+    )
+    .bind(page_id)
+    .execute(&mut *conn)
+    .await
+    .map_err(database_error)?;
+
+    // 3. Resolve inbound dangling path-based links targeting this page
+    let norm_path = path.trim_end_matches(".md").to_lowercase();
+    sqlx::query(
+        "UPDATE tb_links
+         SET target_id = ?
+         WHERE kind = 'page'
+           AND target_id IS NULL
+           AND instr(target_norm, '/') > 0
+           AND target_norm = ?",
+    )
+    .bind(page_id)
+    .bind(&norm_path)
+    .execute(&mut *conn)
+    .await
+    .map_err(database_error)?;
+
+    // 4. Resolve inbound dangling slug-based links targeting this page if slug is unique
+    sqlx::query(
+        "UPDATE tb_links
+         SET target_id = (
+           SELECT CASE WHEN COUNT(*) = 1 THEN ? ELSE NULL END FROM tb_pages WHERE slug = ?
+         )
+         WHERE kind = 'page'
+           AND instr(target_norm, '/') = 0
+           AND target_norm = ?",
+    )
+    .bind(page_id)
+    .bind(slug)
+    .bind(slug)
+    .execute(&mut *conn)
+    .await
+    .map_err(database_error)?;
+
+    Ok(())
 }
 
 async fn resolve_links_conn(conn: &mut sqlx::SqliteConnection) -> StoreResult<()> {
+    // 1. Bulk resolve path-based links
+    sqlx::query(
+        "UPDATE tb_links
+         SET target_id = (
+           SELECT p.id FROM tb_pages p
+           WHERE lower(p.path) = tb_links.target_norm || '.md'
+         )
+         WHERE kind = 'page' AND instr(target_norm, '/') > 0",
+    )
+    .execute(&mut *conn)
+    .await
+    .map_err(database_error)?;
+
+    // 2. Bulk resolve slug-based links
     sqlx::query(
         "WITH unique_slugs AS (
            SELECT slug, MIN(id) AS id
            FROM tb_pages
            GROUP BY slug
            HAVING COUNT(*) = 1
-         ),
-         path_pages AS (
-           SELECT lower(replace(path, '.md', '')) AS norm_path, id
-           FROM tb_pages
          )
          UPDATE tb_links
-         SET target_id = CASE
-           WHEN instr(target_norm, '/') > 0 THEN (
-             SELECT id FROM path_pages WHERE norm_path = tb_links.target_norm
-           )
-           ELSE (
-             SELECT id FROM unique_slugs WHERE slug = tb_links.target_norm
-           )
-         END
-         WHERE tb_links.kind = 'page'",
+         SET target_id = (
+           SELECT u.id FROM unique_slugs u
+           WHERE u.slug = tb_links.target_norm
+         )
+         WHERE kind = 'page' AND instr(target_norm, '/') = 0",
     )
     .execute(&mut *conn)
     .await
     .map_err(database_error)?;
+
     Ok(())
 }
 
@@ -498,8 +581,9 @@ async fn resolve_links_conn(conn: &mut sqlx::SqliteConnection) -> StoreResult<()
 impl IndexWriter for SqliteIndex {
     async fn replace_page(&self, page: PageIndex) -> StoreResult<IndexEvent> {
         let mut tx = self.pool.begin().await.map_err(database_error)?;
-        let event = replace_page_conn(&mut tx, page, self.search_enabled).await?;
-        resolve_links_conn(&mut tx).await?;
+        let (event, page_id, path, slug) =
+            replace_page_conn(&mut tx, page, self.search_enabled).await?;
+        resolve_links_conn_for_page(&mut tx, page_id, &path, &slug).await?;
         tx.commit().await.map_err(database_error)?;
         Ok(event)
     }
@@ -508,7 +592,8 @@ impl IndexWriter for SqliteIndex {
         let mut tx = self.pool.begin().await.map_err(database_error)?;
         let mut events = Vec::with_capacity(pages.len());
         for page in pages {
-            events.push(replace_page_conn(&mut tx, page, self.search_enabled).await?);
+            let (event, _, _, _) = replace_page_conn(&mut tx, page, self.search_enabled).await?;
+            events.push(event);
         }
         resolve_links_conn(&mut tx).await?;
         tx.commit().await.map_err(database_error)?;
