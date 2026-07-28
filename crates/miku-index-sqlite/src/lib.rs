@@ -11,8 +11,6 @@ use miku_domain::{
     MentionRecord, PageIndex, PageSummary, SearchHit, SearchRequest, SearchScope, StoreError,
     StoreResult, TagCount,
 };
-use miku_indexer::page_slug;
-
 const MENTIONS_READY_VERSION: &str = "2";
 
 /// SQLite-backed index projection.
@@ -324,22 +322,19 @@ async fn replace_page_conn(
     search_enabled: bool,
 ) -> StoreResult<IndexEvent> {
     let path = page.summary.path.clone();
-    let slug = page_slug(&path);
     let frontmatter_str = page.summary.frontmatter.to_string();
     let has_mermaid_int = if page.has_mermaid { 1 } else { 0 };
 
     sqlx::query(
-        "INSERT INTO tb_pages (path, slug, title, frontmatter, has_mermaid, mtime)
-         VALUES (?, ?, ?, ?, ?, ?)
+        "INSERT INTO tb_pages (path, title, frontmatter, has_mermaid, mtime)
+         VALUES (?, ?, ?, ?, ?)
          ON CONFLICT (path) DO UPDATE SET
-           slug = EXCLUDED.slug,
            title = EXCLUDED.title,
            frontmatter = EXCLUDED.frontmatter,
            has_mermaid = EXCLUDED.has_mermaid,
            mtime = EXCLUDED.mtime",
     )
     .bind(&path)
-    .bind(&slug)
     .bind(&page.summary.title)
     .bind(&frontmatter_str)
     .bind(has_mermaid_int)
