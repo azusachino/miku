@@ -703,6 +703,21 @@ mod tests {
         env::remove_var("MIKU_PARSE_CONCURRENCY");
     }
 
+    /// Coarse process RSS via `ps`, used only to report an order-of-magnitude
+    /// memory delta for the opt-in real-vault benchmark. Includes allocator
+    /// and Tokio/Tantivy overhead, not just the page-graph structures.
+    fn current_rss_kb() -> u32 {
+        let pid = std::process::id().to_string();
+        let output = std::process::Command::new("ps")
+            .args(["-o", "rss=", "-p", &pid])
+            .output()
+            .expect("run ps for RSS measurement");
+        String::from_utf8_lossy(&output.stdout)
+            .trim()
+            .parse()
+            .expect("parse ps rss output")
+    }
+
     #[tokio::test]
     #[ignore = "runs against the local miku_docs corpus; use make benchmark-real-vault"]
     async fn benchmark_real_vault_reconcile() {
@@ -730,21 +745,26 @@ mod tests {
         let writer: Arc<dyn IndexWriter> = index;
         let (events, _) = broadcast::channel(1);
         let ready = AtomicBool::new(false);
+        let rss_before_kb = current_rss_kb();
         let started = Instant::now();
         reconcile_store(&reader, &writer, &content_root, &events, &ready)
             .await
             .expect("reconcile benchmark vault");
         let elapsed = started.elapsed();
+        let rss_after_kb = current_rss_kb();
         let pages = reader.list_pages().await.expect("list indexed pages");
 
         println!(
-            "benchmark=real-vault files={} bytes={} pages={} elapsed_ms={:.3} parse_concurrency={} batch_size={}",
+            "benchmark=real-vault files={} bytes={} pages={} elapsed_ms={:.3} parse_concurrency={} batch_size={} rss_before_mb={:.1} rss_after_mb={:.1} rss_delta_mb={:.1}",
             files.len(),
             bytes,
             pages.len(),
             elapsed.as_secs_f64() * 1000.0,
             IndexerQueue::parse_concurrency(),
             IndexerQueue::reconcile_batch_size(),
+            f64::from(rss_before_kb) / 1024.0,
+            f64::from(rss_after_kb) / 1024.0,
+            f64::from(rss_after_kb.saturating_sub(rss_before_kb)) / 1024.0,
         );
         assert_eq!(pages.len(), files.len());
     }
