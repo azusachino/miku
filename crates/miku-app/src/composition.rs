@@ -71,7 +71,7 @@ impl IndexReader for ComposedReader {
     }
 
     async fn search(&self, request: SearchRequest) -> StoreResult<Vec<SearchHit>> {
-        self.active().search(request).await
+        self.durable.search(request).await
     }
 
     async fn backlinks(&self, path: &str) -> StoreResult<Vec<Backlink>> {

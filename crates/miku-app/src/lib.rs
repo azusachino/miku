@@ -237,7 +237,7 @@ pub async fn compose_index(config: RuntimeConfig) -> StoreResult<IndexApi> {
             #[cfg(all(feature = "sqlite", feature = "memory"))]
             {
                 let durable =
-                    Arc::new(miku_index_sqlite::SqliteIndex::open_without_search(&path).await?);
+                    Arc::new(miku_index_sqlite::SqliteIndex::open(&path).await?);
                 let hot = Arc::new(miku_index_memory::MemoryIndex::new());
                 Ok(compose_projections(durable, hot))
             }
