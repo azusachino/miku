@@ -14,4 +14,19 @@ export default defineConfig({
       "/events": "http://127.0.0.1:3000",
     },
   },
+  build: {
+    chunkSizeWarningLimit: 3000,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes("node_modules/mermaid") || id.includes("node_modules/cytoscape")) {
+            return "vendor-diagrams";
+          }
+          if (id.includes("node_modules/katex")) {
+            return "vendor-katex";
+          }
+        },
+      },
+    },
+  },
 });
