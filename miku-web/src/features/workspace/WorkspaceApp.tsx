@@ -74,13 +74,20 @@ export function WorkspaceScreen() {
   }, [contextualNote]);
   const notes = useMemo(() => {
     const combined = [...treeNotes, ...Object.values(noteCache)];
-    return Array.from(new Map(combined.map((candidate) => [candidate.id, candidate])).values());
+    const map = new Map<string, NoteModel>();
+    for (const candidate of combined) {
+      if (candidate.id) map.set(candidate.id, candidate);
+      if (candidate.path) map.set(candidate.path, candidate);
+      if (candidate.path) map.set(normalizeNotePath(candidate.path), candidate);
+    }
+    return Array.from(map.values());
   }, [noteCache, treeNotes]);
+  const normActiveId = normalizeNotePath(activeId);
   const activeNote = contextualNote ??
-    notes.find((candidate) => candidate.id === activeId) ?? {
+    notes.find((candidate) => candidate.id === activeId || candidate.path === activeId || normalizeNotePath(candidate.path) === normActiveId) ?? {
       id: activeId,
-      path: "",
-      title: context.isPending || context.isFetching ? "Loading note…" : "Note unavailable",
+      path: activeId,
+      title: context.isPending || context.isFetching ? "Loading note…" : activeId.split("/").pop()?.replace(/\.md$/, "") || "Note unavailable",
       icon: "file-text",
       parents: [],
       updated: "",

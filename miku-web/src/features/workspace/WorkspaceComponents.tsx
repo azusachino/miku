@@ -126,17 +126,31 @@ export function Tabs({
   onSelect: (id: string) => void;
   onClose: (id: string) => void;
 }) {
+  const normActive = normalizeNotePath(activeId);
+
   return (
     <div className="tabs" role="tablist">
-      {tabs.map((id) => {
-        const note = id === activeId ? activeNote : (notes.find((item) => item.id === id) ?? { id, title: "Loading note…", path: id, icon: "file-text" });
+      {tabs.map((tabPath) => {
+        const normTab = normalizeNotePath(tabPath);
+        const isActive = normActive === normTab;
+        const matched = notes.find((item) => item.path === tabPath || item.id === tabPath || normalizeNotePath(item.path) === normTab);
+        const fallbackTitle = tabPath.split("/").pop()?.replace(/\.md$/, "") || tabPath;
+        const note = isActive ? activeNote : (matched ?? { id: tabPath, title: fallbackTitle, path: tabPath, icon: "file-text" });
+
+        const parts = note.path.split("/");
+        const parentDir = parts.length > 1 ? parts[parts.length - 2] : "";
+        const rawTitle = note.title || fallbackTitle;
+        const displayTitle = parentDir && (rawTitle.toLowerCase() === "index" || rawTitle.toLowerCase() === "readme")
+          ? `${parentDir}/${rawTitle}`
+          : rawTitle;
+
         return (
-          <div key={id} className={`tab ${activeId === id ? "is-active" : ""}`} role="tab" aria-selected={activeId === id}>
-            <button className="tab-label" onClick={() => onSelect(id)} title={note.path}>
+          <div key={tabPath} className={`tab ${isActive ? "is-active" : ""}`} role="tab" aria-selected={isActive}>
+            <button className="tab-label" onClick={() => onSelect(tabPath)} title={note.path}>
               <NoteIcon value={note.icon} />
-              <span>{note.title}</span>
+              <span>{displayTitle}</span>
             </button>
-            <button className="tab-close" onClick={() => onClose(id)} aria-label={`Close ${note.title}`}>
+            <button className="tab-close" onClick={() => onClose(tabPath)} aria-label={`Close ${displayTitle}`}>
               <ActionIcon name="close" />
             </button>
           </div>
