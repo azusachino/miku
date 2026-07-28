@@ -188,6 +188,7 @@ pub trait VaultReader: Send + Sync {
     async fn file_tree(&self, request: FileTreeRequest) -> Result<FileTree, ApplicationError>;
     async fn read_note(&self, note: NoteRef) -> Result<VaultDocument, ApplicationError>;
     async fn note_context(&self, note: NoteRef) -> Result<NoteContext, ApplicationError>;
+    async fn read_raw_asset(&self, path: &str) -> Result<Vec<u8>, ApplicationError>;
 }
 
 #[async_trait]
@@ -281,6 +282,10 @@ mod tests {
             }
 
             async fn note_context(&self, _note: NoteRef) -> Result<NoteContext, ApplicationError> {
+                Err(ApplicationError::NotFound("fake".into()))
+            }
+
+            async fn read_raw_asset(&self, _path: &str) -> Result<Vec<u8>, ApplicationError> {
                 Err(ApplicationError::NotFound("fake".into()))
             }
         }

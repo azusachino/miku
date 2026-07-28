@@ -143,6 +143,26 @@ impl Vault {
         parse_document(&path, &raw, modified_seconds(&metadata)?)
     }
 
+    /// Reads raw asset bytes safely from the vault without requiring a `.md` extension.
+    pub fn read_raw_bytes(&self, path: &str) -> Result<Vec<u8>, VaultError> {
+        let trimmed = path.trim().trim_matches('/');
+        let p = Path::new(trimmed);
+        if p.is_absolute()
+            || p.components().any(|component| {
+                matches!(
+                    component,
+                    std::path::Component::ParentDir
+                        | std::path::Component::RootDir
+                        | std::path::Component::Prefix(_)
+                )
+            })
+        {
+            return Err(VaultError::InvalidPath(path.to_string()));
+        }
+        let file_path = self.root.join(p);
+        Ok(fs::read(&file_path)?)
+    }
+
     /// Writes one document using a flushed sibling temporary file and rename.
     pub fn write(&self, document: &VaultDocument) -> Result<RevisionToken, VaultError> {
         let path = VaultPath::new(&document.note.source_path)?;

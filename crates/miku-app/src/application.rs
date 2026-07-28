@@ -108,6 +108,13 @@ impl FileMikuApplication {
         Ok(document)
     }
 
+    pub fn read_raw_asset(&self, path: &str) -> Result<Vec<u8>, ApplicationError> {
+        let rel = RelativePath::new(path)?;
+        self.vault
+            .read_raw_bytes(rel.as_str())
+            .map_err(ApplicationError::from)
+    }
+
     async fn resolve_document(&self, note: NoteRef) -> Result<VaultDocument, ApplicationError> {
         match note {
             NoteRef::Path(path) => {
@@ -261,6 +268,10 @@ impl VaultReader for FileMikuApplication {
 
     async fn read_note(&self, note: NoteRef) -> Result<VaultDocument, ApplicationError> {
         self.resolve_document(note).await
+    }
+
+    async fn read_raw_asset(&self, path: &str) -> Result<Vec<u8>, ApplicationError> {
+        self.read_raw_asset(path)
     }
 
     async fn note_context(&self, note: NoteRef) -> Result<NoteContext, ApplicationError> {

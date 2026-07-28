@@ -497,6 +497,42 @@ fn backlink_response(backlink: Backlink) -> BacklinkResponse {
     }
 }
 
+pub fn asset_content_type(path: &str) -> &'static str {
+    let lower = path.to_lowercase();
+    if lower.ends_with(".svg") {
+        "image/svg+xml"
+    } else if lower.ends_with(".png") {
+        "image/png"
+    } else if lower.ends_with(".jpg") || lower.ends_with(".jpeg") {
+        "image/jpeg"
+    } else if lower.ends_with(".gif") {
+        "image/gif"
+    } else if lower.ends_with(".webp") {
+        "image/webp"
+    } else if lower.ends_with(".pdf") {
+        "application/pdf"
+    } else if lower.ends_with(".html") || lower.ends_with(".htm") {
+        "text/html; charset=utf-8"
+    } else if lower.ends_with(".css") {
+        "text/css; charset=utf-8"
+    } else if lower.ends_with(".js") {
+        "text/javascript; charset=utf-8"
+    } else if lower.ends_with(".json") {
+        "application/json"
+    } else {
+        "application/octet-stream"
+    }
+}
+
+pub async fn asset(
+    State(state): State<AppState>,
+    Path(path): Path<String>,
+) -> Result<impl axum::response::IntoResponse, AppError> {
+    let bytes = state.application.read_raw_asset(&path).await?;
+    let content_type = asset_content_type(&path);
+    Ok(([(axum::http::header::CONTENT_TYPE, content_type)], bytes))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -19,9 +19,46 @@ const markdownSanitizeSchema = {
   attributes: {
     ...defaultSchema.attributes,
     div: [...(defaultSchema.attributes?.div ?? []), "className"],
-    p: [...(defaultSchema.attributes?.p ?? []), "className"]
+    p: [...(defaultSchema.attributes?.p ?? []), "className"],
+    img: [...(defaultSchema.attributes?.img ?? []), "className", "src", "alt"]
   }
 };
+
+export function isAssetFile(path: string): boolean {
+  const lower = path.trim().toLowerCase();
+  return (
+    lower.endsWith(".png") ||
+    lower.endsWith(".jpg") ||
+    lower.endsWith(".jpeg") ||
+    lower.endsWith(".gif") ||
+    lower.endsWith(".svg") ||
+    lower.endsWith(".webp") ||
+    lower.endsWith(".pdf")
+  );
+}
+
+export function resolveAssetSrc(src: string, currentPath: string): string {
+  const trimmed = src.trim();
+  if (!trimmed || trimmed.startsWith("http://") || trimmed.startsWith("https://") || trimmed.startsWith("data:")) {
+    return trimmed;
+  }
+  let path = trimmed;
+  if (path.startsWith("/api/v1/assets/")) {
+    path = path.slice("/api/v1/assets/".length);
+  } else if (path.startsWith("/assets/")) {
+    path = path.slice("/assets/".length);
+  } else if (path.startsWith("/")) {
+    path = path.slice(1);
+  }
+  const base = currentPath ? currentPath.split("/").slice(0, -1) : [];
+  const normalized: string[] = [];
+  for (const segment of [...base, ...path.split("/")]) {
+    if (!segment || segment === ".") continue;
+    if (segment === "..") normalized.pop();
+    else normalized.push(segment);
+  }
+  return "/api/v1/assets/" + normalized.map(encodeURIComponent).join("/");
+}
 
 export function noteHref(target: string): string {
   const trimmed = target.trim();
@@ -50,7 +87,14 @@ export function resolveMarkdownHref(href: string, currentPath: string): string |
 }
 
 export function expandWikiLinks(markdown: string): string {
-  const withEmbeds = markdown.replace(/!\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (_match, target: string, label?: string) => `> Embedded note: [${label?.trim() || target.trim()}](${noteHref(target)})`);
+  const withEmbeds = markdown.replace(/!\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (_match, target: string, label?: string) => {
+    const trimmedTarget = target.trim();
+    const trimmedLabel = label?.trim() || trimmedTarget;
+    if (isAssetFile(trimmedTarget)) {
+      return `![${trimmedLabel}](${trimmedTarget})`;
+    }
+    return `> Embedded note: [${trimmedLabel}](${noteHref(trimmedTarget)})`;
+  });
   return withEmbeds.replace(/(?<!!)\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (_match, target: string, label?: string) => "[" + (label?.trim() || target.trim()) + "](" + noteHref(target) + ")");
 }
 
@@ -151,6 +195,10 @@ export function MarkdownReader({ value, path = "", theme = "dark" }: { value: st
         remarkPlugins={[remarkGfm, remarkMath, remarkAlert]}
         rehypePlugins={[rehypeRaw, [rehypeSanitize, markdownSanitizeSchema], [rehypePrism, { ignoreMissing: true }], rehypeKatex]}
         components={{
+          img: ({ src, alt, node: _node, ...props }) => {
+            const resolvedSrc = src ? resolveAssetSrc(src, path) : src;
+            return <img {...props} src={resolvedSrc} alt={alt ?? ""} className="note-image max-w-full h-auto rounded my-4" />;
+          },
           a: ({ href, children, node: _node, ...props }) => {
             const resolvedHref = href && path ? (resolveMarkdownHref(href, path) ?? href) : href;
             const internal = resolvedHref?.startsWith("/p/") || resolvedHref?.startsWith("/tags/");
