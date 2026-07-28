@@ -34,6 +34,10 @@ export function sortTreeNodes(nodes: TreeNodeModel[]): TreeNodeModel[] {
   });
 }
 
+export function encodePath(path: string): string {
+  return path.split("/").map(encodeURIComponent).join("/");
+}
+
 type ApiTreeNode = Schemas["TreeNode"];
 
 type ApiTreeResponse = { parent_id: string | null; nodes: ApiTreeNode[] };
@@ -197,9 +201,9 @@ export function createWorkspaceClient(onSource: (source: ApiSource) => void) {
       }),
     tree: (folder?: string) => liveTreeOnce(folder),
     invalidateTree: () => treeCache.clear(),
-    note: (id: string) => live(() => request<Schemas["NoteResponse"]>(`/api/v1/notes/${encodeURIComponent(id)}`).then(normalizeNote)),
+    note: (id: string) => live(() => request<Schemas["NoteResponse"]>(`/api/v1/notes/${encodePath(id)}`).then(normalizeNote)),
     saveNote: async (id: string, input: SaveNoteInput): Promise<NoteModel> => {
-      const response = await fetch(`/api/v1/notes/${encodeURIComponent(id)}`, {
+      const response = await fetch(`/api/v1/notes/${encodePath(id)}`, {
         method: "PUT",
         headers: { Accept: "application/json", "Content-Type": "application/json" },
         body: JSON.stringify({ body: input.body, title: input.title, expected_revision: input.expectedRevision })
@@ -210,7 +214,7 @@ export function createWorkspaceClient(onSource: (source: ApiSource) => void) {
     },
     context: (id: string) =>
       live(async () => {
-        const response = await request<Schemas["ContextResponse"]>(`/api/v1/note-context/${encodeURIComponent(id)}`);
+        const response = await request<Schemas["ContextResponse"]>(`/api/v1/note-context/${encodePath(id)}`);
         return {
           note: normalizeNote(response.note),
           parents: response.parents.map((parent) => ({ id: parent.path, path: parent.path, title: parent.title, identityGenerated: parent.identity_generated, parents: [], order: parent.order })),
