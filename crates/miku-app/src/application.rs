@@ -181,13 +181,18 @@ impl FileMikuApplication {
 
     fn snapshot_tree_nodes(pages: &[PageSummary], folder: &RelativePath) -> Vec<FileNode> {
         let folder_path = folder.as_str();
+        let folder_prefix = if folder_path.is_empty() {
+            String::new()
+        } else {
+            format!("{folder_path}/")
+        };
         let mut folders = BTreeMap::<String, FileNode>::new();
         let mut files = BTreeMap::<String, FileNode>::new();
 
         for page in pages {
             let relative = if folder_path.is_empty() {
                 page.path.as_str()
-            } else if let Some(value) = page.path.strip_prefix(&format!("{folder_path}/")) {
+            } else if let Some(value) = page.path.strip_prefix(&folder_prefix) {
                 value
             } else {
                 continue;
@@ -264,18 +269,20 @@ impl VaultReader for FileMikuApplication {
             .list_pages()
             .await
             .map_err(ApplicationError::from)?;
+        let id_map = pages
+            .iter()
+            .filter_map(|page| {
+                page.frontmatter
+                    .get("id")
+                    .and_then(serde_json::Value::as_str)
+                    .map(|id| (id, page))
+            })
+            .collect::<std::collections::HashMap<_, _>>();
         let parents = document
             .note
             .parents
             .iter()
-            .filter_map(|id| {
-                pages.iter().find(|page| {
-                    page.frontmatter
-                        .get("id")
-                        .and_then(serde_json::Value::as_str)
-                        == Some(id.as_str())
-                })
-            })
+            .filter_map(|id| id_map.get(id.as_str()).copied())
             .map(Self::summary_file_node)
             .collect();
         let children = pages
