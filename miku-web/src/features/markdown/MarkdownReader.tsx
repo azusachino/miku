@@ -89,17 +89,19 @@ export function createTargetResolver(notes: NoteCandidate[]): TargetResolver {
       return pathMap.get(lower)!;
     }
 
-    // 2. Exact slug match
+    // 2. Exact slug match (prefer top-level / shortest path if ambiguous)
     const matches = slugMap.get(lower);
-    if (matches && matches.length === 1) {
-      return matches[0];
+    if (matches && matches.length > 0) {
+      const sorted = [...matches].sort((a, b) => a.length - b.length || a.localeCompare(b));
+      return sorted[0];
     }
 
     // 3. Singular / Plural variation (e.g. kb-convention -> kb-conventions)
     const altSlug = lower.endsWith("s") ? lower.slice(0, -1) : `${lower}s`;
     const altMatches = slugMap.get(altSlug);
-    if (altMatches && altMatches.length === 1) {
-      return altMatches[0];
+    if (altMatches && altMatches.length > 0) {
+      const sorted = [...altMatches].sort((a, b) => a.length - b.length || a.localeCompare(b));
+      return sorted[0];
     }
 
     // 4. Substring end-of-path match
