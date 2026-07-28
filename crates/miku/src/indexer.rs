@@ -268,7 +268,10 @@ async fn refresh_mentions_for_sources(
         .collect::<Vec<_>>();
     for page in &changed_pages {
         candidates.retain(|candidate| candidate.summary.path != page.summary.path);
-        candidates.push(page.clone());
+        let mut candidate = page.clone();
+        candidate.body.clear();
+        candidate.body.shrink_to_fit();
+        candidates.push(candidate);
     }
     let matcher = MentionMatcher::new(&candidates);
     let target_paths = changed_pages
@@ -279,14 +282,14 @@ async fn refresh_mentions_for_sources(
         .delete_mentions_for_targets(target_paths)
         .await
         .or_else(ignore_unsupported)?;
-    let entries = changed_pages
-        .into_iter()
-        .map(|page| {
-            let source_path = page.summary.path.clone();
-            let mentions = matcher.extract(&page);
-            (source_path, mentions)
-        })
-        .collect::<Vec<_>>();
+    let mut entries = Vec::with_capacity(changed_pages.len());
+    for mut page in changed_pages {
+        let source_path = page.summary.path.clone();
+        let mentions = matcher.extract(&page);
+        page.body = String::new();
+        page.body.shrink_to_fit();
+        entries.push((source_path, mentions));
+    }
     let updated = entries.len();
     writer
         .replace_mentions_for_sources(entries)
