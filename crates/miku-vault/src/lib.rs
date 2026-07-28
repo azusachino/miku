@@ -395,11 +395,24 @@ fn atomic_write(path: &Path, contents: &[u8]) -> Result<(), VaultError> {
         file.write_all(contents)?;
         file.sync_all()?;
     }
-    if let Err(error) = fs::rename(&temp_path, path) {
+    if let Err(_error) = fs::rename(&temp_path, path) {
         let _ = fs::remove_file(&temp_path);
-        return Err(error.into());
+        return direct_write(path, contents);
     }
-    sync_parent(path.parent())?;
+    let _ = sync_parent(path.parent());
+    Ok(())
+}
+
+fn direct_write(path: &Path, contents: &[u8]) -> Result<(), VaultError> {
+    if let Some(parent) = path.parent() {
+        let _ = fs::create_dir_all(parent);
+    }
+    let mut file = OpenOptions::new()
+        .create(true)
+        .write(true)
+        .truncate(true)
+        .open(path)?;
+    file.write_all(contents)?;
     Ok(())
 }
 
