@@ -495,4 +495,177 @@ mod tests {
             .expect("search after delete")
             .is_empty());
     }
+
+    fn link(target: &str, target_norm: &str) -> LinkRecord {
+        LinkRecord {
+            target: target.to_string(),
+            target_norm: target_norm.to_string(),
+            alias: None,
+            kind: LinkKind::Page,
+            is_embed: false,
+        }
+    }
+
+    #[tokio::test]
+    async fn delete_restores_ambiguous_uniqueness_for_pending_source() {
+        let index = MemoryIndex::new();
+        let mut source = page("Source.md", "Source", "[[Target]]");
+        source.links.push(link("Target", "target"));
+        index.replace_page(source).await.expect("source indexed");
+        index
+            .replace_page(page("same/Target.md", "Target", "t"))
+            .await
+            .expect("unique target indexed");
+        assert_eq!(
+            index.backlinks("same/Target.md").await.unwrap().len(),
+            1,
+            "unique slug must resolve"
+        );
+
+        index
+            .replace_page(page("other/Target.md", "Target", "t"))
+            .await
+            .expect("ambiguous duplicate indexed");
+        assert!(
+            index.backlinks("same/Target.md").await.unwrap().is_empty(),
+            "ambiguous slug must retract the prior backlink"
+        );
+
+        index
+            .delete_page("other/Target.md")
+            .await
+            .expect("delete duplicate");
+        assert_eq!(
+            index.backlinks("same/Target.md").await.unwrap().len(),
+            1,
+            "removing the duplicate must restore the unique resolution"
+        );
+    }
+
+    #[tokio::test]
+    async fn updating_a_pages_links_moves_its_backlink_contribution() {
+        let index = MemoryIndex::new();
+        index
+            .replace_page(page("A.md", "A", "a"))
+            .await
+            .expect("A indexed");
+        index
+            .replace_page(page("B.md", "B", "b"))
+            .await
+            .expect("B indexed");
+
+        let mut source = page("Source.md", "Source", "[[A]]");
+        source.links.push(link("A", "a"));
+        index.replace_page(source).await.expect("source -> A");
+        assert_eq!(index.backlinks("A.md").await.unwrap().len(), 1);
+        assert!(index.backlinks("B.md").await.unwrap().is_empty());
+
+        let mut retargeted = page("Source.md", "Source", "[[B]]");
+        retargeted.links.push(link("B", "b"));
+        index.replace_page(retargeted).await.expect("source -> B");
+        assert!(
+            index.backlinks("A.md").await.unwrap().is_empty(),
+            "stale pending registration must not keep A's backlink alive"
+        );
+        assert_eq!(index.backlinks("B.md").await.unwrap().len(), 1);
+    }
+
+    #[tokio::test]
+    async fn incremental_updates_match_full_rebuild() {
+        let mut ambiguous_source = page("same/Source.md", "Source", "[[Target]]");
+        ambiguous_source.links.push(link("Target", "target"));
+        let mut explicit_source = page("same/Explicit.md", "Explicit", "[[other/Target]]");
+        explicit_source
+            .links
+            .push(link("other/Target", "other/target"));
+        let mut self_referencing = page("Self.md", "Self", "[[Self]]");
+        self_referencing.links.push(link("Self", "self"));
+
+        let pages = vec![
+            ambiguous_source,
+            explicit_source,
+            page("same/Target.md", "Target", "t"),
+            page("other/Target.md", "Target", "t"),
+            self_referencing,
+        ];
+
+        let incremental = MemoryIndex::new();
+        for page in pages.clone() {
+            incremental
+                .replace_page(page)
+                .await
+                .expect("incremental insert");
+        }
+
+        let bulk = MemoryIndex::new();
+        bulk.replace_pages(pages.clone())
+            .await
+            .expect("bulk insert");
+        bulk.rebuild_search_index()
+            .await
+            .expect("full graph rebuild");
+
+        for page in &pages {
+            let path = &page.summary.path;
+            let mut via_incremental = incremental.backlinks(path).await.unwrap();
+            let mut via_full_rebuild = bulk.backlinks(path).await.unwrap();
+            via_incremental.sort_by(|left, right| left.path.cmp(&right.path));
+            via_full_rebuild.sort_by(|left, right| left.path.cmp(&right.path));
+            assert_eq!(
+                via_incremental, via_full_rebuild,
+                "incremental and full-rebuild backlinks diverged for {path}"
+            );
+        }
+    }
+
+    /// Exercises `LinkGraph` directly (not the full `MemoryIndex` API) so the
+    /// measurement isolates graph-resolution cost from unrelated Tantivy
+    /// writer/commit overhead, which dominates at thousands of calls and
+    /// would otherwise swamp the signal this test is checking.
+    #[test]
+    fn single_page_update_cost_does_not_scale_with_corpus_size() {
+        fn seed_and_time_one_update(corpus_size: usize) -> std::time::Duration {
+            let mut graph = LinkGraph::default();
+            let mut all_pages = BTreeMap::new();
+            for i in 0..corpus_size {
+                let target = (i + 1) % corpus_size;
+                let mut note = page(
+                    &format!("Note{i}.md"),
+                    &format!("Note {i}"),
+                    "body text linking onward",
+                );
+                note.links
+                    .push(link(&format!("Note{target}"), &format!("note{target}")));
+                let path = note.summary.path.clone();
+                let links = note.links.clone();
+                all_pages.insert(path.clone(), note);
+                graph.upsert_page(&path, &links, None, &all_pages);
+            }
+
+            let previous = all_pages.get("Note0.md").map(|p| p.links.clone());
+            let mut updated = page("Note0.md", "Note 0", "updated body, same links");
+            updated.links.push(link("Note1", "note1"));
+            all_pages.insert("Note0.md".to_string(), updated.clone());
+            let started = std::time::Instant::now();
+            graph.upsert_page("Note0.md", &updated.links, previous.as_deref(), &all_pages);
+            started.elapsed()
+        }
+
+        let small = seed_and_time_one_update(200);
+        let large = seed_and_time_one_update(4_000);
+
+        println!(
+            "benchmark=single-page-update small_pages=200 small_us={:.1} large_pages=4000 large_us={:.1}",
+            small.as_secs_f64() * 1e6,
+            large.as_secs_f64() * 1e6,
+        );
+
+        // A full-corpus rescan would grow roughly linearly with page count
+        // (20x here); an O(1) incremental update stays flat. Generous
+        // headroom and an absolute floor keep this stable under CI noise.
+        assert!(
+            large.as_secs_f64() < small.as_secs_f64() * 10.0 + 0.010,
+            "single-page update cost scaled with corpus size: small={small:?} large={large:?}"
+        );
+    }
 }
