@@ -12,8 +12,10 @@ use miku_domain::{
 use std::collections::BTreeMap;
 use std::sync::{Arc, RwLock};
 
+mod graph;
 mod search;
 
+use graph::LinkGraph;
 use search::SearchProjection;
 
 type MentionKey = (String, String, String);
@@ -23,7 +25,7 @@ type MentionMap = BTreeMap<MentionKey, MentionRecord>;
 #[derive(Clone)]
 pub struct MemoryIndex {
     pages: Arc<RwLock<BTreeMap<String, PageIndex>>>,
-    backlinks: Arc<RwLock<BTreeMap<String, Vec<Backlink>>>>,
+    graph: Arc<RwLock<LinkGraph>>,
     mentions: Arc<RwLock<MentionMap>>,
     search: Arc<RwLock<SearchProjection>>,
 }
@@ -42,7 +44,7 @@ impl MemoryIndex {
     pub fn new() -> Self {
         Self {
             pages: Arc::new(RwLock::new(BTreeMap::new())),
-            backlinks: Arc::new(RwLock::new(BTreeMap::new())),
+            graph: Arc::new(RwLock::new(LinkGraph::default())),
             mentions: Arc::new(RwLock::new(BTreeMap::new())),
             search: Arc::new(RwLock::new(
                 SearchProjection::new().expect("in-memory Tantivy projection must initialize"),
@@ -84,44 +86,21 @@ impl MemoryIndex {
             .rebuild(&pages.values().cloned().collect::<Vec<_>>())
     }
 
-    fn rebuild_backlinks(&self) -> StoreResult<()> {
-        let pages = self.read_pages()?;
-        let summaries = pages
-            .values()
-            .map(|page| page.summary.clone())
-            .collect::<Vec<_>>();
-        let mut reverse = BTreeMap::<String, Vec<Backlink>>::new();
-        for page in pages.values() {
-            for link in &page.links {
-                if link.kind != miku_domain::LinkKind::Page {
-                    continue;
-                }
-                let Some(target) = miku_indexer::resolve_link_path(&link.target_norm, &summaries)
-                else {
-                    continue;
-                };
-                if target == page.summary.path {
-                    continue;
-                }
-                reverse.entry(target).or_default().push(Backlink {
-                    path: page.summary.path.clone(),
-                    title: page.summary.title.clone(),
-                });
-            }
-        }
-        for entries in reverse.values_mut() {
-            entries.sort_by(|left, right| {
-                left.title
-                    .cmp(&right.title)
-                    .then(left.path.cmp(&right.path))
-            });
-            entries.dedup_by(|left, right| left.path == right.path);
-        }
-        *self
-            .backlinks
+    fn write_graph(&self) -> StoreResult<std::sync::RwLockWriteGuard<'_, LinkGraph>> {
+        self.graph
             .write()
-            .map_err(|_| StoreError::Operation("memory backlinks lock poisoned".to_string()))? =
-            reverse;
+            .map_err(|_| StoreError::Operation("memory graph lock poisoned".to_string()))
+    }
+
+    fn read_graph(&self) -> StoreResult<std::sync::RwLockReadGuard<'_, LinkGraph>> {
+        self.graph
+            .read()
+            .map_err(|_| StoreError::Operation("memory graph lock poisoned".to_string()))
+    }
+
+    fn rebuild_graph(&self) -> StoreResult<()> {
+        let pages = self.read_pages()?;
+        self.write_graph()?.rebuild_all(&pages);
         Ok(())
     }
 }
@@ -161,13 +140,9 @@ impl IndexReader for MemoryIndex {
     }
 
     async fn backlinks(&self, path: &str) -> StoreResult<Vec<Backlink>> {
-        Ok(self
-            .backlinks
-            .read()
-            .map_err(|_| StoreError::Operation("memory backlinks lock poisoned".to_string()))?
-            .get(path)
-            .cloned()
-            .unwrap_or_default())
+        let pages = self.read_pages()?;
+        let index = self.read_graph()?;
+        Ok(graph::backlinks_for(&index, path, &pages))
     }
 
     async fn mentions_for_target(&self, path: &str) -> StoreResult<Vec<MentionRecord>> {
@@ -212,15 +187,22 @@ impl IndexReader for MemoryIndex {
 impl IndexWriter for MemoryIndex {
     async fn replace_page(&self, page: PageIndex) -> StoreResult<IndexEvent> {
         let path = page.summary.path.clone();
-        self.write_pages()?.insert(path.clone(), page.clone());
+        let mut pages = self.write_pages()?;
+        let previous = pages.insert(path.clone(), page.clone());
+        self.write_graph()?.upsert_page(
+            &path,
+            &page.links,
+            previous.as_ref().map(|old| old.links.as_slice()),
+            &pages,
+        );
+        drop(pages);
         self.update_search_page(&page)?;
-        self.rebuild_backlinks()?;
         Ok(IndexEvent::PageIndexed { path })
     }
 
     async fn rebuild_search_index(&self) -> StoreResult<()> {
         self.rebuild_search()?;
-        self.rebuild_backlinks()
+        self.rebuild_graph()
     }
 
     async fn replace_pages(&self, pages: Vec<PageIndex>) -> StoreResult<Vec<IndexEvent>> {
@@ -324,9 +306,14 @@ impl IndexWriter for MemoryIndex {
     }
 
     async fn delete_page(&self, path: &str) -> StoreResult<IndexEvent> {
-        self.write_pages()?.remove(path);
+        let mut pages = self.write_pages()?;
+        let removed = pages.remove(path);
+        if let Some(old_page) = &removed {
+            self.write_graph()?
+                .remove_page(path, &old_page.links, &pages);
+        }
+        drop(pages);
         self.rebuild_search()?;
-        self.rebuild_backlinks()?;
         Ok(IndexEvent::PageDeleted {
             path: path.to_string(),
         })
