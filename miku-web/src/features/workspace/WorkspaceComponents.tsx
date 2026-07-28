@@ -356,10 +356,16 @@ export function ContextPanel({
         </div>
         {outgoingLinks.length ? (
           outgoingLinks.map((link) => (
-            <button className="relation-row backlink-row" key={link.path} onClick={() => onNavigate(link.path)}>
+            <button
+              className={`relation-row backlink-row ${link.isMissing ? "is-missing" : ""}`}
+              key={link.path}
+              onClick={() => onNavigate(link.path)}
+            >
               <span className="relation-line" />
               <span className="relation-copy">
-                <strong>{link.title}</strong>
+                <strong>
+                  {link.title} {link.isMissing && <span className="missing-badge">(uncreated)</span>}
+                </strong>
                 <small>{link.path}</small>
               </span>
               <ActionIcon name="arrow-up-right" />

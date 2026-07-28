@@ -84,41 +84,59 @@ export function createTargetResolver(notes: NoteCandidate[]): TargetResolver {
     if (!trimmed) return null;
     const lower = trimmed.toLowerCase().replace(/\.md$/, "");
 
+    // 1. Exact path match
     if (pathMap.has(lower)) {
       return pathMap.get(lower)!;
     }
 
+    // 2. Exact slug match
     const matches = slugMap.get(lower);
     if (matches && matches.length === 1) {
       return matches[0];
+    }
+
+    // 3. Singular / Plural variation (e.g. kb-convention -> kb-conventions)
+    const altSlug = lower.endsWith("s") ? lower.slice(0, -1) : `${lower}s`;
+    const altMatches = slugMap.get(altSlug);
+    if (altMatches && altMatches.length === 1) {
+      return altMatches[0];
+    }
+
+    // 4. Substring end-of-path match
+    for (const [normPath, fullPath] of pathMap.entries()) {
+      if (normPath.endsWith(`/${lower}`) || normPath.endsWith(`/${altSlug}`)) {
+        return fullPath;
+      }
     }
 
     return null;
   };
 }
 
-export function extractOutgoingLinks(body: string, notes?: NoteCandidate[]): { path: string; title: string }[] {
+export type OutgoingLinkItem = { path: string; title: string; isMissing: boolean };
+
+export function extractOutgoingLinks(body: string, notes?: NoteCandidate[]): OutgoingLinkItem[] {
   if (!body) return [];
   const matches = body.matchAll(/(?<!!)\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g);
   const resolver = notes ? createTargetResolver(notes) : null;
   const seen = new Set<string>();
-  const results: { path: string; title: string }[] = [];
+  const results: OutgoingLinkItem[] = [];
 
   for (const match of matches) {
     const target = match[1].trim();
     if (isAssetFile(target)) continue;
     const label = match[2]?.trim();
-    let resolvedPath = resolver ? resolver(target) : null;
-    if (!resolvedPath) {
-      resolvedPath = target.endsWith(".md") ? target : target + ".md";
-    }
-    if (seen.has(resolvedPath)) continue;
-    seen.add(resolvedPath);
+    const resolvedPath = resolver ? resolver(target) : null;
+    const isMissing = !resolvedPath;
+    const finalPath = resolvedPath || (target.endsWith(".md") ? target : `${target}.md`);
 
-    const matchedNote = notes?.find((n) => n.path === resolvedPath);
+    if (seen.has(finalPath)) continue;
+    seen.add(finalPath);
+
+    const matchedNote = notes?.find((n) => n.path === finalPath);
     const title = label || matchedNote?.title || target.split("/").pop()?.replace(/\.md$/, "") || target;
 
-    results.push({ path: resolvedPath, title });
+    results.push({ path: finalPath, title, isMissing });
   }
 
   return results;

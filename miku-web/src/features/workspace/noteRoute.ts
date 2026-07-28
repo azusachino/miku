@@ -28,10 +28,17 @@ export function useNoteRouteRecovery({ activeId, isNoteRoute, isError, hasNote, 
     if (isError) {
       if (handledInvalidRoute.current === activeId) return;
       handledInvalidRoute.current = activeId;
-      const fallback = tabs.find((tab) => tab !== activeId);
       setNotice(`Note not found: ${activeId}`);
+
+      const remaining = tabs.filter((t) => t !== activeId);
       dispatch({ type: "close", id: activeId });
-      navigate(fallback ? `/p/${fallback}` : "/p/Index.md");
+
+      if (remaining.length > 0) {
+        const next = remaining[remaining.length - 1];
+        navigate(`/p/${next.split("/").map(encodeURIComponent).join("/")}`);
+      } else {
+        navigate("/");
+      }
       return;
     }
     handledInvalidRoute.current = null;
