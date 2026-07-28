@@ -154,7 +154,8 @@ export function NotePane({
   onTagSearch,
   onNavigatePath,
   onSaveNote,
-  theme
+  theme,
+  notes
 }: {
   note: NoteModel;
   split: boolean;
@@ -166,6 +167,7 @@ export function NotePane({
   onNavigatePath: (path: string) => void;
   onSaveNote?: (note: NoteModel) => void;
   theme: Theme;
+  notes?: NoteModel[];
 }) {
   const [draft, setDraft] = useState(note.body);
   const [saveState, setSaveState] = useState("saved");
@@ -283,7 +285,7 @@ export function NotePane({
           </Suspense>
         ) : (
           <Suspense fallback={<div className="markdown-editor-loading">Rendering Markdown…</div>}>
-            <MarkdownReader value={note.body} path={note.path} theme={theme} />
+            <MarkdownReader value={note.body} path={note.path} theme={theme} notes={notes} />
           </Suspense>
         )}
       </div>

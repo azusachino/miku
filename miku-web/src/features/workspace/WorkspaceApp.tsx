@@ -387,6 +387,7 @@ export function WorkspaceScreen() {
                   onNavigatePath={openBreadcrumbPath}
                   onSaveNote={handleSaveNote}
                   theme={theme}
+                  notes={notes}
                 />
                 {state.split && (
                   <NotePane
@@ -400,6 +401,7 @@ export function WorkspaceScreen() {
                     onNavigatePath={openBreadcrumbPath}
                     onSaveNote={handleSaveNote}
                     theme={theme}
+                    notes={notes}
                   />
                 )}
                 <ContextPanel

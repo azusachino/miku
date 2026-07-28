@@ -1,4 +1,4 @@
-import { Children, cloneElement, isValidElement, useEffect, useId, useState, type ReactNode } from "react";
+import { Children, cloneElement, isValidElement, useEffect, useId, useMemo, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import ReactMarkdown from "react-markdown";
 import rehypeRaw from "rehype-raw";
@@ -60,18 +60,61 @@ export function resolveAssetSrc(src: string, currentPath: string): string {
   return "/api/v1/assets/" + normalized.map(encodeURIComponent).join("/");
 }
 
-export function noteHref(target: string): string {
+export type NoteCandidate = { id?: string; path: string; title?: string };
+export type TargetResolver = (target: string) => string | null;
+
+export function createTargetResolver(notes: NoteCandidate[]): TargetResolver {
+  const pathMap = new Map<string, string>();
+  const slugMap = new Map<string, string[]>();
+
+  for (const note of notes) {
+    if (!note.path) continue;
+    const normPath = note.path.toLowerCase().replace(/\.md$/, "");
+    pathMap.set(normPath, note.path);
+
+    const filename = note.path.split("/").pop() ?? note.path;
+    const slug = filename.toLowerCase().replace(/\.md$/, "");
+    const candidates = slugMap.get(slug) ?? [];
+    candidates.push(note.path);
+    slugMap.set(slug, candidates);
+  }
+
+  return (target: string) => {
+    const trimmed = target.trim();
+    if (!trimmed) return null;
+    const lower = trimmed.toLowerCase().replace(/\.md$/, "");
+
+    if (pathMap.has(lower)) {
+      return pathMap.get(lower)!;
+    }
+
+    const matches = slugMap.get(lower);
+    if (matches && matches.length === 1) {
+      return matches[0];
+    }
+
+    return null;
+  };
+}
+
+export function noteHref(target: string, resolveLink?: TargetResolver): string {
   const trimmed = target.trim();
+  if (resolveLink) {
+    const resolved = resolveLink(trimmed);
+    if (resolved) {
+      return "/p/" + resolved.split("/").map(encodeURIComponent).join("/");
+    }
+  }
   const path = trimmed.endsWith(".md") ? trimmed : trimmed + ".md";
   return "/p/" + path.split("/").map(encodeURIComponent).join("/");
 }
 
-export function resolveMarkdownHref(href: string, currentPath: string): string | null {
+export function resolveMarkdownHref(href: string, currentPath: string, resolveLink?: TargetResolver): string | null {
   const trimmed = href.trim();
   if (!trimmed || trimmed.startsWith("#") || /^[a-z][a-z\d+.-]*:/i.test(trimmed)) return null;
   if (trimmed.startsWith("/p/")) {
     const [target, hash] = trimmed.slice(3).split("#", 2);
-    return noteHref(target) + (hash ? `#${hash}` : "");
+    return noteHref(target, resolveLink) + (hash ? `#${hash}` : "");
   }
   if (trimmed.startsWith("/tags/") || trimmed.startsWith("/assets/")) return trimmed;
   const [target, hash] = trimmed.split("#", 2);
@@ -83,19 +126,19 @@ export function resolveMarkdownHref(href: string, currentPath: string): string |
     if (segment === "..") normalized.pop();
     else normalized.push(segment);
   }
-  return noteHref(normalized.join("/")) + (hash ? `#${hash}` : "");
+  return noteHref(normalized.join("/"), resolveLink) + (hash ? `#${hash}` : "");
 }
 
-export function expandWikiLinks(markdown: string): string {
+export function expandWikiLinks(markdown: string, resolveLink?: TargetResolver): string {
   const withEmbeds = markdown.replace(/!\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (_match, target: string, label?: string) => {
     const trimmedTarget = target.trim();
     const trimmedLabel = label?.trim() || trimmedTarget;
     if (isAssetFile(trimmedTarget)) {
       return `![${trimmedLabel}](${trimmedTarget})`;
     }
-    return `> Embedded note: [${trimmedLabel}](${noteHref(trimmedTarget)})`;
+    return `> Embedded note: [${trimmedLabel}](${noteHref(trimmedTarget, resolveLink)})`;
   });
-  return withEmbeds.replace(/(?<!!)\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (_match, target: string, label?: string) => "[" + (label?.trim() || target.trim()) + "](" + noteHref(target) + ")");
+  return withEmbeds.replace(/(?<!!)\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (_match, target: string, label?: string) => "[" + (label?.trim() || target.trim()) + "](" + noteHref(target, resolveLink) + ")");
 }
 
 export function expandInlineTags(markdown: string): string {
@@ -186,8 +229,22 @@ function SyntaxTheme({ theme }: { theme: Theme }) {
   return null;
 }
 
-export function MarkdownReader({ value, path = "", theme = "dark" }: { value: string; path?: string; theme?: Theme }) {
+export function MarkdownReader({
+  value,
+  path = "",
+  theme = "dark",
+  notes,
+  resolveLink
+}: {
+  value: string;
+  path?: string;
+  theme?: Theme;
+  notes?: NoteCandidate[];
+  resolveLink?: TargetResolver;
+}) {
   const navigate = useNavigate();
+  const resolver = useMemo(() => resolveLink ?? (notes ? createTargetResolver(notes) : undefined), [resolveLink, notes]);
+
   return (
     <article className={`markdown-reader prose prose-stone max-w-none ${theme === "dark" ? "prose-invert" : ""}`}>
       <SyntaxTheme theme={theme} />
@@ -200,7 +257,7 @@ export function MarkdownReader({ value, path = "", theme = "dark" }: { value: st
             return <img {...props} src={resolvedSrc} alt={alt ?? ""} className="note-image max-w-full h-auto rounded my-4" />;
           },
           a: ({ href, children, node: _node, ...props }) => {
-            const resolvedHref = href && path ? (resolveMarkdownHref(href, path) ?? href) : href;
+            const resolvedHref = href && path ? (resolveMarkdownHref(href, path, resolver) ?? href) : href;
             const internal = resolvedHref?.startsWith("/p/") || resolvedHref?.startsWith("/tags/");
             return (
               <a
@@ -259,7 +316,7 @@ export function MarkdownReader({ value, path = "", theme = "dark" }: { value: st
           }
         }}
       >
-        {expandInlineTags(expandWikiLinks(value))}
+        {expandInlineTags(expandWikiLinks(value, resolver))}
       </ReactMarkdown>
     </article>
   );
