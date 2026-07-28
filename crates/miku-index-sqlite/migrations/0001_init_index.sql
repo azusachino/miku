@@ -2,15 +2,17 @@
 -- Source of truth is miku/**/*.md; every table here is rebuildable from files.
 -- Single-writer: only the background indexer writes; HTTP handlers read.
 --
--- Per ADR-0019, this is a flat page KV + FTS5 cache: link, slug, alias, tag,
+-- Per ADR-0020, this is a flat page KV cache: link, slug, alias, tag,
 -- and backlink resolution live entirely in the hot MemoryIndex projection,
--- not as relational join targets here.
+-- not as relational join targets here. Full-text search is performed
+-- directly over tb_pages.body in Rust via rayon scanning.
 
 -- One row per Markdown file under miku/.
 CREATE TABLE tb_pages (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,
   path        TEXT NOT NULL UNIQUE,            -- relative to miku/, e.g. 'sub/Bar.md'
   title       TEXT NOT NULL,                   -- frontmatter title, else filename stem
+  body        TEXT NOT NULL DEFAULT '',        -- raw page body markdown
   frontmatter TEXT NOT NULL DEFAULT '{}',      -- JSON as text
   has_mermaid INTEGER NOT NULL DEFAULT 0,      -- boolean 0/1
   mtime       INTEGER NOT NULL                 -- file mtime (unix) for startup reconcile
@@ -31,9 +33,4 @@ CREATE INDEX idx_unlinked_mentions_source ON tb_unlinked_mentions(source_path);
 CREATE TABLE tb_index_meta (
   key   TEXT PRIMARY KEY,
   value TEXT NOT NULL
-);
-
--- FTS5 virtual table for full-text search
-CREATE VIRTUAL TABLE tb_pages_fts USING fts5(
-  path UNINDEXED, title, body, tokenize = 'porter unicode61'
 );
