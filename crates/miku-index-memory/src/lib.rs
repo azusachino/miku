@@ -158,13 +158,16 @@ impl IndexReader for MemoryIndex {
 
 #[async_trait]
 impl IndexWriter for MemoryIndex {
-    async fn replace_page(&self, page: PageIndex) -> StoreResult<IndexEvent> {
+    async fn replace_page(&self, mut page: PageIndex) -> StoreResult<IndexEvent> {
         let path = page.summary.path.clone();
+        let links = page.links.clone();
+        page.body.clear();
+        page.body.shrink_to_fit();
         let mut pages = self.write_pages()?;
-        let previous = pages.insert(path.clone(), page.clone());
+        let previous = pages.insert(path.clone(), page);
         self.write_graph()?.upsert_page(
             &path,
-            &page.links,
+            &links,
             previous.as_ref().map(|old| old.links.as_slice()),
             &pages,
         );
@@ -187,7 +190,9 @@ impl IndexWriter for MemoryIndex {
             })
             .collect();
         let mut indexed = self.write_pages()?;
-        for page in pages {
+        for mut page in pages {
+            page.body.clear();
+            page.body.shrink_to_fit();
             indexed.insert(page.summary.path.clone(), page);
         }
         drop(indexed);
