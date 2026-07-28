@@ -163,6 +163,7 @@ impl IndexWriter for MemoryIndex {
         let links = page.links.clone();
         page.body.clear();
         page.body.shrink_to_fit();
+        page.summary.frontmatter = serde_json::Value::Null;
         let mut pages = self.write_pages()?;
         let previous = pages.insert(path.clone(), page);
         self.write_graph()?.upsert_page(
@@ -193,6 +194,7 @@ impl IndexWriter for MemoryIndex {
         for mut page in pages {
             page.body.clear();
             page.body.shrink_to_fit();
+            page.summary.frontmatter = serde_json::Value::Null;
             indexed.insert(page.summary.path.clone(), page);
         }
         drop(indexed);
