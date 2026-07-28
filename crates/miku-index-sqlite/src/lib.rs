@@ -169,11 +169,49 @@ impl IndexReader for SqliteIndex {
             return Ok(Vec::new());
         }
 
-        let rows =
-            sqlx::query_as::<_, (String, String, String)>("SELECT path, title, body FROM tb_pages")
-                .fetch_all(self.pool())
-                .await
-                .map_err(database_error)?;
+        let mut builder =
+            sqlx::QueryBuilder::<sqlx::Sqlite>::new("SELECT path, title, body FROM tb_pages WHERE ");
+
+        for (i, term) in terms.iter().enumerate() {
+            if i > 0 {
+                builder.push(" AND ");
+            }
+            let escaped = term
+                .replace('\\', "\\\\")
+                .replace('%', "\\%")
+                .replace('_', "\\_");
+            let pattern = format!("%{escaped}%");
+
+            match request.scope {
+                SearchScope::Title => {
+                    builder.push("(path LIKE ");
+                    builder.push_bind(pattern.clone());
+                    builder.push(" ESCAPE '\\' OR title LIKE ");
+                    builder.push_bind(pattern);
+                    builder.push(" ESCAPE '\\')");
+                }
+                SearchScope::Body => {
+                    builder.push("body LIKE ");
+                    builder.push_bind(pattern);
+                    builder.push(" ESCAPE '\\'");
+                }
+                SearchScope::All => {
+                    builder.push("(path LIKE ");
+                    builder.push_bind(pattern.clone());
+                    builder.push(" ESCAPE '\\' OR title LIKE ");
+                    builder.push_bind(pattern.clone());
+                    builder.push(" ESCAPE '\\' OR body LIKE ");
+                    builder.push_bind(pattern);
+                    builder.push(" ESCAPE '\\')");
+                }
+            }
+        }
+
+        let rows = builder
+            .build_query_as::<(String, String, String)>()
+            .fetch_all(self.pool())
+            .await
+            .map_err(database_error)?;
 
         let mut hits: Vec<(f64, SearchHit)> = rows
             .into_par_iter()

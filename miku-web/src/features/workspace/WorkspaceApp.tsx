@@ -53,7 +53,18 @@ export function WorkspaceScreen() {
       return queryClient.getQueryData(["context", activeId]) ?? previousData;
     }
   });
-  const results = useQuery({ queryKey: ["search", query, searchScope], queryFn: () => client.search(query, searchScope), enabled: searchOpen });
+  const [debouncedQuery, setDebouncedQuery] = useState(query);
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedQuery(query), 150);
+    return () => clearTimeout(timer);
+  }, [query]);
+  const searchKey = debouncedQuery.trim();
+  const results = useQuery({
+    queryKey: ["search", searchKey, searchScope],
+    queryFn: () => client.search(searchKey, searchScope),
+    enabled: searchOpen && searchKey.length > 0,
+    staleTime: 30_000
+  });
   const isWorkspaceRoot = location.pathname === "/";
   const visibleTree = useMemo(() => [...(tree.data ?? []), ...(context.data?.children ?? [])], [context.data?.children, tree.data]);
   const treeNotes = useMemo(() => visibleTree.map((node) => ({ ...node.note, icon: "file-text", updated: "indexed", body: "", backlinks: [], tags: [] })), [visibleTree]);
