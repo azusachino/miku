@@ -25,13 +25,14 @@ export function useNoteRouteRecovery({ activeId, isNoteRoute, isError, hasNote, 
       handledInvalidRoute.current = null;
       return;
     }
+    const normActiveId = normalizeNotePath(activeId);
     if (isError) {
-      if (handledInvalidRoute.current === activeId) return;
-      handledInvalidRoute.current = activeId;
-      setNotice(`Note not found: ${activeId}`);
+      if (handledInvalidRoute.current === normActiveId) return;
+      handledInvalidRoute.current = normActiveId;
+      setNotice(`Note not found: ${normActiveId}`);
 
-      const remaining = tabs.filter((t) => t !== activeId);
-      dispatch({ type: "close", id: activeId });
+      const remaining = tabs.map(normalizeNotePath).filter((t) => t !== normActiveId);
+      dispatch({ type: "close", id: normActiveId });
 
       if (remaining.length > 0) {
         const next = remaining[remaining.length - 1];
@@ -42,6 +43,8 @@ export function useNoteRouteRecovery({ activeId, isNoteRoute, isError, hasNote, 
       return;
     }
     handledInvalidRoute.current = null;
-    if (hasNote) dispatch({ type: "open", id: activeId });
+    if (hasNote && !tabs.map(normalizeNotePath).includes(normActiveId)) {
+      dispatch({ type: "open", id: normActiveId });
+    }
   }, [activeId, dispatch, hasNote, isError, isNoteRoute, navigate, setNotice, tabs]);
 }
