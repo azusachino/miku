@@ -63,11 +63,11 @@ impl IndexReader for ComposedReader {
     }
 
     async fn list_pages(&self) -> StoreResult<Vec<PageSummary>> {
-        self.active().list_pages().await
+        self.durable.list_pages().await
     }
 
     async fn page(&self, path: &str) -> StoreResult<Option<PageSummary>> {
-        self.active().page(path).await
+        self.durable.page(path).await
     }
 
     async fn search(&self, request: SearchRequest) -> StoreResult<Vec<SearchHit>> {
