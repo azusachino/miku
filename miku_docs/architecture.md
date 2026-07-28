@@ -21,8 +21,8 @@ repo/
 │   ├── miku-vault/              # safe Markdown filesystem adapter
 │   ├── miku-markdown/           # Markdown parsing and source transforms
 │   ├── miku-indexer/            # filesystem-to-index projection builder
-│   ├── miku-index-memory/       # hot graph and Tantivy search projection
-│   ├── miku-index-sqlite/       # local durable projection
+│   ├── miku-index-memory/       # hot graph projection (ADR-0019/ADR-0020)
+│   ├── miku-index-sqlite/       # local durable projection and rayon search (ADR-0020)
 │   ├── miku-index-postgres/     # optional scale projection
 │   └── miku-cache-valkey/       # optional best-effort cache
 ├── miku-web/                    # React, TypeScript, Vite frontend
@@ -155,8 +155,8 @@ Four separate stores exist, not one "index." None of them holds the same shape o
 |---|---|---|---|
 | `miku_docs/**/*.md` | Full Markdown + YAML frontmatter. The only source of truth. | Unbounded — this is the vault, not a cache. | Disk |
 | `documents_cache` (`crates/miku-app/src/application.rs:20-25`) | Parsed `VaultDocument` (frontmatter + full body) for **recently opened notes only**. Hand-rolled LRU: `HashMap` + `VecDeque` order, evicts oldest on overflow (`application.rs:41-49`). | `DOCUMENT_CACHE_CAPACITY = 128` documents (`application.rs:20`) | Process RAM |
-| `tb_pages` / `tb_pages_fts` (SQLite, `crates/miku-index-sqlite`) | Per-page `path, title, frontmatter, has_mermaid, mtime` (`tb_pages`), plus a full-text copy of `path, title, body` for FTS5 (`tb_pages_fts`). No links/tags/aliases tables since ADR-0019 task-4. | Every page in the vault — but disk-backed, not RAM-resident; the OS/SQLite page cache decides what's actually memory-resident. | Disk (`miku_docs/.miku-index.sqlite`), OS-cached |
-| `MemoryIndex` (`crates/miku-index-memory`) | `pages: BTreeMap<String, PageIndex>` — every page's **full parsed body**, links, tags, aliases, signals (needed so `rebuild_search` in step 5 above can always re-supply Tantivy). `graph: LinkGraph` — `slug_index`/`path_index`/`backlinks`, just `String` paths, negligible size. `search` — Tantivy's own in-RAM index (`Index::create_in_ram`, `search.rs:27`) with its own separate `STORED` copy of `path, title, body` plus the inverted index/postings/positions. | Every page in the vault, fully RAM-resident, for the life of the process. This is the ~2.27 GB. | Process RAM |
+| `tb_pages` (SQLite, `crates/miku-index-sqlite`) | Per-page `path, title, body, frontmatter, has_mermaid, mtime` (`tb_pages`). No `tb_pages_fts` virtual table per ADR-0020. Searches raw body via `rayon` parallel scanning. | Every page in the vault — disk-backed (`282.2MB`), flat single-copy footprint. | Disk (`miku_docs/.miku-index.sqlite`), OS-cached |
+| `MemoryIndex` (`crates/miku-index-memory`) | `pages: BTreeMap<String, PageIndex>` — page summary, links, tags, aliases, signals (`body` is stripped per ADR-0020 via `clear() + shrink_to_fit()`). `graph: LinkGraph` — `slug_index`/`path_index`/`backlinks`. Tantivy removed entirely per ADR-0020. | Fast in-memory graph resolution without holding raw page text resident in RAM. Reconcile peak RSS delta **779.7MB** (down from ~2.27GB). | Process RAM |
 
 ### Read path: opening pages
 

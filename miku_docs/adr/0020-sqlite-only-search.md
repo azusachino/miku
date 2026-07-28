@@ -142,4 +142,9 @@ Local-file-first (`miku_docs/**/*.md` stays the only source of truth); backlinks
 
 ## Implementation status
 
-Proposed and accepted; not yet implemented. `crates/miku-index-memory` still depends on `tantivy` and holds full `PageIndex` (including `body`) in `pages: BTreeMap<String, PageIndex>`. `crates/miku-index-sqlite` does not yet have a `body` column, and `ComposedReader::search` still routes to whichever projection is `active()`. The experiments backing this decision live in `crates/miku-index-sqlite/examples/search_approach_bench.rs` (Approaches A/B/D/E/F/H, all reproducible via `cargo run -p miku-index-sqlite --release --example search_approach_bench -- miku_docs`). Adoption is tracked as its own asobi epic (`miku:sqlite-plain-search`), separate from the closed `miku:document-graph-index` epic (ADR-0019 tasks 1-5), since this changes ADR-0018's composition boundary rather than extending ADR-0019's link-graph work.
+Implemented and verified (`miku:sqlite-plain-search` epic, tasks 1–8). `crates/miku-index-sqlite` stores raw page bodies in `tb_pages.body` and searches via `rayon` parallel scanning with zero-allocation ASCII case-insensitive window matching. `crates/miku-index-memory` no longer depends on `tantivy` or holds page bodies in memory (`body.clear()` and `shrink_to_fit()` on store).
+
+Re-measured against the live 15,911-file `miku_docs` corpus via `make benchmark-real-vault`:
+- Reconcile time: **3.33s** (15,911 files, 280MB raw text)
+- Peak RSS delta: **779.7MB** (down from the ~2.27GB baseline with Tantivy + full body memory duplicate)
+- SQLite database size: **282.2MB** (single table copy, flat byte-for-byte footprint)
