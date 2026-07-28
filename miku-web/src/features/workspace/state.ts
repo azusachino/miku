@@ -8,7 +8,13 @@ export type WorkspaceState = {
 };
 
 export type WorkspaceAction =
-  { type: "open"; id: string } | { type: "close"; id: string } | { type: "toggle-split" } | { type: "toggle-context" } | { type: "toggle-hoist" } | { type: "focus"; target: WorkspaceState["focus"] };
+  | { type: "open"; id: string }
+  | { type: "close"; id: string }
+  | { type: "replace-tab"; oldId: string; newId: string }
+  | { type: "toggle-split" }
+  | { type: "toggle-context" }
+  | { type: "toggle-hoist" }
+  | { type: "focus"; target: WorkspaceState["focus"] };
 
 export const initialWorkspaceState: WorkspaceState = {
   tabs: [],
@@ -46,6 +52,23 @@ export function workspaceReducer(state: WorkspaceState, action: WorkspaceAction)
         ...state,
         tabs,
         activeId: normActive === normId ? tabs.at(-1)! : normActive
+      };
+    }
+    case "replace-tab": {
+      const oldNorm = normalize(action.oldId);
+      const newNorm = normalize(action.newId);
+      if (!newNorm) return state;
+      const updatedTabs: string[] = [];
+      for (const tab of state.tabs.map(normalize)) {
+        const target = tab === oldNorm ? newNorm : tab;
+        if (!updatedTabs.includes(target)) {
+          updatedTabs.push(target);
+        }
+      }
+      return {
+        ...state,
+        tabs: updatedTabs,
+        activeId: normalize(state.activeId) === oldNorm ? newNorm : normalize(state.activeId)
       };
     }
     case "toggle-split":

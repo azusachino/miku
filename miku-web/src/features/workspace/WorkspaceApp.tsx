@@ -72,6 +72,15 @@ export function WorkspaceScreen() {
   useEffect(() => {
     if (contextualNote) setNoteCache((current) => ({ ...current, [contextualNote.id]: contextualNote }));
   }, [contextualNote]);
+  useEffect(() => {
+    if (!contextualNote || !activeId || !isNoteRoute) return;
+    const normActive = normalizeNotePath(activeId);
+    const normCanonical = normalizeNotePath(contextualNote.path);
+    if (normActive !== normCanonical) {
+      dispatch({ type: "replace-tab", oldId: normActive, newId: normCanonical });
+      navigate(`/p/${normCanonical.split("/").map(encodeURIComponent).join("/")}`, { replace: true });
+    }
+  }, [activeId, contextualNote, isNoteRoute, navigate]);
   const notes = useMemo(() => {
     const combined = [...treeNotes, ...Object.values(noteCache)];
     const map = new Map<string, NoteModel>();
