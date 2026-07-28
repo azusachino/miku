@@ -8,7 +8,9 @@ import { WorkspaceTree } from "../../components/workspace/WorkspaceTree";
 import { headingSlug, shellRegions, type Theme } from "../../shared/ui";
 
 const MarkdownEditor = lazy(() => import("../markdown/MarkdownEditor"));
-const MarkdownReader = lazy(() => import("../markdown/MarkdownReader").then((module) => ({ default: module.MarkdownReader })));
+const MarkdownReaderModule = import("../markdown/MarkdownReader");
+const MarkdownReader = lazy(() => MarkdownReaderModule.then((module) => ({ default: module.MarkdownReader })));
+import { extractOutgoingLinks } from "../markdown/MarkdownReader";
 
 function noteHeadings(markdown: string): { id: string; text: string; level: number }[] {
   const headings: { id: string; text: string; level: number }[] = [];
@@ -300,7 +302,8 @@ export function ContextPanel({
   open,
   onToggle,
   onNavigate,
-  onResizeStart
+  onResizeStart,
+  notes
 }: {
   note: NoteModel;
   backlinks: BacklinkModel[];
@@ -309,6 +312,7 @@ export function ContextPanel({
   onToggle: () => void;
   onNavigate: (path: string) => void;
   onResizeStart: (event: React.PointerEvent<HTMLButtonElement>) => void;
+  notes?: NoteModel[];
 }) {
   if (!open)
     return (
@@ -316,6 +320,8 @@ export function ContextPanel({
         <ActionIcon name="chevron-left" />
       </button>
     );
+  const outgoingLinks = extractOutgoingLinks(note.body, notes);
+
   return (
     <aside className="context-panel" data-region={shellRegions[3]}>
       <button className="context-resizer" onPointerDown={onResizeStart} aria-label="Resize note context panel" />
@@ -342,6 +348,25 @@ export function ContextPanel({
           ))
         ) : (
           <p className="context-empty">No backlinks indexed yet.</p>
+        )}
+      </div>
+      <div className="context-section">
+        <div className="context-title">
+          Outgoing links <span>{outgoingLinks.length}</span>
+        </div>
+        {outgoingLinks.length ? (
+          outgoingLinks.map((link) => (
+            <button className="relation-row backlink-row" key={link.path} onClick={() => onNavigate(link.path)}>
+              <span className="relation-line" />
+              <span className="relation-copy">
+                <strong>{link.title}</strong>
+                <small>{link.path}</small>
+              </span>
+              <ActionIcon name="arrow-up-right" />
+            </button>
+          ))
+        ) : (
+          <p className="context-empty">No outgoing links in this note.</p>
         )}
       </div>
       <div className="context-section">

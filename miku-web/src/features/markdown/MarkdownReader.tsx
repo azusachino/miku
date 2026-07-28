@@ -97,6 +97,33 @@ export function createTargetResolver(notes: NoteCandidate[]): TargetResolver {
   };
 }
 
+export function extractOutgoingLinks(body: string, notes?: NoteCandidate[]): { path: string; title: string }[] {
+  if (!body) return [];
+  const matches = body.matchAll(/(?<!!)\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g);
+  const resolver = notes ? createTargetResolver(notes) : null;
+  const seen = new Set<string>();
+  const results: { path: string; title: string }[] = [];
+
+  for (const match of matches) {
+    const target = match[1].trim();
+    if (isAssetFile(target)) continue;
+    const label = match[2]?.trim();
+    let resolvedPath = resolver ? resolver(target) : null;
+    if (!resolvedPath) {
+      resolvedPath = target.endsWith(".md") ? target : target + ".md";
+    }
+    if (seen.has(resolvedPath)) continue;
+    seen.add(resolvedPath);
+
+    const matchedNote = notes?.find((n) => n.path === resolvedPath);
+    const title = label || matchedNote?.title || target.split("/").pop()?.replace(/\.md$/, "") || target;
+
+    results.push({ path: resolvedPath, title });
+  }
+
+  return results;
+}
+
 export function noteHref(target: string, resolveLink?: TargetResolver): string {
   const trimmed = target.trim();
   if (resolveLink) {

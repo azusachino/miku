@@ -416,6 +416,7 @@ export function WorkspaceScreen() {
                     resizingContext.current = true;
                     document.body.style.cursor = "col-resize";
                   }}
+                  notes={notes}
                 />
               </div>
             </>
