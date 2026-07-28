@@ -13,10 +13,8 @@ use std::collections::BTreeMap;
 use std::sync::{Arc, RwLock};
 
 mod graph;
-mod search;
 
 use graph::LinkGraph;
-use search::SearchProjection;
 
 type MentionKey = (String, String, String);
 type MentionMap = BTreeMap<MentionKey, MentionRecord>;
@@ -27,7 +25,6 @@ pub struct MemoryIndex {
     pages: Arc<RwLock<BTreeMap<String, PageIndex>>>,
     graph: Arc<RwLock<LinkGraph>>,
     mentions: Arc<RwLock<MentionMap>>,
-    search: Arc<RwLock<SearchProjection>>,
 }
 
 impl HotProjection for MemoryIndex {}
@@ -46,9 +43,6 @@ impl MemoryIndex {
             pages: Arc::new(RwLock::new(BTreeMap::new())),
             graph: Arc::new(RwLock::new(LinkGraph::default())),
             mentions: Arc::new(RwLock::new(BTreeMap::new())),
-            search: Arc::new(RwLock::new(
-                SearchProjection::new().expect("in-memory Tantivy projection must initialize"),
-            )),
         }
     }
 
@@ -66,24 +60,6 @@ impl MemoryIndex {
         self.pages
             .write()
             .map_err(|_| StoreError::Operation("memory index lock poisoned".to_string()))
-    }
-
-    fn update_search_page(&self, page: &PageIndex) -> StoreResult<()> {
-        self.search
-            .write()
-            .map_err(|_| StoreError::Operation("memory search lock poisoned".to_string()))?
-            .update_page(page)
-    }
-
-    fn rebuild_search(&self) -> StoreResult<()> {
-        let pages = self
-            .pages
-            .read()
-            .map_err(|_| StoreError::Operation("memory index lock poisoned".to_string()))?;
-        self.search
-            .write()
-            .map_err(|_| StoreError::Operation("memory search lock poisoned".to_string()))?
-            .rebuild(&pages.values().cloned().collect::<Vec<_>>())
     }
 
     fn write_graph(&self) -> StoreResult<std::sync::RwLockWriteGuard<'_, LinkGraph>> {
@@ -110,7 +86,7 @@ impl IndexReader for MemoryIndex {
     async fn capabilities(&self) -> StoreResult<IndexCapabilities> {
         Ok(IndexCapabilities {
             durable: false,
-            full_text_search: true,
+            full_text_search: false,
             fuzzy_page_search: false,
             transactions: true,
             remote_sync: false,
@@ -132,11 +108,8 @@ impl IndexReader for MemoryIndex {
             .map(|page| page.summary.clone()))
     }
 
-    async fn search(&self, request: SearchRequest) -> StoreResult<Vec<SearchHit>> {
-        self.search
-            .read()
-            .map_err(|_| StoreError::Operation("memory search lock poisoned".to_string()))?
-            .search(&request)
+    async fn search(&self, _request: SearchRequest) -> StoreResult<Vec<SearchHit>> {
+        Ok(Vec::new())
     }
 
     async fn backlinks(&self, path: &str) -> StoreResult<Vec<Backlink>> {
@@ -196,12 +169,10 @@ impl IndexWriter for MemoryIndex {
             &pages,
         );
         drop(pages);
-        self.update_search_page(&page)?;
         Ok(IndexEvent::PageIndexed { path })
     }
 
     async fn rebuild_search_index(&self) -> StoreResult<()> {
-        self.rebuild_search()?;
         self.rebuild_graph()
     }
 
@@ -220,9 +191,6 @@ impl IndexWriter for MemoryIndex {
             indexed.insert(page.summary.path.clone(), page);
         }
         drop(indexed);
-        // Bulk callers rebuild the search projection once after all batches
-        // have been loaded. Rebuilding here would make a full reconcile
-        // quadratic in the number of batches.
         Ok(events)
     }
 
@@ -313,11 +281,11 @@ impl IndexWriter for MemoryIndex {
                 .remove_page(path, &old_page.links, &pages);
         }
         drop(pages);
-        self.rebuild_search()?;
         Ok(IndexEvent::PageDeleted {
             path: path.to_string(),
         })
     }
+}
 }
 
 #[cfg(test)]
