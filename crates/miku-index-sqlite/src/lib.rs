@@ -7,7 +7,7 @@ use std::str::FromStr;
 use std::time::Duration;
 
 use miku_domain::{
-    Backlink, DurableProjection, IndexCapabilities, IndexEvent, IndexReader, IndexWriter, LinkKind,
+    Backlink, DurableProjection, IndexCapabilities, IndexEvent, IndexReader, IndexWriter,
     MentionRecord, PageIndex, PageSummary, SearchHit, SearchRequest, SearchScope, StoreError,
     StoreResult, TagCount,
 };
@@ -247,27 +247,11 @@ impl IndexReader for SqliteIndex {
         .map_err(database_error)
     }
 
-    async fn backlinks(&self, path: &str) -> StoreResult<Vec<Backlink>> {
-        sqlx::query_as::<_, (String, String)>(
-            "SELECT DISTINCT src.path, src.title
-             FROM tb_links link
-             JOIN tb_pages target ON target.id = link.target_id
-             JOIN tb_pages src ON src.id = link.src_id
-             WHERE target.path = ? AND link.kind = 'page'
-             ORDER BY src.title, src.path LIMIT 50",
-        )
-        .bind(page_path(path))
-        .fetch_all(self.pool())
-        .await
-        .map(|rows| {
-            rows.into_iter()
-                .map(|(path, title)| Backlink {
-                    path: path.strip_suffix(".md").unwrap_or(&path).to_string(),
-                    title,
-                })
-                .collect()
-        })
-        .map_err(database_error)
+    /// Link-graph resolution now lives entirely in the hot `MemoryIndex`
+    /// projection (ADR-0019); the durable SQLite projection no longer
+    /// tracks a relational link graph, so this always returns no backlinks.
+    async fn backlinks(&self, _path: &str) -> StoreResult<Vec<Backlink>> {
+        Ok(Vec::new())
     }
 
     async fn mentions_for_target(&self, _path: &str) -> StoreResult<Vec<MentionRecord>> {
@@ -317,57 +301,34 @@ impl IndexReader for SqliteIndex {
             .map_err(database_error)
     }
 
+    /// Tag resolution now lives entirely in the hot `MemoryIndex` projection
+    /// (ADR-0019); the durable SQLite projection no longer maintains a tag
+    /// table, so this always returns no tags.
     async fn tags(&self) -> StoreResult<Vec<TagCount>> {
-        sqlx::query_as::<_, (String, i64)>(
-            "SELECT tag, COUNT(*) FROM tb_tags GROUP BY tag ORDER BY COUNT(*) DESC, tag",
-        )
-        .fetch_all(self.pool())
-        .await
-        .map(|rows| {
-            rows.into_iter()
-                .map(|(tag, count)| TagCount { tag, count })
-                .collect()
-        })
-        .map_err(database_error)
+        Ok(Vec::new())
     }
 
-    async fn pages_with_tag(&self, tag: &str) -> StoreResult<Vec<PageSummary>> {
-        let rows = sqlx::query_as::<_, (String, String, String, i64)>(
-            "SELECT p.path, p.title, p.frontmatter, p.mtime
-             FROM tb_tags t JOIN tb_pages p ON p.id = t.page_id
-             WHERE t.tag = ? ORDER BY p.title, p.path",
-        )
-        .bind(tag)
-        .fetch_all(self.pool())
-        .await
-        .map_err(database_error)?;
-
-        let mut summaries = Vec::with_capacity(rows.len());
-        for (path, title, frontmatter_str, mtime) in rows {
-            let frontmatter = serde_json::from_str(&frontmatter_str)
-                .map_err(|e| StoreError::Operation(format!("invalid frontmatter JSON: {e}")))?;
-            summaries.push(PageSummary {
-                path,
-                title,
-                frontmatter,
-                mtime,
-            });
-        }
-        Ok(summaries)
+    /// See [`SqliteIndex::tags`]: always empty now that tags are memory-only.
+    async fn pages_with_tag(&self, _tag: &str) -> StoreResult<Vec<PageSummary>> {
+        Ok(Vec::new())
     }
 }
 
+/// Writes a page's content and search document only. Per ADR-0019, the
+/// durable SQLite projection is a page KV + FTS5 cache: it no longer tracks
+/// links, tags, or aliases as relational join targets, so there is nothing
+/// here to resolve against other pages.
 async fn replace_page_conn(
     conn: &mut sqlx::SqliteConnection,
     page: PageIndex,
     search_enabled: bool,
-) -> StoreResult<(IndexEvent, i64, String, String)> {
+) -> StoreResult<IndexEvent> {
     let path = page.summary.path.clone();
     let slug = page_slug(&path);
     let frontmatter_str = page.summary.frontmatter.to_string();
     let has_mermaid_int = if page.has_mermaid { 1 } else { 0 };
 
-    let (page_id,): (i64,) = sqlx::query_as(
+    sqlx::query(
         "INSERT INTO tb_pages (path, slug, title, frontmatter, has_mermaid, mtime)
          VALUES (?, ?, ?, ?, ?, ?)
          ON CONFLICT (path) DO UPDATE SET
@@ -375,8 +336,7 @@ async fn replace_page_conn(
            title = EXCLUDED.title,
            frontmatter = EXCLUDED.frontmatter,
            has_mermaid = EXCLUDED.has_mermaid,
-           mtime = EXCLUDED.mtime
-         RETURNING id",
+           mtime = EXCLUDED.mtime",
     )
     .bind(&path)
     .bind(&slug)
@@ -384,7 +344,7 @@ async fn replace_page_conn(
     .bind(&frontmatter_str)
     .bind(has_mermaid_int)
     .bind(page.summary.mtime)
-    .fetch_one(&mut *conn)
+    .execute(&mut *conn)
     .await
     .map_err(database_error)?;
 
@@ -404,186 +364,14 @@ async fn replace_page_conn(
             .map_err(database_error)?;
     }
 
-    sqlx::query("DELETE FROM tb_links WHERE src_id = ?")
-        .bind(page_id)
-        .execute(&mut *conn)
-        .await
-        .map_err(database_error)?;
-
-    sqlx::query("DELETE FROM tb_tags WHERE page_id = ?")
-        .bind(page_id)
-        .execute(&mut *conn)
-        .await
-        .map_err(database_error)?;
-
-    sqlx::query("DELETE FROM tb_page_aliases WHERE page_id = ?")
-        .bind(page_id)
-        .execute(&mut *conn)
-        .await
-        .map_err(database_error)?;
-
-    for tag in &page.tags {
-        sqlx::query("INSERT INTO tb_tags (page_id, tag) VALUES (?, ?)")
-            .bind(page_id)
-            .bind(tag)
-            .execute(&mut *conn)
-            .await
-            .map_err(database_error)?;
-    }
-
-    for alias in &page.aliases {
-        sqlx::query("INSERT INTO tb_page_aliases (page_id, alias) VALUES (?, ?)")
-            .bind(page_id)
-            .bind(alias)
-            .execute(&mut *conn)
-            .await
-            .map_err(database_error)?;
-    }
-
-    for link in &page.links {
-        let kind = match link.kind {
-            LinkKind::Page => "page",
-            LinkKind::Asset => "asset",
-        };
-        let is_embed_int = if link.is_embed { 1 } else { 0 };
-        sqlx::query(
-            "INSERT INTO tb_links (src_id, kind, is_embed, target, target_norm, alias)
-             VALUES (?, ?, ?, ?, ?, ?)
-             ON CONFLICT (src_id, kind, target_norm, is_embed) DO NOTHING",
-        )
-        .bind(page_id)
-        .bind(kind)
-        .bind(is_embed_int)
-        .bind(&link.target)
-        .bind(&link.target_norm)
-        .bind(&link.alias)
-        .execute(&mut *conn)
-        .await
-        .map_err(database_error)?;
-    }
-
-    Ok((
-        IndexEvent::PageIndexed { path: path.clone() },
-        page_id,
-        path,
-        slug,
-    ))
-}
-
-async fn resolve_links_conn_for_page(
-    conn: &mut sqlx::SqliteConnection,
-    page_id: i64,
-    path: &str,
-    slug: &str,
-) -> StoreResult<()> {
-    // 1. Resolve outbound path-based links from this page
-    sqlx::query(
-        "UPDATE tb_links
-         SET target_id = (
-           SELECT p.id FROM tb_pages p
-           WHERE lower(p.path) = tb_links.target_norm || '.md'
-         )
-         WHERE src_id = ? AND kind = 'page' AND instr(target_norm, '/') > 0",
-    )
-    .bind(page_id)
-    .execute(&mut *conn)
-    .await
-    .map_err(database_error)?;
-
-    // 2. Resolve outbound slug-based links from this page
-    sqlx::query(
-        "UPDATE tb_links
-         SET target_id = (
-           SELECT p.id FROM tb_pages p
-           WHERE p.slug = tb_links.target_norm
-           GROUP BY p.slug HAVING COUNT(*) = 1
-         )
-         WHERE src_id = ? AND kind = 'page' AND instr(target_norm, '/') = 0",
-    )
-    .bind(page_id)
-    .execute(&mut *conn)
-    .await
-    .map_err(database_error)?;
-
-    // 3. Resolve inbound dangling path-based links targeting this page
-    let norm_path = path.trim_end_matches(".md").to_lowercase();
-    sqlx::query(
-        "UPDATE tb_links
-         SET target_id = ?
-         WHERE kind = 'page'
-           AND target_id IS NULL
-           AND instr(target_norm, '/') > 0
-           AND target_norm = ?",
-    )
-    .bind(page_id)
-    .bind(&norm_path)
-    .execute(&mut *conn)
-    .await
-    .map_err(database_error)?;
-
-    // 4. Resolve inbound dangling slug-based links targeting this page if slug is unique
-    sqlx::query(
-        "UPDATE tb_links
-         SET target_id = (
-           SELECT CASE WHEN COUNT(*) = 1 THEN ? ELSE NULL END FROM tb_pages WHERE slug = ?
-         )
-         WHERE kind = 'page'
-           AND instr(target_norm, '/') = 0
-           AND target_norm = ?",
-    )
-    .bind(page_id)
-    .bind(slug)
-    .bind(slug)
-    .execute(&mut *conn)
-    .await
-    .map_err(database_error)?;
-
-    Ok(())
-}
-
-async fn resolve_links_conn(conn: &mut sqlx::SqliteConnection) -> StoreResult<()> {
-    // 1. Bulk resolve path-based links
-    sqlx::query(
-        "UPDATE tb_links
-         SET target_id = (
-           SELECT p.id FROM tb_pages p
-           WHERE lower(p.path) = tb_links.target_norm || '.md'
-         )
-         WHERE kind = 'page' AND instr(target_norm, '/') > 0",
-    )
-    .execute(&mut *conn)
-    .await
-    .map_err(database_error)?;
-
-    // 2. Bulk resolve slug-based links
-    sqlx::query(
-        "WITH unique_slugs AS (
-           SELECT slug, MIN(id) AS id
-           FROM tb_pages
-           GROUP BY slug
-           HAVING COUNT(*) = 1
-         )
-         UPDATE tb_links
-         SET target_id = (
-           SELECT u.id FROM unique_slugs u
-           WHERE u.slug = tb_links.target_norm
-         )
-         WHERE kind = 'page' AND instr(target_norm, '/') = 0",
-    )
-    .execute(&mut *conn)
-    .await
-    .map_err(database_error)?;
-
-    Ok(())
+    Ok(IndexEvent::PageIndexed { path })
 }
 
 #[async_trait]
 impl IndexWriter for SqliteIndex {
     async fn replace_page(&self, page: PageIndex) -> StoreResult<IndexEvent> {
         let mut tx = self.pool.begin().await.map_err(database_error)?;
-        let (event, page_id, path, slug) =
-            replace_page_conn(&mut tx, page, self.search_enabled).await?;
-        resolve_links_conn_for_page(&mut tx, page_id, &path, &slug).await?;
+        let event = replace_page_conn(&mut tx, page, self.search_enabled).await?;
         tx.commit().await.map_err(database_error)?;
         Ok(event)
     }
@@ -592,10 +380,8 @@ impl IndexWriter for SqliteIndex {
         let mut tx = self.pool.begin().await.map_err(database_error)?;
         let mut events = Vec::with_capacity(pages.len());
         for page in pages {
-            let (event, _, _, _) = replace_page_conn(&mut tx, page, self.search_enabled).await?;
-            events.push(event);
+            events.push(replace_page_conn(&mut tx, page, self.search_enabled).await?);
         }
-        resolve_links_conn(&mut tx).await?;
         tx.commit().await.map_err(database_error)?;
         Ok(events)
     }
@@ -842,7 +628,7 @@ mod tests {
             target: "Second.md".to_string(),
             target_norm: "second".to_string(),
             alias: Some("alias_link".to_string()),
-            kind: LinkKind::Page,
+            kind: miku_domain::LinkKind::Page,
             is_embed: false,
         };
         let page1 = test_page(
@@ -916,20 +702,19 @@ mod tests {
             .expect("search punctuation");
         assert!(punctuation_hits.is_empty());
 
-        // Backlinks
-        let links = store.backlinks("Second").await.expect("backlinks");
-        assert_eq!(links.len(), 1);
-        assert_eq!(links[0].path, "First");
-
-        // Tags
-        let tags = store.tags().await.expect("tags");
-        assert_eq!(tags.len(), 3);
-        assert_eq!(tags[0].tag, "miku");
-        assert_eq!(tags[0].count, 1);
-
-        let tagged_pages = store.pages_with_tag("note").await.expect("pages with tag");
-        assert_eq!(tagged_pages.len(), 1);
-        assert_eq!(tagged_pages[0].path, "Second.md");
+        // Backlinks and tags are memory-only per ADR-0019; the durable
+        // SQLite projection no longer tracks a link graph or tag table.
+        assert!(store
+            .backlinks("Second")
+            .await
+            .expect("backlinks")
+            .is_empty());
+        assert!(store.tags().await.expect("tags").is_empty());
+        assert!(store
+            .pages_with_tag("note")
+            .await
+            .expect("pages with tag")
+            .is_empty());
 
         // Mentions
         let mention = MentionRecord {
@@ -998,7 +783,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_batch_writes_and_transaction_rollback() {
+    async fn test_batch_writes() {
         let temp_file = NamedTempFile::new().expect("failed to create temp file");
         let temp_path = temp_file.path().to_str().expect("temp path");
         let store = SqliteIndex::open(temp_path).await.expect("open store");
@@ -1017,28 +802,10 @@ mod tests {
             .expect("empty batch")
             .is_empty());
 
-        let invalid = test_page(
-            "Broken.md",
-            "must not commit",
-            vec!["duplicate", "duplicate"],
-            vec![],
-        );
-        assert!(store.replace_page(invalid).await.is_err());
-        assert!(store
-            .page("Broken")
-            .await
-            .expect("rollback lookup")
-            .is_none());
-        assert!(store
-            .search(SearchRequest {
-                query: "must not commit".to_string(),
-                scope: SearchScope::Body,
-                limit: 10,
-            })
-            .await
-            .expect("rollback search")
-            .is_empty());
-
+        // A prior duplicate-tag case exercised transaction rollback here via
+        // a tb_tags primary-key conflict; that table is retired per
+        // ADR-0019, and tb_pages/tb_pages_fts have no writer-reachable
+        // conflict left to probe atomicity with.
         store.rebuild_search_index().await.expect("default rebuild");
     }
 
@@ -1210,7 +977,13 @@ mod tests {
             .await
             .expect("corrupt frontmatter");
         assert!(store.list_pages().await.is_err());
-        assert!(store.pages_with_tag("broken").await.is_err());
+        // pages_with_tag no longer reads frontmatter (tags are memory-only
+        // per ADR-0019), so malformed JSON elsewhere no longer surfaces here.
+        assert!(store
+            .pages_with_tag("broken")
+            .await
+            .expect("pages_with_tag ignores frontmatter")
+            .is_empty());
     }
 
     #[tokio::test]

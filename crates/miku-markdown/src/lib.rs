@@ -87,9 +87,9 @@ pub fn is_asset_path(path: &str) -> bool {
         || lower.ends_with(".webp")
 }
 
-/// Normalize a wikilink target into the resolver key stored in `tb_pages.slug`
-/// / `tb_links.target_norm`: lowercased, with a trailing `.md` stripped for
-/// pages (assets keep their extension).
+/// Normalize a wikilink target into the resolver key stored in
+/// `tb_pages.slug` / `LinkRecord::target_norm`: lowercased, with a trailing
+/// `.md` stripped for pages (assets keep their extension).
 pub fn normalize_target(name: &str, is_asset: bool) -> String {
     let trimmed = name.trim();
     if is_asset {
