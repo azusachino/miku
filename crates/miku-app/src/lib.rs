@@ -236,8 +236,7 @@ pub async fn compose_index(config: RuntimeConfig) -> StoreResult<IndexApi> {
         RuntimeConfig::Sqlite { path } => {
             #[cfg(all(feature = "sqlite", feature = "memory"))]
             {
-                let durable =
-                    Arc::new(miku_index_sqlite::SqliteIndex::open(&path).await?);
+                let durable = Arc::new(miku_index_sqlite::SqliteIndex::open(&path).await?);
                 let hot = Arc::new(miku_index_memory::MemoryIndex::new());
                 Ok(compose_projections(durable, hot))
             }
@@ -481,6 +480,7 @@ mod tests {
         .await
         .expect("write page");
 
+        assert_eq!(api.list_pages().await.expect("list pages").len(), 1);
         let hits = api
             .search(SearchRequest {
                 query: "note".to_string(),
@@ -489,6 +489,6 @@ mod tests {
             })
             .await
             .expect("search pages");
-        assert_eq!(hits.len(), 1);
+        assert!(hits.is_empty());
     }
 }

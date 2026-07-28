@@ -169,12 +169,11 @@ impl IndexReader for SqliteIndex {
             return Ok(Vec::new());
         }
 
-        let rows = sqlx::query_as::<_, (String, String, String)>(
-            "SELECT path, title, body FROM tb_pages",
-        )
-        .fetch_all(self.pool())
-        .await
-        .map_err(database_error)?;
+        let rows =
+            sqlx::query_as::<_, (String, String, String)>("SELECT path, title, body FROM tb_pages")
+                .fetch_all(self.pool())
+                .await
+                .map_err(database_error)?;
 
         let mut hits: Vec<(f64, SearchHit)> = rows
             .into_par_iter()
@@ -620,6 +619,7 @@ mod tests {
             .expect("search body");
         assert_eq!(hits.len(), 1);
         assert_eq!(hits[0].path, "First.md");
+        assert_eq!(hits[0].snippet, "Miku wiki");
 
         // Search title
         let hits = store

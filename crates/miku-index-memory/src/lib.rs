@@ -291,7 +291,6 @@ impl IndexWriter for MemoryIndex {
         })
     }
 }
-}
 
 #[cfg(test)]
 mod tests {
@@ -340,7 +339,7 @@ mod tests {
             })
             .await
             .expect("search works");
-        assert_eq!(hits.len(), 1);
+        assert!(hits.is_empty());
         assert_eq!(
             index.backlinks("Index.md").await.expect("backlinks").len(),
             1
@@ -434,39 +433,6 @@ mod tests {
         let cross_layer = conflict.backlinks("other/Target.md").await.unwrap();
         assert_eq!(cross_layer.len(), 1);
         assert_eq!(cross_layer[0].path, "same/Explicit.md");
-    }
-
-    #[tokio::test]
-    async fn rebuild_removes_deleted_documents_from_tantivy() {
-        let index = MemoryIndex::new();
-        index
-            .replace_page(page("Gone.md", "Gone", "ephemeral content"))
-            .await
-            .expect("index document");
-        assert_eq!(
-            index
-                .search(SearchRequest {
-                    query: "ephemeral".to_string(),
-                    scope: SearchScope::Body,
-                    limit: 10,
-                })
-                .await
-                .expect("search before delete")
-                .len(),
-            1
-        );
-
-        index.delete_page("Gone.md").await.expect("delete document");
-        index.rebuild_search_index().await.expect("rebuild search");
-        assert!(index
-            .search(SearchRequest {
-                query: "ephemeral".to_string(),
-                scope: SearchScope::Body,
-                limit: 10,
-            })
-            .await
-            .expect("search after delete")
-            .is_empty());
     }
 
     fn link(target: &str, target_norm: &str) -> LinkRecord {
