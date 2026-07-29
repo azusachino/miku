@@ -248,6 +248,26 @@ pub trait IndexReader: Send + Sync {
     /// List all indexed pages in deterministic order.
     async fn list_pages(&self) -> StoreResult<Vec<PageSummary>>;
 
+    /// List indexed pages whose path starts with `prefix` (or every page,
+    /// for an empty prefix). Backed by `list_pages` plus a filter by
+    /// default; durable backends override this to push the prefix down to
+    /// the query instead of fetching and JSON-parsing every page's
+    /// frontmatter just to discard most of it, which is what a
+    /// folder-scoped tree request needs (`list_pages` proper is still the
+    /// right call for anything that genuinely needs the whole vault, like
+    /// global wikilink resolution).
+    async fn list_pages_under(&self, prefix: &str) -> StoreResult<Vec<PageSummary>> {
+        let pages = self.list_pages().await?;
+        Ok(if prefix.is_empty() {
+            pages
+        } else {
+            pages
+                .into_iter()
+                .filter(|page| page.path.starts_with(prefix))
+                .collect()
+        })
+    }
+
     /// Load one indexed page summary, if it exists.
     async fn page(&self, path: &str) -> StoreResult<Option<PageSummary>>;
 

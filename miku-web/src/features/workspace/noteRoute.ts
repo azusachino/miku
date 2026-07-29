@@ -6,6 +6,36 @@ export function normalizeNotePath(path: string): string {
   return path.endsWith(".md") ? path : `${path}.md`;
 }
 
+type CloseTabOptions = {
+  id: string;
+  tabs: string[];
+  /**
+   * The note actually being viewed right now, derived from the URL (e.g.
+   * `activeId` in WorkspaceApp) -- NOT the reducer's internal
+   * `state.activeId`. That field only updates when something dispatches
+   * "open"/"replace-tab"; navigating to an already-open note via a direct
+   * `navigate()` call (e.g. clicking a wikilink inside MarkdownReader,
+   * which never dispatches) changes the URL and the rendered note without
+   * updating it. Using the stale reducer field here means closing the tab
+   * you're actually looking at silently fails to navigate away, even
+   * though the tab is correctly removed from the list.
+   */
+  activeId: string;
+  dispatch: Dispatch<WorkspaceAction>;
+  navigate: NavigateFunction;
+};
+
+export function closeTab({ id, tabs, activeId, dispatch, navigate }: CloseTabOptions): void {
+  const normId = normalizeNotePath(id);
+  const remaining = tabs.map(normalizeNotePath).filter((tab) => tab !== normId);
+  dispatch({ type: "close", id: normId });
+  if (!remaining.length) {
+    navigate("/");
+  } else if (normalizeNotePath(activeId) === normId) {
+    navigate(`/p/${remaining.at(-1)!.split("/").map(encodeURIComponent).join("/")}`);
+  }
+}
+
 type NoteRouteRecoveryOptions = {
   activeId: string;
   isNoteRoute: boolean;

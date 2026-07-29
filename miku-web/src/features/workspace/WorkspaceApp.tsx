@@ -5,7 +5,7 @@ import { createWorkspaceClient, subscribeToWorkspaceEvents, type ApiSource, type
 import { ContextPanel, FolderBrowser, LaunchBar, NotePane, SettingsDialog, Sidebar, Tabs, WorkspaceUtility } from "./WorkspaceComponents";
 import { NoteIcon } from "../../components/workspace/icons";
 import { WorkspaceNotice } from "../../components/workspace/WorkspaceNotice";
-import { normalizeNotePath, useNoteRouteRecovery } from "./noteRoute";
+import { closeTab, normalizeNotePath, useNoteRouteRecovery } from "./noteRoute";
 import { UI_STATE_VERSION, moveSearchSelection, readTheme, shellRegions, writeTheme, type Theme } from "../../shared/ui";
 import { initialWorkspaceState, workspaceReducer } from "./state";
 
@@ -229,15 +229,7 @@ export function WorkspaceScreen() {
     const recent = JSON.parse(localStorage.getItem("miku-recent") ?? "[]") as string[];
     localStorage.setItem("miku-recent", JSON.stringify([targetId, ...recent.filter((path) => path !== targetId)].slice(0, 20)));
   };
-  const closeTab = (id: string) => {
-    const remaining = state.tabs.filter((tab) => tab !== id);
-    dispatch({ type: "close", id });
-    if (!remaining.length) {
-      navigate("/");
-    } else if (state.activeId === id) {
-      navigate(`/p/${remaining.at(-1)!.split("/").map(encodeURIComponent).join("/")}`);
-    }
-  };
+  const closeTabHandler = (id: string) => closeTab({ id, tabs: state.tabs, activeId, dispatch, navigate });
   const openBreadcrumbPath = (path: string) => {
     if (!path) {
       navigate("/");
@@ -408,7 +400,7 @@ export function WorkspaceScreen() {
             <WorkspaceUtility route={utilityRoute} theme={theme} onToggleTheme={toggleTheme} client={client} />
           ) : (
             <>
-              <Tabs notes={notes} tabs={state.tabs} activeId={activeId} activeNote={activeNote} onSelect={select} onClose={closeTab} />
+              <Tabs notes={notes} tabs={state.tabs} activeId={activeId} activeNote={activeNote} onSelect={select} onClose={closeTabHandler} />
               <div className="content-stage">
                 <NotePane
                   note={activeNote}

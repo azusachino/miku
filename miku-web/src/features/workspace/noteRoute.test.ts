@@ -2,7 +2,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { renderHook } from "@testing-library/react";
 import type { NavigateFunction } from "react-router-dom";
-import { normalizeNotePath, useNoteRouteRecovery } from "./noteRoute";
+import { closeTab, normalizeNotePath, useNoteRouteRecovery } from "./noteRoute";
 
 describe("note route normalization", () => {
   it("treats extensionless note paths as Markdown files", () => {
@@ -44,5 +44,55 @@ describe("useNoteRouteRecovery", () => {
     const options = baseOptions();
     renderHook(() => useNoteRouteRecovery({ ...options, canonicalId: undefined }));
     expect(options.dispatch).toHaveBeenCalledWith({ type: "open", id: "target-title.md" });
+  });
+});
+
+describe("closeTab", () => {
+  it("navigates away when closing the note actually being viewed, even if it wasn't opened via dispatch", () => {
+    // Regression test: navigating to an already-open note via a direct
+    // navigate() call (e.g. clicking a wikilink inside MarkdownReader)
+    // never dispatches "open", so the reducer's internal activeId can
+    // lag behind the URL-derived activeId that's actually rendered.
+    // Closing the tab you're looking at must still navigate away --
+    // checking the stale reducer field instead used to silently do
+    // nothing, even though the tab was correctly removed from the list.
+    const dispatch = vi.fn();
+    const navigate = vi.fn() as unknown as NavigateFunction;
+    closeTab({
+      id: "b.md",
+      tabs: ["a.md", "b.md"],
+      activeId: "b.md", // URL-derived: this is what's actually on screen
+      dispatch,
+      navigate
+    });
+    expect(dispatch).toHaveBeenCalledWith({ type: "close", id: "b.md" });
+    expect(navigate).toHaveBeenCalledWith("/p/a.md");
+  });
+
+  it("does not navigate away when closing a tab that isn't the one being viewed", () => {
+    const dispatch = vi.fn();
+    const navigate = vi.fn() as unknown as NavigateFunction;
+    closeTab({
+      id: "a.md",
+      tabs: ["a.md", "b.md"],
+      activeId: "b.md",
+      dispatch,
+      navigate
+    });
+    expect(dispatch).toHaveBeenCalledWith({ type: "close", id: "a.md" });
+    expect(navigate).not.toHaveBeenCalled();
+  });
+
+  it("navigates to the workspace root when closing the last tab", () => {
+    const dispatch = vi.fn();
+    const navigate = vi.fn() as unknown as NavigateFunction;
+    closeTab({
+      id: "a.md",
+      tabs: ["a.md"],
+      activeId: "a.md",
+      dispatch,
+      navigate
+    });
+    expect(navigate).toHaveBeenCalledWith("/");
   });
 });

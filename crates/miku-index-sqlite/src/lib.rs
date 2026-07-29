@@ -152,6 +152,38 @@ impl IndexReader for SqliteIndex {
         Ok(summaries)
     }
 
+    async fn list_pages_under(&self, prefix: &str) -> StoreResult<Vec<PageSummary>> {
+        if prefix.is_empty() {
+            return self.list_pages().await;
+        }
+        let escaped_prefix = prefix
+            .replace('\\', "\\\\")
+            .replace('%', "\\%")
+            .replace('_', "\\_");
+        let rows = sqlx::query_as::<_, (String, String, String, i64)>(
+            "SELECT path, title, frontmatter, mtime FROM tb_pages WHERE path LIKE ? ESCAPE '\\' ORDER BY title, path",
+        )
+        .bind(format!("{escaped_prefix}%"))
+        .fetch_all(self.pool())
+        .await
+        .map_err(database_error)?;
+
+        let mut summaries = Vec::with_capacity(rows.len());
+        for (path, title, frontmatter_str, mtime) in rows {
+            let frontmatter: serde_json::Value = serde_json::from_str(&frontmatter_str)
+                .map_err(|e| StoreError::Operation(format!("invalid frontmatter JSON: {e}")))?;
+            let aliases = frontmatter_aliases(&frontmatter);
+            summaries.push(PageSummary {
+                path,
+                title,
+                frontmatter,
+                mtime,
+                aliases,
+            });
+        }
+        Ok(summaries)
+    }
+
     async fn page(&self, path: &str) -> StoreResult<Option<PageSummary>> {
         let row = sqlx::query_as::<_, (String, String, String, i64)>(
             "SELECT path, title, frontmatter, mtime FROM tb_pages WHERE path = ?",
@@ -792,6 +824,43 @@ mod tests {
         assert!(hits.is_empty());
 
         assert!(store.page("Missing").await.expect("missing page").is_none());
+    }
+
+    #[tokio::test]
+    async fn test_list_pages_under_scopes_to_the_folder_prefix() {
+        let temp_file = NamedTempFile::new().expect("failed to create temp file");
+        let temp_path = temp_file.path().to_str().expect("temp path");
+        let store = SqliteIndex::open(temp_path).await.expect("open store");
+
+        store
+            .replace_pages(vec![
+                test_page("folder/One.md", "one", vec![], vec![]),
+                test_page("folder/nested/Two.md", "two", vec![], vec![]),
+                test_page("other/Three.md", "three", vec![], vec![]),
+                test_page("folder-sibling/Four.md", "four", vec![], vec![]),
+            ])
+            .await
+            .expect("seed pages");
+
+        let scoped = store
+            .list_pages_under("folder/")
+            .await
+            .expect("list pages under folder/");
+        let mut scoped_paths: Vec<_> = scoped.iter().map(|page| page.path.clone()).collect();
+        scoped_paths.sort();
+        assert_eq!(scoped_paths, vec!["folder/One.md", "folder/nested/Two.md"]);
+
+        let all = store
+            .list_pages_under("")
+            .await
+            .expect("empty prefix lists everything");
+        assert_eq!(all.len(), 4);
+
+        let none = store
+            .list_pages_under("nonexistent/")
+            .await
+            .expect("no match still succeeds");
+        assert!(none.is_empty());
     }
 
     #[tokio::test]

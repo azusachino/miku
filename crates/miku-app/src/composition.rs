@@ -66,6 +66,10 @@ impl IndexReader for ComposedReader {
         self.durable.list_pages().await
     }
 
+    async fn list_pages_under(&self, prefix: &str) -> StoreResult<Vec<PageSummary>> {
+        self.durable.list_pages_under(prefix).await
+    }
+
     async fn page(&self, path: &str) -> StoreResult<Option<PageSummary>> {
         self.durable.page(path).await
     }

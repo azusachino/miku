@@ -173,6 +173,12 @@ impl IndexApi {
         self.reader.list_pages().await
     }
 
+    /// List indexed pages under one folder prefix, without fetching and
+    /// parsing the whole vault's frontmatter for a folder-scoped request.
+    pub async fn list_pages_under(&self, prefix: &str) -> StoreResult<Vec<PageSummary>> {
+        self.reader.list_pages_under(prefix).await
+    }
+
     /// Load one page summary.
     pub async fn page(&self, path: &str) -> StoreResult<Option<PageSummary>> {
         self.reader.page(path).await

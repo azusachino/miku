@@ -332,9 +332,15 @@ impl VaultReader for FileMikuApplication {
     }
 
     async fn file_tree(&self, request: FileTreeRequest) -> Result<FileTree, ApplicationError> {
+        let folder_path = request.folder.as_str();
+        let prefix = if folder_path.is_empty() {
+            String::new()
+        } else {
+            format!("{folder_path}/")
+        };
         let pages = self
             .index
-            .list_pages()
+            .list_pages_under(&prefix)
             .await
             .map_err(ApplicationError::from)?;
         Ok(FileTree {

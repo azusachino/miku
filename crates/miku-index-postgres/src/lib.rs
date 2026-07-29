@@ -75,6 +75,37 @@ impl IndexReader for PostgresIndex {
         .map_err(database_error)
     }
 
+    async fn list_pages_under(&self, prefix: &str) -> StoreResult<Vec<PageSummary>> {
+        if prefix.is_empty() {
+            return self.list_pages().await;
+        }
+        let escaped_prefix = prefix
+            .replace('\\', "\\\\")
+            .replace('%', "\\%")
+            .replace('_', "\\_");
+        sqlx::query_as::<_, (String, String, serde_json::Value, i64)>(
+            "SELECT path, title, frontmatter, mtime FROM tb_pages WHERE path LIKE $1 ESCAPE '\\' ORDER BY title, path",
+        )
+        .bind(format!("{escaped_prefix}%"))
+        .fetch_all(self.pool())
+        .await
+        .map(|rows| {
+            rows.into_iter()
+                .map(|(path, title, frontmatter, mtime)| {
+                    let aliases = frontmatter_aliases(&frontmatter);
+                    PageSummary {
+                        path,
+                        title,
+                        frontmatter,
+                        mtime,
+                        aliases,
+                    }
+                })
+                .collect()
+        })
+        .map_err(database_error)
+    }
+
     async fn page(&self, path: &str) -> StoreResult<Option<PageSummary>> {
         sqlx::query_as::<_, (String, String, serde_json::Value, i64)>(
             "SELECT path, title, frontmatter, mtime FROM tb_pages WHERE path = $1",

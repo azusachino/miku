@@ -294,10 +294,15 @@ pub async fn note_context(
         .note_context(note_ref(&id).map_err(application_error)?)
         .await
         .map_err(application_error)?;
+    let active_note_id = context.note.note.id.as_str().to_string();
     Ok(Json(ContextResponse {
         note: note_response(&context.note),
         parents: context.parents.into_iter().map(note_summary_node).collect(),
-        children: context.children.into_iter().map(tree_node).collect(),
+        children: context
+            .children
+            .into_iter()
+            .map(|node| tree_node_with_parent(node, Some(active_note_id.clone())))
+            .collect(),
         backlinks: context
             .backlinks
             .into_iter()
@@ -322,9 +327,14 @@ pub async fn note_children(
         .note_context(note_ref(&id).map_err(application_error)?)
         .await
         .map_err(application_error)?;
+    let active_note_id = context.note.note.id.as_str().to_string();
     Ok(Json(TreeResponse {
-        parent_id: Some(id.clone()),
-        nodes: context.children.into_iter().map(tree_node).collect(),
+        parent_id: Some(active_note_id.clone()),
+        nodes: context
+            .children
+            .into_iter()
+            .map(|node| tree_node_with_parent(node, Some(active_note_id.clone())))
+            .collect(),
     }))
 }
 
@@ -425,6 +435,15 @@ fn application_error(error: ApplicationError) -> AppError {
 }
 
 fn tree_node(node: FileNode) -> TreeNode {
+    tree_node_with_parent(node, None)
+}
+
+/// Builds a `TreeNode`, tagging it with `parent_id` when the caller knows
+/// it (e.g. mapping a note's `children` to entries parented by that note --
+/// `FileNode` itself carries no parent reference, so this can't be derived
+/// from `node` alone). `/api/v1/tree`'s root/folder-scoped nodes have no
+/// such relationship yet and keep using `tree_node` (`parent_id`: None).
+fn tree_node_with_parent(node: FileNode, parent_id: Option<String>) -> TreeNode {
     let note_id = node
         .note_id
         .as_ref()
@@ -439,7 +458,7 @@ fn tree_node(node: FileNode) -> TreeNode {
         },
         placement_id: format!("path:{}", node.path),
         note_id,
-        parent_id: None,
+        parent_id,
         note: NoteSummary {
             note_id: node_id(&node),
             path: node.path.as_str().to_string(),
@@ -599,5 +618,34 @@ mod tests {
         assert_eq!(response.frontmatter["id"], "n1");
         assert_eq!(response.frontmatter["order"], 3);
         assert_eq!(response.revision.content_hash, "hash");
+    }
+
+    fn file_node(path: &str) -> FileNode {
+        FileNode {
+            kind: FileNodeKind::Markdown,
+            path: RelativePath::new(path).unwrap(),
+            note_id: None,
+            identity_generated: false,
+            name: path.to_string(),
+            title: Some(path.to_string()),
+            has_children: false,
+            aliases: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn tree_node_has_no_parent_by_default() {
+        // /api/v1/tree's root/folder-scoped nodes have no known parent
+        // note relationship yet.
+        assert_eq!(tree_node(file_node("Notes/N1.md")).parent_id, None);
+    }
+
+    #[test]
+    fn tree_node_with_parent_tags_children_with_the_owning_note() {
+        // Regression: note_context/note_children previously always mapped
+        // children through plain tree_node, so parent_id was hardcoded
+        // None in every response regardless of the actual relationship.
+        let node = tree_node_with_parent(file_node("Notes/Child.md"), Some("parent-1".to_string()));
+        assert_eq!(node.parent_id, Some("parent-1".to_string()));
     }
 }
