@@ -4,8 +4,10 @@
 --
 -- Per ADR-0020, this is a flat page KV cache: link, slug, alias, tag,
 -- and backlink resolution live entirely in the hot MemoryIndex projection,
--- not as relational join targets here. Full-text search is performed
--- directly over tb_pages.body in Rust via rayon scanning.
+-- not as relational join targets here. Full-text search prefilters via SQL
+-- LIKE, then scores/snippets the matched rows over tb_pages.body in Rust
+-- via rayon scanning (a measured deviation from the ADR's original
+-- fetch-all design; see ADR-0020's implementation status).
 
 -- One row per Markdown file under miku/.
 CREATE TABLE tb_pages (

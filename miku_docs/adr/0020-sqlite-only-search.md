@@ -142,9 +142,24 @@ Local-file-first (`miku_docs/**/*.md` stays the only source of truth); backlinks
 
 ## Implementation status
 
-Implemented and verified (`miku:sqlite-plain-search` epic, tasks 1–8). `crates/miku-index-sqlite` stores raw page bodies in `tb_pages.body` and searches via `rayon` parallel scanning with zero-allocation ASCII case-insensitive window matching. `crates/miku-index-memory` no longer depends on `tantivy` or holds page bodies in memory (`body.clear()` and `shrink_to_fit()` on store).
+Implemented and verified (`miku:sqlite-plain-search` epic, tasks 1–8). `crates/miku-index-sqlite` stores raw page bodies in `tb_pages.body`. `crates/miku-index-memory` no longer depends on `tantivy` or holds page bodies in memory (`body.clear()` and `shrink_to_fit()` on store).
 
-Re-measured against the live 15,911-file `miku_docs` corpus via `make benchmark-real-vault`:
-- Reconcile time: **3.04s** (15,911 files, 280MB raw text)
+Re-measured against the live `miku_docs` corpus (14,339 files at time of re-measurement; corpus grows over time) via `make benchmark-real-vault`:
+- Reconcile time: **3.04s** (15,911 files, 280MB raw text, at original measurement)
 - Total RSS: **378MB** (down from ~2.27GB baseline with Tantivy + full body + frontmatter AST memory duplicates, an **83% RAM reduction**)
 - SQLite database size: **282.2MB** (single table copy, flat byte-for-byte footprint)
+
+### Deviation: `search()` prefilters via SQL `LIKE`, not a literal fetch-all
+
+A later, undocumented change (`accbef1`, 2026-07-29) pushed term filtering into a SQL `WHERE ... LIKE '%term%' ESCAPE '\'` clause ahead of the Rust-side scan, rather than the literal design above ("One query — `SELECT path, title, body FROM tb_pages` — then `par_iter()`... to filter/score/snippet"). This was caught by a parity audit against this ADR, not a deliberate accepted revision, and the ADR's own decision record was never updated to match — corrected here.
+
+Re-benchmarked against the live corpus via `make benchmark-real-vault-search` (new; this ADR previously had no query-latency regression test, only the write/reconcile-path benchmark above):
+
+| Variant | single-term body | multi-term body | all-scope | title-scope |
+|---|---|---|---|---|
+| Literal ADR design (unconditional fetch-all, no `WHERE`) | 238.7ms | 238.3ms | 240.6ms | 237.9ms |
+| **Shipped (SQL `LIKE` prefilter + Rust scan)** | **134.8ms** | **133.7ms** | **139.8ms** | **9.9ms** |
+
+Neither variant reproduces the original 22–27ms Approach-H figure the ADR's decision was based on; that number came from an isolated prototype, not this crate's `sqlx`-async production path, and was never re-verified against it. Diagnostic timing (fetch vs. scan split) shows the Rust-side rayon match/score/snippet pass is not the cost: 0.2–2.2ms per query, matching the original Approach H claim almost exactly. The entire remaining cost is in `fetch_all`/`query_as` materializing matched rows into owned `String`s — the literal fetch-all design is slower specifically because it materializes an owned `String` from all ~14k rows' `body` column on every query regardless of match, where the SQL-prefiltered version only materializes the 10–212 rows that actually matched.
+
+**Conclusion**: the shipped `LIKE`-prefilter deviation is a real, measured improvement over the ADR's literal design at this corpus size (not a regression to revert) and is retroactively accepted here — but 135ms for a body-scope query is still far from the original 22-27ms target and not solved. The validated next step, not yet implemented: avoid materializing `body` as an owned `String` at all for rows before a match is confirmed (e.g. borrow `&str` from the row via a streaming/lower-level `sqlx` row API and only allocate for the rows that pass), rather than either fetch strategy tested here. Not implemented in this pass — flagged for a follow-up ADR-0020 addendum once measured.

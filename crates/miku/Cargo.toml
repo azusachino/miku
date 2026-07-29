@@ -40,6 +40,7 @@ postgres-valkey = ["postgres", "valkey"]
 
 [dev-dependencies]
 miku-index-memory = { version = "0.0.4", path = "../miku-index-memory" }
+miku-index-sqlite = { version = "0.0.4", path = "../miku-index-sqlite" }
 
 [lints]
 workspace = true

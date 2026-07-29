@@ -1,4 +1,4 @@
-//! Deterministic in-memory graph and Tantivy [`miku_domain::IndexStore`] implementation.
+//! Deterministic in-memory graph [`miku_domain::IndexStore`] implementation.
 //!
 //! This is the reference behavior for contract tests and disposable
 //! development. It is not a durable deployment backend.
@@ -675,9 +675,9 @@ mod tests {
     }
 
     /// Exercises `LinkGraph` directly (not the full `MemoryIndex` API) so the
-    /// measurement isolates graph-resolution cost from unrelated Tantivy
-    /// writer/commit overhead, which dominates at thousands of calls and
-    /// would otherwise swamp the signal this test is checking.
+    /// measurement isolates graph-resolution cost from unrelated `RwLock`
+    /// and page-storage overhead, which would otherwise swamp the signal
+    /// this test is checking.
     #[test]
     fn single_page_update_cost_does_not_scale_with_corpus_size() {
         fn seed_and_time_one_update(corpus_size: usize) -> std::time::Duration {

@@ -1109,6 +1109,7 @@ dependencies = [
  "miku-app",
  "miku-domain",
  "miku-index-memory",
+ "miku-index-sqlite",
  "miku-indexer",
  "miku-vault",
  "notify",

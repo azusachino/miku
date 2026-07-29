@@ -771,4 +771,107 @@ mod tests {
         );
         assert_eq!(pages.len(), files.len());
     }
+
+    /// Measures `SqliteIndex::search` query latency against the real
+    /// `miku_docs` corpus, the metric ADR-0020's Approach H comparison
+    /// (22-27ms) was decided on. No test in `miku-index-sqlite` exercises
+    /// this against real-world data volume, so a later change to the query
+    /// shape (e.g. pushing filtering into SQL `LIKE`) has no automated
+    /// signal against the number the ADR's decision was actually based on.
+    #[tokio::test]
+    #[ignore = "runs against the local miku_docs corpus; use make benchmark-real-vault-search"]
+    async fn benchmark_real_vault_search() {
+        use miku_domain::{SearchRequest, SearchScope};
+        use miku_index_sqlite::SqliteIndex;
+
+        let content_root = env::var_os(BENCHMARK_VAULT_ENV)
+            .filter(|value| !value.is_empty())
+            .map(PathBuf::from)
+            .expect("MIKU_BENCHMARK_VAULT must be set for the opt-in benchmark");
+
+        let db_path = std::env::temp_dir().join(format!(
+            "miku-search-bench-{}-{}.sqlite3",
+            std::process::id(),
+            Instant::now().elapsed().as_nanos()
+        ));
+        let db_path_str = db_path.to_str().expect("utf8 temp path").to_string();
+        let index = Arc::new(
+            SqliteIndex::open(&db_path_str)
+                .await
+                .expect("open sqlite index"),
+        );
+        let reader: Arc<dyn IndexReader> = index.clone();
+        let writer: Arc<dyn IndexWriter> = index.clone();
+        let (events, _) = broadcast::channel(1);
+        let ready = AtomicBool::new(false);
+
+        let reconcile_started = Instant::now();
+        reconcile_store(&reader, &writer, &content_root, &events, &ready)
+            .await
+            .expect("reconcile benchmark vault into sqlite");
+        let reconcile_elapsed = reconcile_started.elapsed();
+
+        let queries: Vec<(&str, SearchRequest)> = vec![
+            (
+                "single-term-body",
+                SearchRequest {
+                    query: "reconcile".to_string(),
+                    scope: SearchScope::Body,
+                    limit: 20,
+                },
+            ),
+            (
+                "multi-term-body",
+                SearchRequest {
+                    query: "reconcile memory index".to_string(),
+                    scope: SearchScope::Body,
+                    limit: 20,
+                },
+            ),
+            (
+                "single-term-all",
+                SearchRequest {
+                    query: "adr".to_string(),
+                    scope: SearchScope::All,
+                    limit: 20,
+                },
+            ),
+            (
+                "title-scope",
+                SearchRequest {
+                    query: "index".to_string(),
+                    scope: SearchScope::Title,
+                    limit: 20,
+                },
+            ),
+        ];
+
+        for (label, request) in queries {
+            const SAMPLES: u32 = 5;
+            let mut total = Duration::ZERO;
+            let mut hit_count = 0;
+            for _ in 0..SAMPLES {
+                let started = Instant::now();
+                let hits = reader
+                    .search(request.clone())
+                    .await
+                    .expect("search real vault");
+                total += started.elapsed();
+                hit_count = hits.len();
+            }
+            let avg_ms = (total / SAMPLES).as_secs_f64() * 1000.0;
+            println!(
+                "benchmark=real-vault-search label={label} avg_ms={avg_ms:.2} hits={hit_count}"
+            );
+        }
+
+        println!(
+            "benchmark=real-vault-search reconcile_ms={:.1}",
+            reconcile_elapsed.as_secs_f64() * 1000.0
+        );
+
+        let _ = std::fs::remove_file(&db_path);
+        let _ = std::fs::remove_file(format!("{db_path_str}-wal"));
+        let _ = std::fs::remove_file(format!("{db_path_str}-shm"));
+    }
 }
