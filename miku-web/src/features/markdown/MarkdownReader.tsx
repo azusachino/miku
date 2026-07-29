@@ -87,6 +87,21 @@ export function resolveMarkdownHref(href: string, currentPath: string, resolveLi
   return noteHref(normalized.join("/"), resolveLink, currentPath) + (hash ? `#${hash}` : "");
 }
 
+// Obsidian-style foldable callouts write the marker and body on one line,
+// e.g. "> [!note]+ Some text". remark-github-blockquote-alert only strips
+// the marker when the matched paragraph's raw text contains a newline; for
+// single-line callouts it instead drops the whole first child, losing the
+// content entirely (see node_modules/remark-github-blockquote-alert's
+// `!text.includes('\n')` branch). Splitting the marker onto its own line
+// here forces the plugin down its safe "has newline" branch. The Obsidian
+// fold suffix (+/-) has no effect on our rendering (callouts are always
+// expanded), so it's dropped rather than preserved.
+const SINGLE_LINE_CALLOUT_REGEX = /^(>\s?)\[!(note|tip|important|warning|caution)\][+-]?[ \t]+(.+)$/gim;
+
+export function splitSingleLineCallouts(markdown: string): string {
+  return markdown.replace(SINGLE_LINE_CALLOUT_REGEX, (_match, _prefix: string, type: string, content: string) => `> [!${type}]\n> ${content}`);
+}
+
 export function expandWikiLinks(markdown: string, resolveLink?: TargetResolver, currentPath?: string): string {
   const withEmbeds = markdown.replace(/!\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (_match, target: string, label?: string) => {
     const trimmedTarget = target.trim();
@@ -291,7 +306,7 @@ export function MarkdownReader({
           }
         }}
       >
-        {expandInlineTags(expandWikiLinks(value, resolver, path))}
+        {expandInlineTags(expandWikiLinks(splitSingleLineCallouts(value), resolver, path))}
 
       </ReactMarkdown>
     </article>

@@ -20,6 +20,21 @@ static WIKILINK_REGEX: std::sync::LazyLock<Regex> = std::sync::LazyLock::new(|| 
     Regex::new(r"(!?)\[\[([^\]|]+)(?:\|([^\]]+))?\]\]").expect("wikilink regex")
 });
 
+static MARKDOWN_LINK_REGEX: std::sync::LazyLock<Regex> = std::sync::LazyLock::new(|| {
+    Regex::new(r"(!?)\[([^\]]*)\]\(([^)\s]+)[^)]*\)").expect("markdown link regex")
+});
+
+static EXTERNAL_LINK_REGEX: std::sync::LazyLock<Regex> = std::sync::LazyLock::new(|| {
+    Regex::new(r"^[a-zA-Z][a-zA-Z\d+.-]*:").expect("external link regex")
+});
+
+/// Mirrors the frontend's `/^[a-z][a-z\d+.-]*:/i` scheme-prefix check
+/// (`noteLinks.ts`) so external URLs (`https:`, `mailto:`, ...) are never
+/// treated as page/asset targets.
+fn is_external_link(target: &str) -> bool {
+    EXTERNAL_LINK_REGEX.is_match(target)
+}
+
 /// Build one complete index projection from a Markdown file's bytes.
 pub fn build_page_index(path: &str, raw: &[u8], mtime: i64) -> PageIndex {
     let content = String::from_utf8_lossy(raw).replace('\0', "");
@@ -34,7 +49,7 @@ pub fn build_page_index(path: &str, raw: &[u8], mtime: i64) -> PageIndex {
         })
         .collect();
 
-    let links = WIKILINK_REGEX
+    let mut links: Vec<LinkRecord> = WIKILINK_REGEX
         .captures_iter(body)
         .map(|capture| {
             let target = capture[2].trim().to_string();
@@ -54,6 +69,30 @@ pub fn build_page_index(path: &str, raw: &[u8], mtime: i64) -> PageIndex {
             }
         })
         .collect();
+
+    links.extend(
+        MARKDOWN_LINK_REGEX
+            .captures_iter(body)
+            .filter_map(|capture| {
+                let target = capture[3].trim().to_string();
+                if target.is_empty() || target.starts_with('#') || is_external_link(&target) {
+                    return None;
+                }
+                let is_embed = !capture[1].is_empty();
+                let alias = capture[2].trim();
+                Some(LinkRecord {
+                    target: target.clone(),
+                    target_norm: normalize_target(&target, is_embed && is_asset_path(&target)),
+                    alias: (!alias.is_empty()).then(|| alias.to_string()),
+                    kind: if is_embed && is_asset_path(&target) {
+                        LinkKind::Asset
+                    } else {
+                        LinkKind::Page
+                    },
+                    is_embed,
+                })
+            }),
+    );
 
     let mut tags = frontmatter_tags(&frontmatter);
     tags.extend(
@@ -156,6 +195,39 @@ mod tests {
         assert_eq!(page.tags, vec!["daily", "journal"]);
         assert_eq!(page.aliases, vec!["Now"]);
         assert_eq!(page.links[0].target_norm, "index");
+    }
+
+    #[test]
+    fn extracts_standard_markdown_links_alongside_wikilinks() {
+        let page = build_page_index(
+            "adr/README.md",
+            b"# ADRs\n\n- [0001](0001-fts-english.md)\n- [Home](../Home.md \"title\")\n- [[Wikilink]]\n- [Anchor](#section)\n- [External](https://example.com)\n- ![Embed](diagram.png)",
+            1,
+        );
+
+        let targets: Vec<&str> = page.links.iter().map(|l| l.target.as_str()).collect();
+        assert!(targets.contains(&"0001-fts-english.md"));
+        assert!(targets.contains(&"../Home.md"));
+        assert!(targets.contains(&"Wikilink"));
+        assert!(targets.contains(&"diagram.png"));
+        assert!(!targets.contains(&"#section"));
+        assert!(!targets.iter().any(|t| t.starts_with("https:")));
+
+        let home = page
+            .links
+            .iter()
+            .find(|l| l.target == "../Home.md")
+            .unwrap();
+        assert_eq!(home.alias.as_deref(), Some("Home"));
+        assert!(!home.is_embed);
+
+        let embed = page
+            .links
+            .iter()
+            .find(|l| l.target == "diagram.png")
+            .unwrap();
+        assert!(embed.is_embed);
+        assert_eq!(embed.kind, LinkKind::Asset);
     }
 
     #[test]

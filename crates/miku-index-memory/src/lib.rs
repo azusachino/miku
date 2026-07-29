@@ -456,6 +456,35 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn backlinks_resolve_standard_markdown_links_not_just_wikilinks() {
+        // ADR-README-style source: only standard [text](path) links, no
+        // wikilinks. Runs real extraction (miku_indexer::build_page_index)
+        // rather than hand-building LinkRecords, so it exercises the actual
+        // Markdown-link regex, not just the graph's generic link handling.
+        let index = MemoryIndex::new();
+        let mut source = page(
+            "adr/README.md",
+            "ADR Index",
+            "- [0001](0001-fts-english.md)\n- [0002](0002-other.md)",
+        );
+        source.links = miku_indexer::build_page_index(
+            &source.summary.path,
+            source.body.as_bytes(),
+            source.summary.mtime,
+        )
+        .links;
+        index.replace_page(source).await.expect("source indexed");
+        index
+            .replace_page(page("adr/0001-fts-english.md", "0001", "content"))
+            .await
+            .expect("target indexed");
+
+        let backlinks = index.backlinks("adr/0001-fts-english.md").await.unwrap();
+        assert_eq!(backlinks.len(), 1);
+        assert_eq!(backlinks[0].path, "adr/README.md");
+    }
+
+    #[tokio::test]
     async fn delete_restores_ambiguous_uniqueness_for_pending_source() {
         let index = MemoryIndex::new();
         let mut source = page("Source.md", "Source", "[[Target]]");

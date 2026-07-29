@@ -827,6 +827,87 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_note_context_resolves_standard_markdown_links_not_just_wikilinks() {
+        // ADR-README-style page: only standard [text](path) links, the
+        // pattern that motivated adding a second link-extraction regex
+        // alongside [[wikilinks]] in miku-indexer.
+        let root = tempdir().expect("temporary vault");
+        let vault = Arc::new(Vault::new(root.path()));
+        vault
+            .create(
+                "adr/README.md",
+                "ADR Index",
+                "- [0001](0001-fts-english.md)\n- [0002](0002-missing.md)",
+                Default::default(),
+            )
+            .expect("create README");
+        vault
+            .create(
+                "adr/0001-fts-english.md",
+                "0001 FTS English",
+                "# 0001",
+                Default::default(),
+            )
+            .expect("create 0001");
+
+        let workspace: Arc<dyn WorkspaceService> =
+            Arc::new(FileWorkspaceService::new(Arc::clone(&vault), false));
+        let memory = Arc::new(MemoryIndex::new());
+        memory
+            .replace_pages(vec![
+                PageIndex {
+                    summary: PageSummary {
+                        path: "adr/README.md".to_string(),
+                        title: "ADR Index".to_string(),
+                        frontmatter: serde_json::json!({}),
+                        mtime: 1,
+                        aliases: Vec::new(),
+                    },
+                    body: "- [0001](0001-fts-english.md)\n- [0002](0002-missing.md)".to_string(),
+                    links: Vec::new(),
+                    tags: Vec::new(),
+                    aliases: Vec::new(),
+                    has_mermaid: false,
+                    signals: DocumentSignals::default(),
+                },
+                PageIndex {
+                    summary: PageSummary {
+                        path: "adr/0001-fts-english.md".to_string(),
+                        title: "0001 FTS English".to_string(),
+                        frontmatter: serde_json::json!({}),
+                        mtime: 1,
+                        aliases: Vec::new(),
+                    },
+                    body: "# 0001".to_string(),
+                    links: Vec::new(),
+                    tags: Vec::new(),
+                    aliases: Vec::new(),
+                    has_mermaid: false,
+                    signals: DocumentSignals::default(),
+                },
+            ])
+            .await
+            .expect("seed snapshot");
+
+        let index = IndexApi::from_store(memory);
+        let application = FileMikuApplication::new(vault, workspace, index);
+        let context = application
+            .note_context(NoteRef::Path(
+                crate::NotePath::new("adr/README.md").unwrap(),
+            ))
+            .await
+            .expect("fetch note context");
+
+        assert_eq!(context.outgoing.len(), 2);
+        assert_eq!(context.outgoing[0].target, "0001-fts-english.md");
+        assert_eq!(context.outgoing[0].path, "adr/0001-fts-english.md");
+        assert!(!context.outgoing[0].is_missing);
+
+        assert_eq!(context.outgoing[1].target, "0002-missing.md");
+        assert!(context.outgoing[1].is_missing);
+    }
+
+    #[tokio::test]
     async fn test_note_context_keeps_separate_outgoing_entries_for_each_distinct_link_spelling() {
         // Two differently-written links to the same file (its filename and
         // its title) must each get their own `outgoing` entry: the frontend
