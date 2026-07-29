@@ -68,6 +68,8 @@ impl WorkspaceService for FileWorkspaceService {
                 }
                 Err(error) => return Err(error.into()),
             }
+        } else if let Ok(document) = self.vault.read(&format!("{note_id}.md")) {
+            document
         } else {
             self.vault
                 .scan()?

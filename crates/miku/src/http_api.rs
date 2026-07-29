@@ -5,10 +5,12 @@ use axum::{
     Json,
 };
 use miku_app::{
-    ApplicationError, FileNode, FileNodeKind, FileTreeRequest, NotePath, NoteRef, RelativePath,
-    SaveNoteCommand,
+    ApplicationError, FileNode, FileNodeKind, FileTreeRequest, NotePath, NoteRef,
+    OutgoingLinkRecord, RelativePath, SaveNoteCommand,
 };
+
 use miku_domain::{workspace::NoteId, Backlink, SearchRequest, SearchScope};
+
 use miku_vault::VaultDocument;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -45,6 +47,8 @@ pub struct NoteSummary {
     pub order: Option<i64>,
     /// Whether this note still uses a path-derived generated identity.
     pub identity_generated: bool,
+    /// Frontmatter aliases used during wikilink resolution and navigation.
+    pub aliases: Vec<String>,
 }
 
 /// One visible placement in the tree.
@@ -112,6 +116,21 @@ pub struct ContextResponse {
     pub children: Vec<TreeNode>,
     /// Indexed backlinks.
     pub backlinks: Vec<BacklinkResponse>,
+    /// Outgoing links extracted and resolved for the selected note.
+    pub outgoing: Vec<OutgoingLinkResponse>,
+}
+
+/// An outgoing link resolved for the selected note.
+#[derive(Debug, Serialize, ToSchema)]
+pub struct OutgoingLinkResponse {
+    /// The wikilink target exactly as written in the source, e.g. `[[target]]`.
+    pub target: String,
+    /// Display title.
+    pub title: String,
+    /// Resolved target path.
+    pub path: String,
+    /// Whether the target note is uncreated/missing.
+    pub is_missing: bool,
 }
 
 /// A source note that links to the selected note.
@@ -275,14 +294,24 @@ pub async fn note_context(
         .note_context(note_ref(&id).map_err(application_error)?)
         .await
         .map_err(application_error)?;
+    let active_note_id = context.note.note.id.as_str().to_string();
     Ok(Json(ContextResponse {
         note: note_response(&context.note),
         parents: context.parents.into_iter().map(note_summary_node).collect(),
-        children: context.children.into_iter().map(tree_node).collect(),
+        children: context
+            .children
+            .into_iter()
+            .map(|node| tree_node_with_parent(node, Some(active_note_id.clone())))
+            .collect(),
         backlinks: context
             .backlinks
             .into_iter()
             .map(backlink_response)
+            .collect(),
+        outgoing: context
+            .outgoing
+            .into_iter()
+            .map(outgoing_link_response)
             .collect(),
     }))
 }
@@ -298,9 +327,14 @@ pub async fn note_children(
         .note_context(note_ref(&id).map_err(application_error)?)
         .await
         .map_err(application_error)?;
+    let active_note_id = context.note.note.id.as_str().to_string();
     Ok(Json(TreeResponse {
-        parent_id: Some(id.clone()),
-        nodes: context.children.into_iter().map(tree_node).collect(),
+        parent_id: Some(active_note_id.clone()),
+        nodes: context
+            .children
+            .into_iter()
+            .map(|node| tree_node_with_parent(node, Some(active_note_id.clone())))
+            .collect(),
     }))
 }
 
@@ -357,7 +391,8 @@ pub async fn tag_notes(
     Path(tag): Path<String>,
     State(state): State<AppState>,
 ) -> Result<Json<Vec<TagNoteResponse>>, AppError> {
-    let tag = tag.trim_start_matches('#').to_string();
+    let tag = miku_indexer::normalize_tag(&tag);
+
     let notes = state
         .application
         .notes_with_tag(tag)
@@ -390,11 +425,25 @@ fn application_error(error: ApplicationError) -> AppError {
         ApplicationError::NotFound(_) | ApplicationError::InvalidPath(_) => {
             AppError::not_found(anyhow::anyhow!(error))
         }
+        ApplicationError::Vault(miku_vault::VaultError::Io(err))
+            if err.kind() == std::io::ErrorKind::NotFound =>
+        {
+            AppError::not_found(anyhow::anyhow!(err))
+        }
         error => AppError::from(anyhow::anyhow!(error)),
     }
 }
 
 fn tree_node(node: FileNode) -> TreeNode {
+    tree_node_with_parent(node, None)
+}
+
+/// Builds a `TreeNode`, tagging it with `parent_id` when the caller knows
+/// it (e.g. mapping a note's `children` to entries parented by that note --
+/// `FileNode` itself carries no parent reference, so this can't be derived
+/// from `node` alone). `/api/v1/tree`'s root/folder-scoped nodes have no
+/// such relationship yet and keep using `tree_node` (`parent_id`: None).
+fn tree_node_with_parent(node: FileNode, parent_id: Option<String>) -> TreeNode {
     let note_id = node
         .note_id
         .as_ref()
@@ -409,13 +458,14 @@ fn tree_node(node: FileNode) -> TreeNode {
         },
         placement_id: format!("path:{}", node.path),
         note_id,
-        parent_id: None,
+        parent_id,
         note: NoteSummary {
             note_id: node_id(&node),
             path: node.path.as_str().to_string(),
             title,
             order: None,
             identity_generated: node.identity_generated,
+            aliases: node.aliases,
         },
         has_children: node.has_children,
     }
@@ -435,6 +485,7 @@ fn note_summary_node(node: FileNode) -> NoteSummary {
         title: node.title.unwrap_or(node.name),
         order: None,
         identity_generated: node.identity_generated,
+        aliases: node.aliases,
     }
 }
 
@@ -445,6 +496,15 @@ fn note_ref(id: &str) -> Result<NoteRef, ApplicationError> {
         Ok(NoteRef::Id(
             NoteId::new(id.to_string()).map_err(ApplicationError::Workspace)?,
         ))
+    }
+}
+
+fn outgoing_link_response(item: OutgoingLinkRecord) -> OutgoingLinkResponse {
+    OutgoingLinkResponse {
+        target: item.target,
+        title: item.title,
+        path: item.path,
+        is_missing: item.is_missing,
     }
 }
 
@@ -492,6 +552,42 @@ fn backlink_response(backlink: Backlink) -> BacklinkResponse {
     }
 }
 
+pub fn asset_content_type(path: &str) -> &'static str {
+    let lower = path.to_lowercase();
+    if lower.ends_with(".svg") {
+        "image/svg+xml"
+    } else if lower.ends_with(".png") {
+        "image/png"
+    } else if lower.ends_with(".jpg") || lower.ends_with(".jpeg") {
+        "image/jpeg"
+    } else if lower.ends_with(".gif") {
+        "image/gif"
+    } else if lower.ends_with(".webp") {
+        "image/webp"
+    } else if lower.ends_with(".pdf") {
+        "application/pdf"
+    } else if lower.ends_with(".html") || lower.ends_with(".htm") {
+        "text/html; charset=utf-8"
+    } else if lower.ends_with(".css") {
+        "text/css; charset=utf-8"
+    } else if lower.ends_with(".js") {
+        "text/javascript; charset=utf-8"
+    } else if lower.ends_with(".json") {
+        "application/json"
+    } else {
+        "application/octet-stream"
+    }
+}
+
+pub async fn asset(
+    State(state): State<AppState>,
+    Path(path): Path<String>,
+) -> Result<impl axum::response::IntoResponse, AppError> {
+    let bytes = state.application.read_raw_asset(&path).await?;
+    let content_type = asset_content_type(&path);
+    Ok(([(axum::http::header::CONTENT_TYPE, content_type)], bytes))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -522,5 +618,34 @@ mod tests {
         assert_eq!(response.frontmatter["id"], "n1");
         assert_eq!(response.frontmatter["order"], 3);
         assert_eq!(response.revision.content_hash, "hash");
+    }
+
+    fn file_node(path: &str) -> FileNode {
+        FileNode {
+            kind: FileNodeKind::Markdown,
+            path: RelativePath::new(path).unwrap(),
+            note_id: None,
+            identity_generated: false,
+            name: path.to_string(),
+            title: Some(path.to_string()),
+            has_children: false,
+            aliases: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn tree_node_has_no_parent_by_default() {
+        // /api/v1/tree's root/folder-scoped nodes have no known parent
+        // note relationship yet.
+        assert_eq!(tree_node(file_node("Notes/N1.md")).parent_id, None);
+    }
+
+    #[test]
+    fn tree_node_with_parent_tags_children_with_the_owning_note() {
+        // Regression: note_context/note_children previously always mapped
+        // children through plain tree_node, so parent_id was hardcoded
+        // None in every response regardless of the actual relationship.
+        let node = tree_node_with_parent(file_node("Notes/Child.md"), Some("parent-1".to_string()));
+        assert_eq!(node.parent_id, Some("parent-1".to_string()));
     }
 }

@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { markdown } from "@codemirror/lang-markdown";
 import { EditorState, type Extension } from "@codemirror/state";
-import { minimalSetup, EditorView } from "codemirror";
+import { minimalSetup } from "codemirror";
+import { EditorView, keymap } from "@codemirror/view";
 import type { Theme } from "../../shared/ui";
 
 type MarkdownEditorProps = {
@@ -10,17 +11,35 @@ type MarkdownEditorProps = {
   readOnly?: boolean;
   theme?: Theme;
   onChange?: (value: string) => void;
+  onSave?: () => void;
 };
 
 function editorTheme(): Extension {
   return EditorView.theme({
-    "&": { backgroundColor: "var(--surface-code)", color: "var(--text)" },
-    ".cm-content": { caretColor: "var(--accent)" },
-    ".cm-cursor, .cm-dropCursor": { borderLeftColor: "var(--accent)" },
-    ".cm-selectionBackground, ::selection": { backgroundColor: "var(--accent-soft)" },
-    ".cm-gutters": { color: "var(--faint)", backgroundColor: "var(--surface-code)" },
-    ".cm-activeLine, .cm-activeLineGutter": { backgroundColor: "var(--panel-2)" },
-    ".cm-scroller": { fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }
+    "&": { backgroundColor: "transparent", color: "var(--text)" },
+    "&.cm-focused": { outline: "none" },
+    ".cm-content": {
+      caretColor: "var(--accent)",
+      fontFamily: "var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace)",
+      fontSize: "0.86rem",
+      lineHeight: "1.7"
+    },
+    ".cm-line": { padding: "0 4px" },
+    ".cm-cursor, .cm-dropCursor": { borderLeftColor: "var(--accent)", borderLeftWidth: "2px" },
+    ".cm-selectionBackground, ::selection": { backgroundColor: "var(--accent-soft) !important" },
+    ".cm-gutters": {
+      color: "var(--faint)",
+      backgroundColor: "transparent",
+      borderRight: "1px solid color-mix(in srgb, var(--line) 40%, transparent)",
+      paddingRight: "6px",
+      marginRight: "12px"
+    },
+    ".cm-activeLine": { backgroundColor: "color-mix(in srgb, var(--panel-2) 50%, transparent)" },
+    ".cm-activeLineGutter": { backgroundColor: "color-mix(in srgb, var(--panel-2) 70%, transparent)", color: "var(--muted)" },
+    ".cm-scroller": {
+      fontFamily: "var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace)",
+      overflow: "visible"
+    }
   });
 }
 
@@ -29,15 +48,17 @@ function editorTheme(): Extension {
  * React only replaces it when the selected note changes. This avoids copying
  * the complete document through component state on every keystroke.
  */
-export function MarkdownEditor({ noteId, value, readOnly = false, theme = "dark", onChange }: MarkdownEditorProps) {
+export function MarkdownEditor({ noteId, value, readOnly = false, theme = "dark", onChange, onSave }: MarkdownEditorProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const noteIdRef = useRef(noteId);
   const onChangeRef = useRef(onChange);
+  const onSaveRef = useRef(onSave);
   const syncingRef = useRef(false);
   const [dirty, setDirty] = useState(false);
 
   onChangeRef.current = onChange;
+  onSaveRef.current = onSave;
 
   useEffect(() => {
     const host = hostRef.current;
@@ -48,9 +69,19 @@ export function MarkdownEditor({ noteId, value, readOnly = false, theme = "dark"
       extensions: [
         minimalSetup,
         markdown(),
+        EditorView.lineWrapping,
         editorTheme(),
         EditorView.editable.of(!readOnly),
         EditorState.readOnly.of(readOnly),
+        keymap.of([
+          {
+            key: "Mod-s",
+            run: () => {
+              onSaveRef.current?.();
+              return true;
+            }
+          }
+        ]),
         EditorView.updateListener.of((update) => {
           if (!update.docChanged || syncingRef.current) return;
           setDirty(true);

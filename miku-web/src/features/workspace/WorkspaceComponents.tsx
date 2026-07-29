@@ -1,10 +1,12 @@
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate, useParams } from "react-router-dom";
-import { createWorkspaceClient, sortTreeNodes, type BacklinkModel, type NoteModel, type TreeNodeModel } from "./api";
+import { createWorkspaceClient, sortTreeNodes, type BacklinkModel, type NoteModel, type OutgoingLinkModel, type TreeNodeModel } from "./api";
+import { normalizeNotePath } from "./noteRoute";
 import { ActionIcon, NoteIcon } from "../../components/workspace/icons";
 import { WorkspaceTree } from "../../components/workspace/WorkspaceTree";
 import { headingSlug, shellRegions, type Theme } from "../../shared/ui";
+import { extractOutgoingLinks } from "../markdown/noteLinks";
 
 const MarkdownEditor = lazy(() => import("../markdown/MarkdownEditor"));
 const MarkdownReader = lazy(() => import("../markdown/MarkdownReader").then((module) => ({ default: module.MarkdownReader })));
@@ -123,17 +125,43 @@ export function Tabs({
   onSelect: (id: string) => void;
   onClose: (id: string) => void;
 }) {
+  const normActive = normalizeNotePath(activeId);
+  // Indexed once per notes change instead of a linear notes.find() inside
+  // the tabs.map() below -- O(tabs + notes) instead of O(tabs * notes) on
+  // every render.
+  const notesByKey = useMemo(() => {
+    const map = new Map<string, NoteModel>();
+    for (const item of notes) {
+      if (item.path) map.set(item.path, item);
+      if (item.id) map.set(item.id, item);
+      if (item.path) map.set(normalizeNotePath(item.path), item);
+    }
+    return map;
+  }, [notes]);
+
   return (
     <div className="tabs" role="tablist">
-      {tabs.map((id) => {
-        const note = id === activeId ? activeNote : (notes.find((item) => item.id === id) ?? { id, title: "Loading note…", path: id, icon: "file-text" });
+      {tabs.map((tabPath) => {
+        const normTab = normalizeNotePath(tabPath);
+        const isActive = normActive === normTab;
+        const matched = notesByKey.get(tabPath) ?? notesByKey.get(normTab);
+        const fallbackTitle = tabPath.split("/").pop()?.replace(/\.md$/, "") || tabPath;
+        const note = isActive ? activeNote : (matched ?? { id: tabPath, title: fallbackTitle, path: tabPath, icon: "file-text" });
+
+        const parts = note.path.split("/");
+        const parentDir = parts.length > 1 ? parts[parts.length - 2] : "";
+        const rawTitle = note.title || fallbackTitle;
+        const displayTitle = parentDir && (rawTitle.toLowerCase() === "index" || rawTitle.toLowerCase() === "readme")
+          ? `${parentDir}/${rawTitle}`
+          : rawTitle;
+
         return (
-          <div key={id} className={`tab ${activeId === id ? "is-active" : ""}`} role="tab" aria-selected={activeId === id}>
-            <button className="tab-label" onClick={() => onSelect(id)} title={note.path}>
+          <div key={tabPath} className={`tab ${isActive ? "is-active" : ""}`} role="tab" aria-selected={isActive}>
+            <button className="tab-label" onClick={() => onSelect(tabPath)} title={note.path}>
               <NoteIcon value={note.icon} />
-              <span>{note.title}</span>
+              <span>{displayTitle}</span>
             </button>
-            <button className="tab-close" onClick={() => onClose(id)} aria-label={`Close ${note.title}`}>
+            <button className="tab-close" onClick={() => onClose(tabPath)} aria-label={`Close ${displayTitle}`}>
               <ActionIcon name="close" />
             </button>
           </div>
@@ -152,7 +180,10 @@ export function NotePane({
   client,
   onTagSearch,
   onNavigatePath,
-  theme
+  onSaveNote,
+  theme,
+  notes,
+  outgoingLinks
 }: {
   note: NoteModel;
   split: boolean;
@@ -162,7 +193,10 @@ export function NotePane({
   client: ReturnType<typeof createWorkspaceClient>;
   onTagSearch: (tag: string) => void;
   onNavigatePath: (path: string) => void;
+  onSaveNote?: (note: NoteModel) => void;
   theme: Theme;
+  notes?: NoteModel[];
+  outgoingLinks?: OutgoingLinkModel[];
 }) {
   const [draft, setDraft] = useState(note.body);
   const [saveState, setSaveState] = useState("saved");
@@ -176,7 +210,8 @@ export function NotePane({
     if (readonly || !note.revision) return;
     setSaveState("saving…");
     try {
-      await client.saveNote(note.id, { body: draft, title: note.title, expectedRevision: note.revision });
+      const updated = await client.saveNote(note.id, { body: draft, title: note.title, expectedRevision: note.revision });
+      onSaveNote?.(updated);
       setSaveState("saved");
       setSourceMode(false);
     } catch (error) {
@@ -206,14 +241,26 @@ export function NotePane({
             {split ? "Single pane" : "Split pane"}
           </button>
           {!readonly && (
-            <div className="view-switch" role="tablist" aria-label="Note view">
-              <button className={!sourceMode ? "is-active" : ""} onClick={() => setSourceMode(false)} role="tab" aria-selected={!sourceMode}>
-                Reader
-              </button>
-              <button className={sourceMode ? "is-active" : ""} onClick={() => setSourceMode(true)} role="tab" aria-selected={sourceMode}>
-                Source
-              </button>
-            </div>
+            <>
+              {sourceMode && (
+                <button
+                  className={`toolbar-button save-button ${saveState === "unsaved" ? "is-dirty" : ""}`}
+                  disabled={readonly || !note.revision || saveState === "saving…" || saveState === "saved"}
+                  onClick={save}
+                  title="Save changes (Cmd+S)"
+                >
+                  {saveState === "saving…" ? "Saving…" : saveState === "unsaved" ? "Save" : "Saved"}
+                </button>
+              )}
+              <div className="view-switch" role="tablist" aria-label="Note view">
+                <button className={!sourceMode ? "is-active" : ""} onClick={() => setSourceMode(false)} role="tab" aria-selected={!sourceMode}>
+                  Reader
+                </button>
+                <button className={sourceMode ? "is-active" : ""} onClick={() => setSourceMode(true)} role="tab" aria-selected={sourceMode}>
+                  Source
+                </button>
+              </div>
+            </>
           )}
         </div>
       </div>
@@ -262,20 +309,13 @@ export function NotePane({
                 setDraft(value);
                 setSaveState("unsaved");
               }}
+              onSave={save}
             />
           </Suspense>
         ) : (
           <Suspense fallback={<div className="markdown-editor-loading">Rendering Markdown…</div>}>
-            <MarkdownReader value={note.body} path={note.path} theme={theme} />
+            <MarkdownReader value={note.body} path={note.path} theme={theme} notes={notes} outgoingLinks={outgoingLinks} />
           </Suspense>
-        )}
-        {sourceMode && (
-          <div className="note-footer">
-            <span>Markdown source · changes stay local until saved</span>
-            <button className="toolbar-button" disabled={readonly || !note.revision || saveState === "saving…"} onClick={save}>
-              Save
-            </button>
-          </div>
         )}
       </div>
     </section>
@@ -285,26 +325,42 @@ export function NotePane({
 export function ContextPanel({
   note,
   backlinks,
+  outgoing,
   indexPhase,
   open,
   onToggle,
   onNavigate,
-  onResizeStart
+  onResizeStart,
+  notes
 }: {
   note: NoteModel;
   backlinks: BacklinkModel[];
+  outgoing?: OutgoingLinkModel[];
   indexPhase?: string;
   open: boolean;
   onToggle: () => void;
   onNavigate: (path: string) => void;
   onResizeStart: (event: React.PointerEvent<HTMLButtonElement>) => void;
+  notes?: NoteModel[];
 }) {
+  // Hooks must run unconditionally before the collapsed-panel early
+  // return below (Rules of Hooks); memoizing here also means a plain
+  // re-render (sidebar resize, theme toggle, etc.) doesn't re-run the
+  // regex-based client-side extractOutgoingLinks fallback every time.
+  const outgoingLinks = useMemo(
+    () => (outgoing && outgoing.length > 0 ? outgoing : extractOutgoingLinks(note.body, notes, note.path)),
+    [outgoing, note.body, notes, note.path]
+  );
+
   if (!open)
     return (
       <button className="context-reopen" onClick={onToggle} aria-label="Open context panel" title="Open context panel">
         <ActionIcon name="chevron-left" />
       </button>
     );
+
+
+
   return (
     <aside className="context-panel" data-region={shellRegions[3]}>
       <button className="context-resizer" onPointerDown={onResizeStart} aria-label="Resize note context panel" />
@@ -331,6 +387,31 @@ export function ContextPanel({
           ))
         ) : (
           <p className="context-empty">No backlinks indexed yet.</p>
+        )}
+      </div>
+      <div className="context-section">
+        <div className="context-title">
+          Outgoing links <span>{outgoingLinks.length}</span>
+        </div>
+        {outgoingLinks.length ? (
+          outgoingLinks.map((link) => (
+            <button
+              className={`relation-row backlink-row ${link.isMissing ? "is-missing" : ""}`}
+              key={link.path}
+              onClick={() => onNavigate(link.path)}
+            >
+              <span className="relation-line" />
+              <span className="relation-copy">
+                <strong>
+                  {link.title} {link.isMissing && <span className="missing-badge">(uncreated)</span>}
+                </strong>
+                <small>{link.path}</small>
+              </span>
+              <ActionIcon name="arrow-up-right" />
+            </button>
+          ))
+        ) : (
+          <p className="context-empty">No outgoing links in this note.</p>
         )}
       </div>
       <div className="context-section">
@@ -432,7 +513,7 @@ export function WorkspaceUtility({
         <div className="utility-list">
           {recent.length ? (
             recent.map((path) => (
-              <button className="utility-row" key={path} onClick={() => navigate(`/p/${path}`)}>
+              <button className="utility-row" key={path} onClick={() => navigate(`/p/${normalizeNotePath(path)}`)}>
                 <strong>{path.split("/").pop()}</strong>
                 <small>{path}</small>
               </button>
@@ -449,7 +530,7 @@ export function WorkspaceUtility({
               <p>Loading notes…</p>
             ) : (
               tagNotes.data?.map((note) => (
-                <button className="utility-row" key={note.path} onClick={() => navigate(`/p/${note.path}`)}>
+                <button className="utility-row" key={note.path} onClick={() => navigate(`/p/${normalizeNotePath(note.path)}`)}>
                   <strong>{note.title}</strong>
                   <small>{note.path}</small>
                 </button>

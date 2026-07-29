@@ -194,6 +194,7 @@ mod tests {
                 title: title.to_string(),
                 frontmatter: serde_json::json!({}),
                 mtime: 1,
+                aliases: Vec::new(),
             },
             body: body.to_string(),
             links: Vec::new(),

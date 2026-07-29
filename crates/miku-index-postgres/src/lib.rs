@@ -60,11 +60,46 @@ impl IndexReader for PostgresIndex {
         .await
         .map(|rows| {
             rows.into_iter()
-                .map(|(path, title, frontmatter, mtime)| PageSummary {
-                    path,
-                    title,
-                    frontmatter,
-                    mtime,
+                .map(|(path, title, frontmatter, mtime)| {
+                    let aliases = frontmatter_aliases(&frontmatter);
+                    PageSummary {
+                        path,
+                        title,
+                        frontmatter,
+                        mtime,
+                        aliases,
+                    }
+                })
+                .collect()
+        })
+        .map_err(database_error)
+    }
+
+    async fn list_pages_under(&self, prefix: &str) -> StoreResult<Vec<PageSummary>> {
+        if prefix.is_empty() {
+            return self.list_pages().await;
+        }
+        let escaped_prefix = prefix
+            .replace('\\', "\\\\")
+            .replace('%', "\\%")
+            .replace('_', "\\_");
+        sqlx::query_as::<_, (String, String, serde_json::Value, i64)>(
+            "SELECT path, title, frontmatter, mtime FROM tb_pages WHERE path LIKE $1 ESCAPE '\\' ORDER BY title, path",
+        )
+        .bind(format!("{escaped_prefix}%"))
+        .fetch_all(self.pool())
+        .await
+        .map(|rows| {
+            rows.into_iter()
+                .map(|(path, title, frontmatter, mtime)| {
+                    let aliases = frontmatter_aliases(&frontmatter);
+                    PageSummary {
+                        path,
+                        title,
+                        frontmatter,
+                        mtime,
+                        aliases,
+                    }
                 })
                 .collect()
         })
@@ -79,11 +114,15 @@ impl IndexReader for PostgresIndex {
         .fetch_optional(self.pool())
         .await
         .map(|row| {
-            row.map(|(path, title, frontmatter, mtime)| PageSummary {
-                path,
-                title,
-                frontmatter,
-                mtime,
+            row.map(|(path, title, frontmatter, mtime)| {
+                let aliases = frontmatter_aliases(&frontmatter);
+                PageSummary {
+                    path,
+                    title,
+                    frontmatter,
+                    mtime,
+                    aliases,
+                }
             })
         })
         .map_err(database_error)
@@ -241,16 +280,35 @@ impl IndexReader for PostgresIndex {
         .await
         .map(|rows| {
             rows.into_iter()
-                .map(|(path, title, frontmatter, mtime)| PageSummary {
-                    path,
-                    title,
-                    frontmatter,
-                    mtime,
+                .map(|(path, title, frontmatter, mtime)| {
+                    let aliases = frontmatter_aliases(&frontmatter);
+                    PageSummary {
+                        path,
+                        title,
+                        frontmatter,
+                        mtime,
+                        aliases,
+                    }
                 })
                 .collect()
         })
         .map_err(database_error)
     }
+}
+
+/// Read the frontmatter `aliases` array so it survives alongside the raw
+/// frontmatter blob, matching `miku_indexer`'s extraction at write time.
+fn frontmatter_aliases(frontmatter: &serde_json::Value) -> Vec<String> {
+    frontmatter
+        .get("aliases")
+        .and_then(serde_json::Value::as_array)
+        .map(|values| {
+            values
+                .iter()
+                .filter_map(|value| value.as_str().map(str::to_string))
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 #[async_trait]

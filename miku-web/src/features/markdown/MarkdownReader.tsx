@@ -1,4 +1,4 @@
-import { Children, cloneElement, isValidElement, useEffect, useId, useState, type ReactNode } from "react";
+import { Children, cloneElement, isValidElement, useEffect, useId, useMemo, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import ReactMarkdown from "react-markdown";
 import rehypeRaw from "rehype-raw";
@@ -10,31 +10,69 @@ import remarkMath from "remark-math";
 import mermaid from "mermaid";
 import { headingSlug, type Theme } from "../../shared/ui";
 import { rehypePrism } from "./prism";
+import { isAssetFile, createTargetResolver, createResolverFromOutgoingLinks, combineResolvers, type NoteCandidate, type TargetResolver } from "./noteLinks";
 import "katex/dist/katex.min.css";
 import lightSyntaxTheme from "prismjs/themes/prism.css?url";
 import darkSyntaxTheme from "prismjs/themes/prism-tomorrow.css?url";
+
+export { isAssetFile, createTargetResolver, extractOutgoingLinks } from "./noteLinks";
+export type { NoteCandidate, TargetResolver, OutgoingLinkItem } from "./noteLinks";
 
 const markdownSanitizeSchema = {
   ...defaultSchema,
   attributes: {
     ...defaultSchema.attributes,
     div: [...(defaultSchema.attributes?.div ?? []), "className"],
-    p: [...(defaultSchema.attributes?.p ?? []), "className"]
+    p: [...(defaultSchema.attributes?.p ?? []), "className"],
+    img: [...(defaultSchema.attributes?.img ?? []), "className", "src", "alt"]
   }
 };
 
-export function noteHref(target: string): string {
+export function resolveAssetSrc(src: string, currentPath: string): string {
+  const trimmed = src.trim();
+  if (!trimmed || trimmed.startsWith("http://") || trimmed.startsWith("https://") || trimmed.startsWith("data:")) {
+    return trimmed;
+  }
+  let path = trimmed;
+  if (path.startsWith("/api/v1/assets/")) {
+    path = path.slice("/api/v1/assets/".length);
+  } else if (path.startsWith("/assets/")) {
+    path = path.slice("/assets/".length);
+  } else if (path.startsWith("/")) {
+    path = path.slice(1);
+  }
+  const base = currentPath ? currentPath.split("/").slice(0, -1) : [];
+  const normalized: string[] = [];
+  for (const segment of [...base, ...path.split("/")]) {
+    if (!segment || segment === ".") continue;
+    if (segment === "..") normalized.pop();
+    else normalized.push(segment);
+  }
+  return "/api/v1/assets/" + normalized.map(encodeURIComponent).join("/");
+}
+
+export function noteHref(target: string, resolveLink?: TargetResolver, currentPath?: string): string {
   const trimmed = target.trim();
-  const path = trimmed.endsWith(".md") ? trimmed : trimmed + ".md";
+  if (resolveLink) {
+    const resolved = resolveLink(trimmed);
+    if (resolved) {
+      return "/p/" + resolved.split("/").map(encodeURIComponent).join("/");
+    }
+  }
+  let path = trimmed.endsWith(".md") ? trimmed : `${trimmed}.md`;
+  if (currentPath && !path.includes("/")) {
+    const folder = currentPath.split("/").slice(0, -1).join("/");
+    if (folder) path = `${folder}/${path}`;
+  }
   return "/p/" + path.split("/").map(encodeURIComponent).join("/");
 }
 
-export function resolveMarkdownHref(href: string, currentPath: string): string | null {
+export function resolveMarkdownHref(href: string, currentPath: string, resolveLink?: TargetResolver): string | null {
   const trimmed = href.trim();
   if (!trimmed || trimmed.startsWith("#") || /^[a-z][a-z\d+.-]*:/i.test(trimmed)) return null;
   if (trimmed.startsWith("/p/")) {
     const [target, hash] = trimmed.slice(3).split("#", 2);
-    return noteHref(target) + (hash ? `#${hash}` : "");
+    return noteHref(target, resolveLink, currentPath) + (hash ? `#${hash}` : "");
   }
   if (trimmed.startsWith("/tags/") || trimmed.startsWith("/assets/")) return trimmed;
   const [target, hash] = trimmed.split("#", 2);
@@ -46,13 +84,39 @@ export function resolveMarkdownHref(href: string, currentPath: string): string |
     if (segment === "..") normalized.pop();
     else normalized.push(segment);
   }
-  return noteHref(normalized.join("/")) + (hash ? `#${hash}` : "");
+  return noteHref(normalized.join("/"), resolveLink, currentPath) + (hash ? `#${hash}` : "");
 }
 
-export function expandWikiLinks(markdown: string): string {
-  const withEmbeds = markdown.replace(/!\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (_match, target: string, label?: string) => `> Embedded note: [${label?.trim() || target.trim()}](${noteHref(target)})`);
-  return withEmbeds.replace(/(?<!!)\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (_match, target: string, label?: string) => "[" + (label?.trim() || target.trim()) + "](" + noteHref(target) + ")");
+// Obsidian-style foldable callouts write the marker and body on one line,
+// e.g. "> [!note]+ Some text". remark-github-blockquote-alert only strips
+// the marker when the matched paragraph's raw text contains a newline; for
+// single-line callouts it instead drops the whole first child, losing the
+// content entirely (see node_modules/remark-github-blockquote-alert's
+// `!text.includes('\n')` branch). Splitting the marker onto its own line
+// here forces the plugin down its safe "has newline" branch. The Obsidian
+// fold suffix (+/-) has no effect on our rendering (callouts are always
+// expanded), so it's dropped rather than preserved.
+const SINGLE_LINE_CALLOUT_REGEX = /^(>\s?)\[!(note|tip|important|warning|caution)\][+-]?[ \t]+(.+)$/gim;
+
+export function splitSingleLineCallouts(markdown: string): string {
+  return markdown.replace(SINGLE_LINE_CALLOUT_REGEX, (_match, _prefix: string, type: string, content: string) => `> [!${type}]\n> ${content}`);
 }
+
+export function expandWikiLinks(markdown: string, resolveLink?: TargetResolver, currentPath?: string): string {
+  const withEmbeds = markdown.replace(/!\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (_match, target: string, label?: string) => {
+    const trimmedTarget = target.trim();
+    const trimmedLabel = label?.trim() || trimmedTarget;
+    if (isAssetFile(trimmedTarget)) {
+      return `![${trimmedLabel}](${trimmedTarget})`;
+    }
+    return `> Embedded note: [${trimmedLabel}](${noteHref(trimmedTarget, resolveLink, currentPath)})`;
+  });
+  return withEmbeds.replace(
+    /(?<!!)\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g,
+    (_match, target: string, label?: string) => "[" + (label?.trim() || target.trim()) + "](" + noteHref(target, resolveLink, currentPath) + ")"
+  );
+}
+
 
 export function expandInlineTags(markdown: string): string {
   const segments = markdown.split(/(```[\s\S]*?```|`[^`]*`)/g);
@@ -142,8 +206,35 @@ function SyntaxTheme({ theme }: { theme: Theme }) {
   return null;
 }
 
-export function MarkdownReader({ value, path = "", theme = "dark" }: { value: string; path?: string; theme?: Theme }) {
+export function MarkdownReader({
+  value,
+  path = "",
+  theme = "dark",
+  notes,
+  outgoingLinks,
+  resolveLink
+}: {
+  value: string;
+  path?: string;
+  theme?: Theme;
+  notes?: NoteCandidate[];
+  outgoingLinks?: { target: string; path: string }[];
+  resolveLink?: TargetResolver;
+}) {
   const navigate = useNavigate();
+  const resolver = useMemo(() => {
+    if (resolveLink) return resolveLink;
+    // Prefer the backend's already-resolved links (ADR-0022: resolved
+    // server-side against the full page index) over the client-side
+    // heuristic, which only sees whatever notes have been lazily loaded
+    // into the tree/cache so far and can guess wrong for title/alias
+    // wikilinks it hasn't seen yet.
+    const fromOutgoing = outgoingLinks?.length ? createResolverFromOutgoingLinks(outgoingLinks) : undefined;
+    const fromNotes = notes ? createTargetResolver(notes, path) : undefined;
+    if (!fromOutgoing) return fromNotes;
+    return combineResolvers(fromOutgoing, fromNotes);
+  }, [resolveLink, outgoingLinks, notes, path]);
+
   return (
     <article className={`markdown-reader prose prose-stone max-w-none ${theme === "dark" ? "prose-invert" : ""}`}>
       <SyntaxTheme theme={theme} />
@@ -151,8 +242,12 @@ export function MarkdownReader({ value, path = "", theme = "dark" }: { value: st
         remarkPlugins={[remarkGfm, remarkMath, remarkAlert]}
         rehypePlugins={[rehypeRaw, [rehypeSanitize, markdownSanitizeSchema], [rehypePrism, { ignoreMissing: true }], rehypeKatex]}
         components={{
+          img: ({ src, alt, node: _node, ...props }) => {
+            const resolvedSrc = src ? resolveAssetSrc(src, path) : src;
+            return <img {...props} src={resolvedSrc} alt={alt ?? ""} className="note-image max-w-full h-auto rounded my-4" />;
+          },
           a: ({ href, children, node: _node, ...props }) => {
-            const resolvedHref = href && path ? (resolveMarkdownHref(href, path) ?? href) : href;
+            const resolvedHref = href && path ? (resolveMarkdownHref(href, path, resolver) ?? href) : href;
             const internal = resolvedHref?.startsWith("/p/") || resolvedHref?.startsWith("/tags/");
             return (
               <a
@@ -211,7 +306,8 @@ export function MarkdownReader({ value, path = "", theme = "dark" }: { value: st
           }
         }}
       >
-        {expandInlineTags(expandWikiLinks(value))}
+        {expandInlineTags(expandWikiLinks(splitSingleLineCallouts(value), resolver, path))}
+
       </ReactMarkdown>
     </article>
   );

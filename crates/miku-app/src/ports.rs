@@ -123,6 +123,8 @@ pub struct FileNode {
     pub name: String,
     pub title: Option<String>,
     pub has_children: bool,
+    /// Frontmatter aliases used during wikilink resolution and navigation.
+    pub aliases: Vec<String>,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
@@ -145,11 +147,21 @@ pub struct SaveNoteCommand {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+pub struct OutgoingLinkRecord {
+    /// The wikilink target exactly as written in the source, e.g. `[[target]]`.
+    pub target: String,
+    pub title: String,
+    pub path: String,
+    pub is_missing: bool,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct NoteContext {
     pub note: VaultDocument,
     pub parents: Vec<FileNode>,
     pub children: Vec<FileNode>,
     pub backlinks: Vec<Backlink>,
+    pub outgoing: Vec<OutgoingLinkRecord>,
 }
 
 #[non_exhaustive]
@@ -162,7 +174,7 @@ pub enum ApplicationError {
     #[error("index operation failed: {0}")]
     Index(#[from] StoreError),
     #[error("vault operation failed: {0}")]
-    Vault(#[from] VaultError),
+    Vault(VaultError),
     #[error("note not found: {0}")]
     NotFound(String),
     #[error("workspace is readonly")]
@@ -171,12 +183,25 @@ pub enum ApplicationError {
     Conflict,
 }
 
+impl From<VaultError> for ApplicationError {
+    fn from(error: VaultError) -> Self {
+        match error {
+            VaultError::Io(err) if err.kind() == std::io::ErrorKind::NotFound => {
+                ApplicationError::NotFound(err.to_string())
+            }
+            other => ApplicationError::Vault(other),
+        }
+    }
+}
+
 #[async_trait]
 pub trait VaultReader: Send + Sync {
     async fn vault_info(&self) -> Result<VaultInfo, ApplicationError>;
     async fn file_tree(&self, request: FileTreeRequest) -> Result<FileTree, ApplicationError>;
+    async fn list_pages(&self) -> Result<Vec<PageSummary>, ApplicationError>;
     async fn read_note(&self, note: NoteRef) -> Result<VaultDocument, ApplicationError>;
     async fn note_context(&self, note: NoteRef) -> Result<NoteContext, ApplicationError>;
+    async fn read_raw_asset(&self, path: &str) -> Result<Vec<u8>, ApplicationError>;
 }
 
 #[async_trait]
@@ -255,6 +280,10 @@ mod tests {
                 })
             }
 
+            async fn list_pages(&self) -> Result<Vec<PageSummary>, ApplicationError> {
+                Ok(Vec::new())
+            }
+
             async fn file_tree(
                 &self,
                 _request: FileTreeRequest,
@@ -270,6 +299,10 @@ mod tests {
             }
 
             async fn note_context(&self, _note: NoteRef) -> Result<NoteContext, ApplicationError> {
+                Err(ApplicationError::NotFound("fake".into()))
+            }
+
+            async fn read_raw_asset(&self, _path: &str) -> Result<Vec<u8>, ApplicationError> {
                 Err(ApplicationError::NotFound("fake".into()))
             }
         }

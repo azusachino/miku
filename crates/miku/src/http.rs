@@ -73,6 +73,8 @@ pub(super) fn router(state: AppState) -> Router {
         .route("/api/v1/search", get(http_api::search))
         .route("/api/v1/tags", get(http_api::tags))
         .route("/api/v1/tags/{tag}/notes", get(http_api::tag_notes))
+        .route("/api/v1/assets/{*path}", get(http_api::asset))
+        .route("/assets/{*path}", get(http_api::asset))
         .route("/api/openapi.json", get(openapi::json))
         .layer(TraceLayer::new_for_http().on_response(super::observe_http_response))
         .layer(middleware::from_fn(request_context))

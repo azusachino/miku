@@ -1,10 +1,7 @@
 use anyhow::Result;
 use miku_domain::{DocumentSignals, IndexReader, IndexWriter, PageIndex, PageSummary};
 use miku_indexer::{build_page_index, MentionMatcher};
-use notify::{
-    event::{EventKind, ModifyKind},
-    Watcher,
-};
+use notify::Watcher;
 use std::collections::{HashMap, HashSet};
 use std::env;
 use std::fs;
@@ -188,14 +185,17 @@ async fn reconcile_store(
         batches += 1;
         write_duration += flush_reconcile_batch(writer, events, pages, batches).await?;
     }
+    let is_already_ready = ready.load(Ordering::Acquire);
     let mut hot_hydrated = false;
-    for source_batch in unchanged_files.chunks(batch_size) {
-        let parse_started = Instant::now();
-        let pages = build_page_batch(content_root, source_batch, parse_concurrency).await?;
-        parse_duration += parse_started.elapsed();
-        if !pages.is_empty() {
-            writer.hydrate_hot_pages(pages).await?;
-            hot_hydrated = true;
+    if !is_already_ready {
+        for source_batch in unchanged_files.chunks(batch_size) {
+            let parse_started = Instant::now();
+            let pages = build_page_batch(content_root, source_batch, parse_concurrency).await?;
+            parse_duration += parse_started.elapsed();
+            if !pages.is_empty() {
+                writer.hydrate_hot_pages(pages).await?;
+                hot_hydrated = true;
+            }
         }
     }
     let mut deleted = false;
@@ -214,7 +214,8 @@ async fn reconcile_store(
     if deleted {
         let _ = events.send(BULK_INDEX_REFRESH.to_string());
     }
-    let search_rebuilt = indexed_pages > 0 || deleted_pages > 0 || hot_hydrated;
+    let search_rebuilt =
+        indexed_pages > 0 || deleted_pages > 0 || (!is_already_ready && hot_hydrated);
     if search_rebuilt {
         writer.rebuild_search_index().await?;
     }
@@ -267,7 +268,10 @@ async fn refresh_mentions_for_sources(
         .collect::<Vec<_>>();
     for page in &changed_pages {
         candidates.retain(|candidate| candidate.summary.path != page.summary.path);
-        candidates.push(page.clone());
+        let mut candidate = page.clone();
+        candidate.body.clear();
+        candidate.body.shrink_to_fit();
+        candidates.push(candidate);
     }
     let matcher = MentionMatcher::new(&candidates);
     let target_paths = changed_pages
@@ -278,14 +282,14 @@ async fn refresh_mentions_for_sources(
         .delete_mentions_for_targets(target_paths)
         .await
         .or_else(ignore_unsupported)?;
-    let entries = changed_pages
-        .into_iter()
-        .map(|page| {
-            let source_path = page.summary.path.clone();
-            let mentions = matcher.extract(&page);
-            (source_path, mentions)
-        })
-        .collect::<Vec<_>>();
+    let mut entries = Vec::with_capacity(changed_pages.len());
+    for mut page in changed_pages {
+        let source_path = page.summary.path.clone();
+        let mentions = matcher.extract(&page);
+        page.body = String::new();
+        page.body.shrink_to_fit();
+        entries.push((source_path, mentions));
+    }
     let updated = entries.len();
     writer
         .replace_mentions_for_sources(entries)
@@ -540,10 +544,13 @@ impl IndexerQueue {
         let mut watcher = notify::RecommendedWatcher::new(
             move |result: Result<notify::Event, notify::Error>| match result {
                 Ok(event) => {
-                    let needs_reconcile = event.kind.is_remove()
-                        || matches!(event.kind, EventKind::Modify(ModifyKind::Name(_)))
-                        || event.paths.iter().any(|path| path.extension().is_none());
-                    if needs_reconcile {
+                    let is_dir_or_removal = event.kind.is_remove()
+                        || event.paths.iter().any(|path| {
+                            path.is_dir()
+                                || (path.extension().is_none()
+                                    && !path.to_string_lossy().contains(".miku-tmp"))
+                        });
+                    if is_dir_or_removal {
                         IndexerQueue::try_queue_reconcile(
                             &sender_for_watcher,
                             &reconcile_flag_for_watcher,
@@ -552,7 +559,7 @@ impl IndexerQueue {
                     }
                     for path in event.paths {
                         if path.extension().is_some_and(|extension| extension == "md")
-                            && !path.to_string_lossy().ends_with(".tmp")
+                            && !path.to_string_lossy().contains(".miku-tmp")
                         {
                             let Some(relative) = path.strip_prefix(&root_for_watcher).ok() else {
                                 continue;
@@ -699,6 +706,21 @@ mod tests {
         env::remove_var("MIKU_PARSE_CONCURRENCY");
     }
 
+    /// Coarse process RSS via `ps`, used only to report an order-of-magnitude
+    /// memory delta for the opt-in real-vault benchmark. Includes allocator
+    /// and Tokio/Tantivy overhead, not just the page-graph structures.
+    fn current_rss_kb() -> u32 {
+        let pid = std::process::id().to_string();
+        let output = std::process::Command::new("ps")
+            .args(["-o", "rss=", "-p", &pid])
+            .output()
+            .expect("run ps for RSS measurement");
+        String::from_utf8_lossy(&output.stdout)
+            .trim()
+            .parse()
+            .expect("parse ps rss output")
+    }
+
     #[tokio::test]
     #[ignore = "runs against the local miku_docs corpus; use make benchmark-real-vault"]
     async fn benchmark_real_vault_reconcile() {
@@ -726,22 +748,130 @@ mod tests {
         let writer: Arc<dyn IndexWriter> = index;
         let (events, _) = broadcast::channel(1);
         let ready = AtomicBool::new(false);
+        let rss_before_kb = current_rss_kb();
         let started = Instant::now();
         reconcile_store(&reader, &writer, &content_root, &events, &ready)
             .await
             .expect("reconcile benchmark vault");
         let elapsed = started.elapsed();
+        let rss_after_kb = current_rss_kb();
         let pages = reader.list_pages().await.expect("list indexed pages");
 
         println!(
-            "benchmark=real-vault files={} bytes={} pages={} elapsed_ms={:.3} parse_concurrency={} batch_size={}",
+            "benchmark=real-vault files={} bytes={} pages={} elapsed_ms={:.3} parse_concurrency={} batch_size={} rss_before_mb={:.1} rss_after_mb={:.1} rss_delta_mb={:.1}",
             files.len(),
             bytes,
             pages.len(),
             elapsed.as_secs_f64() * 1000.0,
             IndexerQueue::parse_concurrency(),
             IndexerQueue::reconcile_batch_size(),
+            f64::from(rss_before_kb) / 1024.0,
+            f64::from(rss_after_kb) / 1024.0,
+            f64::from(rss_after_kb.saturating_sub(rss_before_kb)) / 1024.0,
         );
         assert_eq!(pages.len(), files.len());
+    }
+
+    /// Measures `SqliteIndex::search` query latency against the real
+    /// `miku_docs` corpus, the metric ADR-0020's Approach H comparison
+    /// (22-27ms) was decided on. No test in `miku-index-sqlite` exercises
+    /// this against real-world data volume, so a later change to the query
+    /// shape (e.g. pushing filtering into SQL `LIKE`) has no automated
+    /// signal against the number the ADR's decision was actually based on.
+    #[tokio::test]
+    #[ignore = "runs against the local miku_docs corpus; use make benchmark-real-vault-search"]
+    async fn benchmark_real_vault_search() {
+        use miku_domain::{SearchRequest, SearchScope};
+        use miku_index_sqlite::SqliteIndex;
+
+        let content_root = env::var_os(BENCHMARK_VAULT_ENV)
+            .filter(|value| !value.is_empty())
+            .map(PathBuf::from)
+            .expect("MIKU_BENCHMARK_VAULT must be set for the opt-in benchmark");
+
+        let db_path = std::env::temp_dir().join(format!(
+            "miku-search-bench-{}-{}.sqlite3",
+            std::process::id(),
+            Instant::now().elapsed().as_nanos()
+        ));
+        let db_path_str = db_path.to_str().expect("utf8 temp path").to_string();
+        let index = Arc::new(
+            SqliteIndex::open(&db_path_str)
+                .await
+                .expect("open sqlite index"),
+        );
+        let reader: Arc<dyn IndexReader> = index.clone();
+        let writer: Arc<dyn IndexWriter> = index.clone();
+        let (events, _) = broadcast::channel(1);
+        let ready = AtomicBool::new(false);
+
+        let reconcile_started = Instant::now();
+        reconcile_store(&reader, &writer, &content_root, &events, &ready)
+            .await
+            .expect("reconcile benchmark vault into sqlite");
+        let reconcile_elapsed = reconcile_started.elapsed();
+
+        let queries: Vec<(&str, SearchRequest)> = vec![
+            (
+                "single-term-body",
+                SearchRequest {
+                    query: "reconcile".to_string(),
+                    scope: SearchScope::Body,
+                    limit: 20,
+                },
+            ),
+            (
+                "multi-term-body",
+                SearchRequest {
+                    query: "reconcile memory index".to_string(),
+                    scope: SearchScope::Body,
+                    limit: 20,
+                },
+            ),
+            (
+                "single-term-all",
+                SearchRequest {
+                    query: "adr".to_string(),
+                    scope: SearchScope::All,
+                    limit: 20,
+                },
+            ),
+            (
+                "title-scope",
+                SearchRequest {
+                    query: "index".to_string(),
+                    scope: SearchScope::Title,
+                    limit: 20,
+                },
+            ),
+        ];
+
+        for (label, request) in queries {
+            const SAMPLES: u32 = 5;
+            let mut total = Duration::ZERO;
+            let mut hit_count = 0;
+            for _ in 0..SAMPLES {
+                let started = Instant::now();
+                let hits = reader
+                    .search(request.clone())
+                    .await
+                    .expect("search real vault");
+                total += started.elapsed();
+                hit_count = hits.len();
+            }
+            let avg_ms = (total / SAMPLES).as_secs_f64() * 1000.0;
+            println!(
+                "benchmark=real-vault-search label={label} avg_ms={avg_ms:.2} hits={hit_count}"
+            );
+        }
+
+        println!(
+            "benchmark=real-vault-search reconcile_ms={:.1}",
+            reconcile_elapsed.as_secs_f64() * 1000.0
+        );
+
+        let _ = std::fs::remove_file(&db_path);
+        let _ = std::fs::remove_file(format!("{db_path_str}-wal"));
+        let _ = std::fs::remove_file(format!("{db_path_str}-shm"));
     }
 }

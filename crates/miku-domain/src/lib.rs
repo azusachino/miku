@@ -39,6 +39,9 @@ pub struct PageSummary {
     pub frontmatter: serde_json::Value,
     /// Source file modification time as Unix seconds.
     pub mtime: i64,
+    /// Frontmatter aliases used during wikilink resolution and navigation.
+    #[serde(default)]
+    pub aliases: Vec<String>,
 }
 
 /// The complete index projection produced for one Markdown page.
@@ -79,6 +82,34 @@ pub struct HeadingSummary {
     pub level: u8,
     /// Plain visible heading text.
     pub text: String,
+}
+
+/// Fold whitespace, hyphens, and underscores out of a name so that
+/// "elden ring", "elden-ring", and "Elden_Ring" compare equal.
+pub fn fold_name(value: &str) -> String {
+    value
+        .trim()
+        .to_lowercase()
+        .trim_end_matches(".md")
+        .chars()
+        .filter(|ch| !ch.is_whitespace() && *ch != '-' && *ch != '_')
+        .collect()
+}
+
+/// Every name a wikilink might use to reach a page: its filename stem,
+/// its title, and its frontmatter aliases.
+pub fn page_names(path: &str, title: &str, aliases: &[String]) -> Vec<String> {
+    let stem = path
+        .split('/')
+        .next_back()
+        .unwrap_or(path)
+        .trim_end_matches(".md")
+        .to_string();
+    let mut names = Vec::with_capacity(2 + aliases.len());
+    names.push(stem);
+    names.push(title.to_string());
+    names.extend(aliases.iter().cloned());
+    names
 }
 
 /// An outgoing page or asset link in a page projection.
@@ -216,6 +247,26 @@ pub trait IndexReader: Send + Sync {
 
     /// List all indexed pages in deterministic order.
     async fn list_pages(&self) -> StoreResult<Vec<PageSummary>>;
+
+    /// List indexed pages whose path starts with `prefix` (or every page,
+    /// for an empty prefix). Backed by `list_pages` plus a filter by
+    /// default; durable backends override this to push the prefix down to
+    /// the query instead of fetching and JSON-parsing every page's
+    /// frontmatter just to discard most of it, which is what a
+    /// folder-scoped tree request needs (`list_pages` proper is still the
+    /// right call for anything that genuinely needs the whole vault, like
+    /// global wikilink resolution).
+    async fn list_pages_under(&self, prefix: &str) -> StoreResult<Vec<PageSummary>> {
+        let pages = self.list_pages().await?;
+        Ok(if prefix.is_empty() {
+            pages
+        } else {
+            pages
+                .into_iter()
+                .filter(|page| page.path.starts_with(prefix))
+                .collect()
+        })
+    }
 
     /// Load one indexed page summary, if it exists.
     async fn page(&self, path: &str) -> StoreResult<Option<PageSummary>>;
@@ -380,6 +431,7 @@ mod tests {
                 title: "Today".to_string(),
                 frontmatter: serde_json::json!({"status": "draft"}),
                 mtime: 42,
+                aliases: Vec::new(),
             },
             body: "# Today".to_string(),
             links: vec![LinkRecord {

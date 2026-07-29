@@ -143,6 +143,26 @@ impl Vault {
         parse_document(&path, &raw, modified_seconds(&metadata)?)
     }
 
+    /// Reads raw asset bytes safely from the vault without requiring a `.md` extension.
+    pub fn read_raw_bytes(&self, path: &str) -> Result<Vec<u8>, VaultError> {
+        let trimmed = path.trim().trim_matches('/');
+        let p = Path::new(trimmed);
+        if p.is_absolute()
+            || p.components().any(|component| {
+                matches!(
+                    component,
+                    std::path::Component::ParentDir
+                        | std::path::Component::RootDir
+                        | std::path::Component::Prefix(_)
+                )
+            })
+        {
+            return Err(VaultError::InvalidPath(path.to_string()));
+        }
+        let file_path = self.root.join(p);
+        Ok(fs::read(&file_path)?)
+    }
+
     /// Writes one document using a flushed sibling temporary file and rename.
     pub fn write(&self, document: &VaultDocument) -> Result<RevisionToken, VaultError> {
         let path = VaultPath::new(&document.note.source_path)?;
@@ -395,11 +415,24 @@ fn atomic_write(path: &Path, contents: &[u8]) -> Result<(), VaultError> {
         file.write_all(contents)?;
         file.sync_all()?;
     }
-    if let Err(error) = fs::rename(&temp_path, path) {
+    if let Err(_error) = fs::rename(&temp_path, path) {
         let _ = fs::remove_file(&temp_path);
-        return Err(error.into());
+        return direct_write(path, contents);
     }
-    sync_parent(path.parent())?;
+    let _ = sync_parent(path.parent());
+    Ok(())
+}
+
+fn direct_write(path: &Path, contents: &[u8]) -> Result<(), VaultError> {
+    if let Some(parent) = path.parent() {
+        let _ = fs::create_dir_all(parent);
+    }
+    let mut file = OpenOptions::new()
+        .create(true)
+        .write(true)
+        .truncate(true)
+        .open(path)?;
+    file.write_all(contents)?;
     Ok(())
 }
 

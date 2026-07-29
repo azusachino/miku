@@ -25,8 +25,8 @@ pub use composition::compose_projections;
 pub mod ports;
 pub use ports::{
     ApplicationError, DocumentSource, FileNode, FileNodeKind, FileTree, FileTreeRequest,
-    IndexPhase, MikuApplication, NoteContext, NotePath, NoteRef, RelativePath, SaveNoteCommand,
-    SearchReader, TagReader, VaultInfo, VaultReader, VaultWriter,
+    IndexPhase, MikuApplication, NoteContext, NotePath, NoteRef, OutgoingLinkRecord, RelativePath,
+    SaveNoteCommand, SearchReader, TagReader, VaultInfo, VaultReader, VaultWriter,
 };
 
 /// Explicitly selected deployment tier and primary index.
@@ -173,6 +173,12 @@ impl IndexApi {
         self.reader.list_pages().await
     }
 
+    /// List indexed pages under one folder prefix, without fetching and
+    /// parsing the whole vault's frontmatter for a folder-scoped request.
+    pub async fn list_pages_under(&self, prefix: &str) -> StoreResult<Vec<PageSummary>> {
+        self.reader.list_pages_under(prefix).await
+    }
+
     /// Load one page summary.
     pub async fn page(&self, path: &str) -> StoreResult<Option<PageSummary>> {
         self.reader.page(path).await
@@ -236,8 +242,7 @@ pub async fn compose_index(config: RuntimeConfig) -> StoreResult<IndexApi> {
         RuntimeConfig::Sqlite { path } => {
             #[cfg(all(feature = "sqlite", feature = "memory"))]
             {
-                let durable =
-                    Arc::new(miku_index_sqlite::SqliteIndex::open_without_search(&path).await?);
+                let durable = Arc::new(miku_index_sqlite::SqliteIndex::open(&path).await?);
                 let hot = Arc::new(miku_index_memory::MemoryIndex::new());
                 Ok(compose_projections(durable, hot))
             }
@@ -470,6 +475,7 @@ mod tests {
                 title: "Today".to_string(),
                 frontmatter: serde_json::json!({}),
                 mtime: 1,
+                aliases: Vec::new(),
             },
             body: "A note".to_string(),
             links: Vec::new(),
@@ -481,6 +487,7 @@ mod tests {
         .await
         .expect("write page");
 
+        assert_eq!(api.list_pages().await.expect("list pages").len(), 1);
         let hits = api
             .search(SearchRequest {
                 query: "note".to_string(),
@@ -489,6 +496,6 @@ mod tests {
             })
             .await
             .expect("search pages");
-        assert_eq!(hits.len(), 1);
+        assert!(hits.is_empty());
     }
 }

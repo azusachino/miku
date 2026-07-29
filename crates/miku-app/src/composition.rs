@@ -63,15 +63,19 @@ impl IndexReader for ComposedReader {
     }
 
     async fn list_pages(&self) -> StoreResult<Vec<PageSummary>> {
-        self.active().list_pages().await
+        self.durable.list_pages().await
+    }
+
+    async fn list_pages_under(&self, prefix: &str) -> StoreResult<Vec<PageSummary>> {
+        self.durable.list_pages_under(prefix).await
     }
 
     async fn page(&self, path: &str) -> StoreResult<Option<PageSummary>> {
-        self.active().page(path).await
+        self.durable.page(path).await
     }
 
     async fn search(&self, request: SearchRequest) -> StoreResult<Vec<SearchHit>> {
-        self.active().search(request).await
+        self.durable.search(request).await
     }
 
     async fn backlinks(&self, path: &str) -> StoreResult<Vec<Backlink>> {
@@ -237,6 +241,7 @@ mod tests {
                 title: "Index".to_string(),
                 frontmatter: serde_json::json!({}),
                 mtime: 1,
+                aliases: Vec::new(),
             },
             body: "# Index".to_string(),
             links: Vec::new(),

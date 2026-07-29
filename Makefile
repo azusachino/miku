@@ -57,6 +57,9 @@ benchmark-api:
 benchmark-real-vault:
 	MIKU_BENCHMARK_VAULT="$(CURDIR)/miku_docs" cargo test -p miku --release --lib -- --ignored --nocapture benchmark_real_vault_reconcile
 
+benchmark-real-vault-search:
+	MIKU_BENCHMARK_VAULT="$(CURDIR)/miku_docs" cargo test -p miku --release --lib -- --ignored --nocapture benchmark_real_vault_search
+
 release:
 	uv run python scripts/orchestrate.py release
 

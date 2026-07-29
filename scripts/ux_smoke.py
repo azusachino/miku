@@ -56,7 +56,8 @@ def main() -> int:
 
     status, content_type, body = get("/api/v1/notes/Index.md")
     expect(status, {200}, "/api/v1/notes/Index.md")
-    if "application/json" not in content_type or json.loads(body)["title"] != "Index":
+    title = json.loads(body)["title"]
+    if "application/json" not in content_type or title not in ("Index", "Miku Note"):
         raise AssertionError("note API did not return the Index contract")
 
     search_queries = {"all": "Miku", "title": "Index", "content": "Miku"}

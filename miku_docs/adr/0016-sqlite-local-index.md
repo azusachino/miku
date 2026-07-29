@@ -3,14 +3,14 @@ id: ADR-0016
 type: adr
 title: ADR-0016 — SQLite (sqlx) local index
 slug: sqlite-local-index
-status: Accepted
-updated: 2026-07-15
+status: Superseded by ADR-0017
+updated: 2026-07-28
 date-proposed: 2026-07-15
 date-accepted: 2026-07-15
 deciders: [haru]
 mirror: asobi:miku:decision:sqlite-local-index
 supersedes: [ADR-0011, ADR-0014]
-superseded-by:
+superseded-by: [ADR-0017]
 relates-to: [ADR-0009, ADR-0010, ADR-0012, ADR-0013]
 rejects: [rusqlite-sync, libsql-embedded, redb-kv, retained-removed-backend]
 impacts: [crates/miku-index-sqlite, crates/miku-app, Cargo.toml, Makefile, miku_docs/setup.md, miku_docs/architecture.md]
@@ -19,6 +19,11 @@ tags: [index, sqlite, sqlx, fts5, dependencies]
 ---
 
 # ADR-0016 — SQLite (sqlx) local index
+
+## Status
+
+Superseded by ADR-0017. SQLite via `sqlx` remains the crate and dependency choice, but ADR-0017 rejects SQLite as the domain/note-identity model, and ADR-0019 retires this record's relational
+`tb_links`/`tb_tags`/`tb_page_aliases` schema and resolve-pass design in favor of in-memory graph resolution. This record is retained for the crate-selection and FTS5 rationale.
 
 ## Decision
 

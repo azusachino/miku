@@ -14,3 +14,6 @@
 [submodule "vendor/silverbullet"]
 	path = vendor/silverbullet
 	url = https://github.com/silverbulletmd/silverbullet.git
+[submodule "vendor/foam"]
+	path = vendor/foam
+	url = https://github.com/foambubble/foam.git

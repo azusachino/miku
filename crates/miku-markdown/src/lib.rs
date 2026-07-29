@@ -87,9 +87,9 @@ pub fn is_asset_path(path: &str) -> bool {
         || lower.ends_with(".webp")
 }
 
-/// Normalize a wikilink target into the resolver key stored in `tb_pages.slug`
-/// / `tb_links.target_norm`: lowercased, with a trailing `.md` stripped for
-/// pages (assets keep their extension).
+/// Normalize a wikilink target into the resolver key stored in
+/// `tb_pages.slug` / `LinkRecord::target_norm`: lowercased, with a trailing
+/// `.md` stripped for pages (assets keep their extension).
 pub fn normalize_target(name: &str, is_asset: bool) -> String {
     let trimmed = name.trim();
     if is_asset {
@@ -263,12 +263,31 @@ fn anchor_html(target: &str, label: &str, resolved: &dyn Fn(&str) -> Option<Stri
     }
 }
 
+/// Canonical tag normalization: lowercased and hyphen-connected.
+/// E.g. `#Todo` -> `"todo"`, `my_tag` -> `"my-tag"`, `MY TAG` -> `"my-tag"`.
+pub fn normalize_tag(tag: &str) -> String {
+    let clean = tag.trim_start_matches('#').trim();
+    let mut normalized = String::with_capacity(clean.len());
+    for c in clean.chars() {
+        if c.is_alphanumeric() {
+            normalized.extend(c.to_lowercase());
+        } else if (c == '-' || c == '_' || c.is_whitespace())
+            && !normalized.ends_with('-')
+            && !normalized.is_empty()
+        {
+            normalized.push('-');
+        }
+    }
+    normalized.trim_matches('-').to_string()
+}
+
 /// Render an inline `#tag` as a link to its `/tags/{tag}` filter page.
 fn tag_html(tag: &str) -> String {
+    let canonical = normalize_tag(tag);
     format!(
         "<a href=\"/tags/{}\" class=\"tag-inline\">#{}</a>",
-        escape_attr(tag),
-        escape_text(tag)
+        escape_attr(&canonical),
+        escape_text(&canonical)
     )
 }
 
@@ -777,5 +796,13 @@ mod tests {
                 .collect::<Vec<_>>(),
             vec![(1, "Title".to_string()), (2, "Details".to_string())]
         );
+    }
+
+    #[test]
+    fn test_normalize_tag_canonical_lowercased_hyphenated() {
+        assert_eq!(normalize_tag("#Todo"), "todo");
+        assert_eq!(normalize_tag("my_tag"), "my-tag");
+        assert_eq!(normalize_tag("MY TAG"), "my-tag");
+        assert_eq!(normalize_tag("#TO-DO"), "to-do");
     }
 }

@@ -5,7 +5,7 @@ import { createWorkspaceClient, subscribeToWorkspaceEvents, type ApiSource, type
 import { ContextPanel, FolderBrowser, LaunchBar, NotePane, SettingsDialog, Sidebar, Tabs, WorkspaceUtility } from "./WorkspaceComponents";
 import { NoteIcon } from "../../components/workspace/icons";
 import { WorkspaceNotice } from "../../components/workspace/WorkspaceNotice";
-import { normalizeNotePath, useNoteRouteRecovery } from "./noteRoute";
+import { closeTab, normalizeNotePath, useNoteRouteRecovery } from "./noteRoute";
 import { UI_STATE_VERSION, moveSearchSelection, readTheme, shellRegions, writeTheme, type Theme } from "../../shared/ui";
 import { initialWorkspaceState, workspaceReducer } from "./state";
 
@@ -45,26 +45,77 @@ export function WorkspaceScreen() {
   const workspace = useQuery({ queryKey: ["workspace"], queryFn: client.workspace });
   const tree = useQuery({ queryKey: ["tree"], queryFn: () => client.tree() });
   const folder = useQuery({ queryKey: ["folder", folderPath], queryFn: () => client.tree(folderPath), enabled: Boolean(folderPath) });
-  const context = useQuery({ queryKey: ["context", activeId], queryFn: () => client.context(activeId), enabled: Boolean(activeId) });
-  const results = useQuery({ queryKey: ["search", query, searchScope], queryFn: () => client.search(query, searchScope), enabled: searchOpen });
+  const context = useQuery({
+    queryKey: ["context", activeId],
+    queryFn: () => client.context(activeId),
+    enabled: Boolean(activeId),
+    placeholderData: (previousData) => {
+      return queryClient.getQueryData(["context", activeId]) ?? previousData;
+    }
+  });
+  const [debouncedQuery, setDebouncedQuery] = useState(query);
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedQuery(query), 150);
+    return () => clearTimeout(timer);
+  }, [query]);
+  const searchKey = debouncedQuery.trim();
+  const results = useQuery({
+    queryKey: ["search", searchKey, searchScope],
+    queryFn: () => client.search(searchKey, searchScope),
+    enabled: searchOpen && searchKey.length > 0,
+    staleTime: 30_000
+  });
   const isWorkspaceRoot = location.pathname === "/";
   const visibleTree = useMemo(() => [...(tree.data ?? []), ...(context.data?.children ?? [])], [context.data?.children, tree.data]);
   const treeNotes = useMemo(() => visibleTree.map((node) => ({ ...node.note, icon: "file-text", updated: "indexed", body: "", backlinks: [], tags: [] })), [visibleTree]);
   const contextualNote = useMemo(() => context.data?.note, [context.data]);
   useEffect(() => {
-    if (contextualNote) setNoteCache((current) => ({ ...current, [contextualNote.id]: contextualNote }));
+    if (!contextualNote) return;
+    setNoteCache((current) => {
+      const existing = current[contextualNote.id];
+      // React Query hands back a freshly deserialized object on every
+      // fetch even when the underlying note hasn't changed (revisiting an
+      // already-cached note, a background refetch, etc.), so a reference
+      // check alone would always say "different" here. Comparing content
+      // identity instead lets a revisit bail out of the state update
+      // entirely (returning `current` unchanged), avoiding a cascade
+      // through the notes memo and every consumer's resolver rebuild.
+      if (existing && existing.path === contextualNote.path && existing.revision?.content_hash === contextualNote.revision?.content_hash) {
+        return current;
+      }
+      return { ...current, [contextualNote.id]: contextualNote };
+    });
   }, [contextualNote]);
+  useEffect(() => {
+    if (!contextualNote || !activeId || !isNoteRoute || context.isPlaceholderData) return;
+    const normActive = normalizeNotePath(activeId);
+    const normCanonical = normalizeNotePath(contextualNote.path);
+    if (normActive !== normCanonical) {
+      dispatch({ type: "replace-tab", oldId: normActive, newId: normCanonical });
+      navigate(`/p/${normCanonical.split("/").map(encodeURIComponent).join("/")}`, { replace: true });
+    }
+  }, [activeId, contextualNote, context.isPlaceholderData, isNoteRoute, navigate]);
   const notes = useMemo(() => {
     const combined = [...treeNotes, ...Object.values(noteCache)];
-    return Array.from(new Map(combined.map((candidate) => [candidate.id, candidate])).values());
+    const map = new Map<string, NoteModel>();
+    for (const candidate of combined) {
+      if (candidate.id) map.set(candidate.id, candidate);
+      if (candidate.path) map.set(candidate.path, candidate);
+      if (candidate.path) map.set(normalizeNotePath(candidate.path), candidate);
+    }
+    return Array.from(map.values());
   }, [noteCache, treeNotes]);
+
+
+  const normActiveId = normalizeNotePath(activeId);
   const activeNote = contextualNote ??
-    notes.find((candidate) => candidate.id === activeId) ?? {
+    notes.find((candidate) => candidate.id === activeId || candidate.path === activeId || normalizeNotePath(candidate.path) === normActiveId) ?? {
       id: activeId,
-      path: "",
-      title: context.isPending || context.isFetching ? "Loading note…" : "Note unavailable",
+      path: activeId,
+      title: context.isPending || context.isFetching ? "Loading note…" : activeId.split("/").pop()?.replace(/\.md$/, "") || "Note unavailable",
       icon: "file-text",
       parents: [],
+      aliases: [],
       updated: "",
       body: "",
       backlinks: [],
@@ -76,6 +127,7 @@ export function WorkspaceScreen() {
     isNoteRoute,
     isError: context.isError,
     hasNote: Boolean(context.data?.note),
+    canonicalId: contextualNote && !context.isPlaceholderData ? normalizeNotePath(contextualNote.path) : undefined,
     tabs: state.tabs,
     dispatch,
     navigate,
@@ -169,21 +221,15 @@ export function WorkspaceScreen() {
   }, [results.data]);
 
   const select = (id: string) => {
-    dispatch({ type: "open", id });
-    navigate(`/p/${id}`);
+    const targetId = normalizeNotePath(id);
+    void queryClient.prefetchQuery({ queryKey: ["context", targetId], queryFn: () => client.context(targetId) });
+    dispatch({ type: "open", id: targetId });
+    navigate(`/p/${targetId.split("/").map(encodeURIComponent).join("/")}`);
     setSearchOpen(false);
     const recent = JSON.parse(localStorage.getItem("miku-recent") ?? "[]") as string[];
-    localStorage.setItem("miku-recent", JSON.stringify([id, ...recent.filter((path) => path !== id)].slice(0, 20)));
+    localStorage.setItem("miku-recent", JSON.stringify([targetId, ...recent.filter((path) => path !== targetId)].slice(0, 20)));
   };
-  const closeTab = (id: string) => {
-    const remaining = state.tabs.filter((tab) => tab !== id);
-    dispatch({ type: "close", id });
-    if (!remaining.length) {
-      navigate("/");
-    } else if (state.activeId === id) {
-      navigate(`/p/${remaining.at(-1)}`);
-    }
-  };
+  const closeTabHandler = (id: string) => closeTab({ id, tabs: state.tabs, activeId, dispatch, navigate });
   const openBreadcrumbPath = (path: string) => {
     if (!path) {
       navigate("/");
@@ -204,8 +250,7 @@ export function WorkspaceScreen() {
     navigate(`/tags/${encodeURIComponent(tag)}`);
   };
   const navigateContextPath = (path: string) => {
-    if (path.endsWith(".md")) select(path);
-    else openBreadcrumbPath(path);
+    select(path);
   };
   const openSearch = () => {
     setSearchSelection(-1);
@@ -221,6 +266,21 @@ export function WorkspaceScreen() {
       writeTheme(next);
       return next;
     });
+  const handleSaveNote = (updated: NoteModel) => {
+    queryClient.setQueryData(["context", activeId], (old: unknown) =>
+      old && typeof old === "object" ? { ...old, note: updated } : old
+    );
+    if (updated.path) {
+      queryClient.setQueryData(["context", updated.path], (old: unknown) =>
+        old && typeof old === "object" ? { ...old, note: updated } : old
+      );
+    }
+    setNoteCache((current) => ({
+      ...current,
+      [updated.id]: updated,
+      ...(updated.path ? { [updated.path]: updated } : {})
+    }));
+  };
   const status = useMemo(() => (workspace.data ? `${workspace.data.noteCount} notes` : "Loading workspace"), [workspace.data]);
 
   const secondaryNote = notes.find((candidate) => candidate.id === (state.tabs.find((tab) => tab !== activeId) ?? "welcome")) ?? activeNote;
@@ -340,7 +400,7 @@ export function WorkspaceScreen() {
             <WorkspaceUtility route={utilityRoute} theme={theme} onToggleTheme={toggleTheme} client={client} />
           ) : (
             <>
-              <Tabs notes={notes} tabs={state.tabs} activeId={activeId} activeNote={activeNote} onSelect={select} onClose={closeTab} />
+              <Tabs notes={notes} tabs={state.tabs} activeId={activeId} activeNote={activeNote} onSelect={select} onClose={closeTabHandler} />
               <div className="content-stage">
                 <NotePane
                   note={activeNote}
@@ -351,7 +411,10 @@ export function WorkspaceScreen() {
                   client={client}
                   onTagSearch={searchTag}
                   onNavigatePath={openBreadcrumbPath}
+                  onSaveNote={handleSaveNote}
                   theme={theme}
+                  notes={notes}
+                  outgoingLinks={context.isPlaceholderData ? undefined : context.data?.outgoing}
                 />
                 {state.split && (
                   <NotePane
@@ -363,13 +426,17 @@ export function WorkspaceScreen() {
                     client={client}
                     onTagSearch={searchTag}
                     onNavigatePath={openBreadcrumbPath}
+                    onSaveNote={handleSaveNote}
                     theme={theme}
+                    notes={notes}
                   />
                 )}
                 <ContextPanel
                   note={activeNote}
                   backlinks={context.data?.backlinks ?? []}
+                  outgoing={context.data?.outgoing ?? []}
                   indexPhase={workspace.data?.indexPhase}
+
                   open={state.contextOpen}
                   onToggle={() => dispatch({ type: "toggle-context" })}
                   onNavigate={navigateContextPath}
@@ -378,6 +445,7 @@ export function WorkspaceScreen() {
                     resizingContext.current = true;
                     document.body.style.cursor = "col-resize";
                   }}
+                  notes={notes}
                 />
               </div>
             </>

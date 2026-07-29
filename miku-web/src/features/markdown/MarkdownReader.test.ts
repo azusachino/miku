@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { extractInlineTags } from "../workspace/api";
-import { expandInlineTags, expandWikiLinks, mermaidTheme, noteHref, resolveMarkdownHref } from "./MarkdownReader";
+import { expandInlineTags, expandWikiLinks, mermaidTheme, noteHref, resolveMarkdownHref, splitSingleLineCallouts } from "./MarkdownReader";
 import { supportedPrismLanguages } from "./prism";
 
 describe("Markdown reader navigation", () => {
@@ -41,4 +41,39 @@ describe("Markdown reader navigation", () => {
     expect(mermaidTheme("light")).toBe("default");
     expect(mermaidTheme("dark")).toBe("dark");
   });
+
+  it("prepends current note subfolder path to relative wikilinks", () => {
+    expect(noteHref("uncreated-note", undefined, "vault/maps/topic-map.md")).toBe("/p/vault/maps/uncreated-note.md");
+    expect(expandWikiLinks("[[uncreated-note]]", undefined, "vault/maps/topic-map.md")).toContain("/p/vault/maps/uncreated-note.md");
+  });
+
+  it("splits Obsidian single-line foldable callouts onto their own line so content survives remark-alert", () => {
+    const result = splitSingleLineCallouts("> [!note]+ Will Power is the trait of the week.");
+    expect(result).toBe("> [!note]\n> Will Power is the trait of the week.");
+  });
+
+  it("handles every admonition type and both fold suffixes", () => {
+    for (const type of ["note", "tip", "important", "warning", "caution"]) {
+      for (const suffix of ["+", "-", ""]) {
+        const result = splitSingleLineCallouts(`> [!${type}]${suffix} content`);
+        expect(result).toBe(`> [!${type}]\n> content`);
+      }
+    }
+  });
+
+  it("leaves already-correct multi-line callouts untouched", () => {
+    const original = "> [!note]\n> content on its own line";
+    expect(splitSingleLineCallouts(original)).toBe(original);
+  });
+
+  it("leaves plain blockquotes and non-callout text untouched", () => {
+    expect(splitSingleLineCallouts("> just a quote")).toBe("> just a quote");
+    expect(splitSingleLineCallouts("no callout here")).toBe("no callout here");
+  });
+
+  it("splits multiple single-line callouts in the same document independently", () => {
+    const result = splitSingleLineCallouts("> [!note]+ first\n\nsome text\n\n> [!warning]- second");
+    expect(result).toBe("> [!note]\n> first\n\nsome text\n\n> [!warning]\n> second");
+  });
 });
+

@@ -1,25 +1,23 @@
 //! SQLite implementation of Miku's backend-neutral index contract.
 
 use async_trait::async_trait;
+use futures_util::TryStreamExt;
 use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions};
-use sqlx::SqlitePool;
+use sqlx::{Row, SqlitePool};
 use std::str::FromStr;
 use std::time::Duration;
 
 use miku_domain::{
-    Backlink, DurableProjection, IndexCapabilities, IndexEvent, IndexReader, IndexWriter, LinkKind,
+    Backlink, DurableProjection, IndexCapabilities, IndexEvent, IndexReader, IndexWriter,
     MentionRecord, PageIndex, PageSummary, SearchHit, SearchRequest, SearchScope, StoreError,
     StoreResult, TagCount,
 };
-use miku_indexer::page_slug;
-
 const MENTIONS_READY_VERSION: &str = "2";
 
 /// SQLite-backed index projection.
 #[derive(Clone)]
 pub struct SqliteIndex {
     pool: SqlitePool,
-    search_enabled: bool,
 }
 
 impl DurableProjection for SqliteIndex {}
@@ -27,16 +25,6 @@ impl DurableProjection for SqliteIndex {}
 impl SqliteIndex {
     /// Open a new SQLite-backed index at the given path.
     pub async fn open(path: &str) -> StoreResult<Self> {
-        Self::open_with_search(path, true).await
-    }
-
-    /// Open SQLite as a durable graph/metadata projection while delegating
-    /// full-text serving to a composed hot search projection.
-    pub async fn open_without_search(path: &str) -> StoreResult<Self> {
-        Self::open_with_search(path, false).await
-    }
-
-    async fn open_with_search(path: &str, search_enabled: bool) -> StoreResult<Self> {
         let opts = SqliteConnectOptions::from_str(&format!("sqlite://{path}"))
             .map_err(|e| StoreError::InvalidInput(format!("invalid connection string: {e}")))?
             .create_if_missing(true)
@@ -56,21 +44,7 @@ impl SqliteIndex {
             .await
             .map_err(|e| StoreError::Unavailable(format!("failed to run migrations: {e}")))?;
 
-        // Explicit CREATE VIRTUAL TABLE FTS5 smoke verification
-        sqlx::query("CREATE VIRTUAL TABLE IF NOT EXISTS fts5_smoke_test USING fts5(content);")
-            .execute(&pool)
-            .await
-            .map_err(|e| StoreError::Unavailable(format!("FTS5 check failed: {e}")))?;
-
-        sqlx::query("DROP TABLE IF EXISTS fts5_smoke_test;")
-            .execute(&pool)
-            .await
-            .map_err(|e| StoreError::Unavailable(format!("FTS5 cleanup failed: {e}")))?;
-
-        Ok(Self {
-            pool,
-            search_enabled,
-        })
+        Ok(Self { pool })
     }
 
     /// Return reference to the underlying connection pool.
@@ -91,23 +65,55 @@ fn page_path(path: &str) -> String {
     }
 }
 
-fn sanitize_fts5_query(query: &str) -> String {
-    query
-        .split_whitespace()
-        .map(|term| {
-            let cleaned: String = term
-                .chars()
-                .filter(|c| c.is_alphanumeric() || *c == '-' || *c == '_')
-                .collect();
-            if cleaned.is_empty() {
-                String::new()
-            } else {
-                format!("\"{}\"*", cleaned)
-            }
+fn contains_ascii_ci(haystack: &str, needle: &str) -> bool {
+    let h = haystack.as_bytes();
+    let n = needle.as_bytes();
+    if n.is_empty() {
+        return true;
+    }
+    if n.len() > h.len() {
+        return false;
+    }
+    h.windows(n.len()).any(|w| w.eq_ignore_ascii_case(n))
+}
+
+fn count_ascii_ci(haystack: &str, needle: &str) -> usize {
+    let h = haystack.as_bytes();
+    let n = needle.as_bytes();
+    if n.is_empty() || n.len() > h.len() {
+        return 0;
+    }
+    h.windows(n.len())
+        .filter(|w| w.eq_ignore_ascii_case(n))
+        .count()
+}
+
+fn snippet(body: &str, terms: &[&str]) -> String {
+    if body.is_empty() {
+        return String::new();
+    }
+    let lower = body.to_lowercase();
+    let start = terms
+        .iter()
+        .find_map(|term| lower.find(&term.to_lowercase()))
+        .unwrap_or(0);
+    let start_chars = lower[..start].chars().count();
+    body.chars().skip(start_chars).take(160).collect()
+}
+
+/// Read the frontmatter `aliases` array so it survives alongside the raw
+/// frontmatter blob, matching `miku_indexer`'s extraction at write time.
+fn frontmatter_aliases(frontmatter: &serde_json::Value) -> Vec<String> {
+    frontmatter
+        .get("aliases")
+        .and_then(serde_json::Value::as_array)
+        .map(|values| {
+            values
+                .iter()
+                .filter_map(|value| value.as_str().map(str::to_string))
+                .collect()
         })
-        .filter(|s| !s.is_empty())
-        .collect::<Vec<_>>()
-        .join(" ")
+        .unwrap_or_default()
 }
 
 #[async_trait]
@@ -115,7 +121,7 @@ impl IndexReader for SqliteIndex {
     async fn capabilities(&self) -> StoreResult<IndexCapabilities> {
         Ok(IndexCapabilities {
             durable: true,
-            full_text_search: self.search_enabled,
+            full_text_search: true,
             fuzzy_page_search: false,
             transactions: true,
             remote_sync: false,
@@ -132,13 +138,47 @@ impl IndexReader for SqliteIndex {
 
         let mut summaries = Vec::with_capacity(rows.len());
         for (path, title, frontmatter_str, mtime) in rows {
-            let frontmatter = serde_json::from_str(&frontmatter_str)
+            let frontmatter: serde_json::Value = serde_json::from_str(&frontmatter_str)
                 .map_err(|e| StoreError::Operation(format!("invalid frontmatter JSON: {e}")))?;
+            let aliases = frontmatter_aliases(&frontmatter);
             summaries.push(PageSummary {
                 path,
                 title,
                 frontmatter,
                 mtime,
+                aliases,
+            });
+        }
+        Ok(summaries)
+    }
+
+    async fn list_pages_under(&self, prefix: &str) -> StoreResult<Vec<PageSummary>> {
+        if prefix.is_empty() {
+            return self.list_pages().await;
+        }
+        let escaped_prefix = prefix
+            .replace('\\', "\\\\")
+            .replace('%', "\\%")
+            .replace('_', "\\_");
+        let rows = sqlx::query_as::<_, (String, String, String, i64)>(
+            "SELECT path, title, frontmatter, mtime FROM tb_pages WHERE path LIKE ? ESCAPE '\\' ORDER BY title, path",
+        )
+        .bind(format!("{escaped_prefix}%"))
+        .fetch_all(self.pool())
+        .await
+        .map_err(database_error)?;
+
+        let mut summaries = Vec::with_capacity(rows.len());
+        for (path, title, frontmatter_str, mtime) in rows {
+            let frontmatter: serde_json::Value = serde_json::from_str(&frontmatter_str)
+                .map_err(|e| StoreError::Operation(format!("invalid frontmatter JSON: {e}")))?;
+            let aliases = frontmatter_aliases(&frontmatter);
+            summaries.push(PageSummary {
+                path,
+                title,
+                frontmatter,
+                mtime,
+                aliases,
             });
         }
         Ok(summaries)
@@ -154,13 +194,15 @@ impl IndexReader for SqliteIndex {
         .map_err(database_error)?;
 
         if let Some((path, title, frontmatter_str, mtime)) = row {
-            let frontmatter = serde_json::from_str(&frontmatter_str)
+            let frontmatter: serde_json::Value = serde_json::from_str(&frontmatter_str)
                 .map_err(|e| StoreError::Operation(format!("invalid frontmatter JSON: {e}")))?;
+            let aliases = frontmatter_aliases(&frontmatter);
             Ok(Some(PageSummary {
                 path,
                 title,
                 frontmatter,
                 mtime,
+                aliases,
             }))
         } else {
             Ok(None)
@@ -173,101 +215,112 @@ impl IndexReader for SqliteIndex {
             return Ok(Vec::new());
         }
 
-        let like = format!("%{}%", query.replace('%', "\\%").replace('_', "\\_"));
-        let fts_query = sanitize_fts5_query(query);
+        let terms: Vec<&str> = query.split_whitespace().collect();
+        if terms.is_empty() {
+            return Ok(Vec::new());
+        }
 
-        let rows = match request.scope {
-            SearchScope::Body => {
-                if fts_query.is_empty() {
-                    return Ok(Vec::new());
+        let mut builder = sqlx::QueryBuilder::<sqlx::Sqlite>::new(
+            "SELECT path, title, body FROM tb_pages WHERE ",
+        );
+
+        for (i, term) in terms.iter().enumerate() {
+            if i > 0 {
+                builder.push(" AND ");
+            }
+            let escaped = term
+                .replace('\\', "\\\\")
+                .replace('%', "\\%")
+                .replace('_', "\\_");
+            let pattern = format!("%{escaped}%");
+
+            match request.scope {
+                SearchScope::Title => {
+                    builder.push("(path LIKE ");
+                    builder.push_bind(pattern.clone());
+                    builder.push(" ESCAPE '\\' OR title LIKE ");
+                    builder.push_bind(pattern);
+                    builder.push(" ESCAPE '\\')");
                 }
-                sqlx::query_as::<_, (String, String)>(
-                    "SELECT p.path, p.title FROM tb_pages p
-                     JOIN tb_pages_fts f ON f.path = p.path
-                     WHERE tb_pages_fts MATCH ?
-                     ORDER BY bm25(tb_pages_fts, 10.0, 1.0) ASC, p.title
-                     LIMIT ?",
-                )
-                .bind(fts_query)
-                .bind(request.limit as i64)
-                .fetch_all(self.pool())
-                .await
-            }
-            SearchScope::Title => {
-                sqlx::query_as::<_, (String, String)>(
-                    "SELECT path, title FROM tb_pages
-                     WHERE title LIKE ? ESCAPE '\\' OR path LIKE ? ESCAPE '\\'
-                     ORDER BY title, path LIMIT ?",
-                )
-                .bind(&like)
-                .bind(&like)
-                .bind(request.limit as i64)
-                .fetch_all(self.pool())
-                .await
-            }
-            SearchScope::All => {
-                if fts_query.is_empty() {
-                    sqlx::query_as::<_, (String, String)>(
-                        "SELECT path, title FROM tb_pages
-                         WHERE title LIKE ? ESCAPE '\\' OR path LIKE ? ESCAPE '\\'
-                         ORDER BY title, path LIMIT ?",
-                    )
-                    .bind(&like)
-                    .bind(&like)
-                    .bind(request.limit as i64)
-                    .fetch_all(self.pool())
-                    .await
-                } else {
-                    sqlx::query_as::<_, (String, String)>(
-                        "SELECT path, title FROM tb_pages
-                         WHERE path IN (SELECT path FROM tb_pages_fts WHERE tb_pages_fts MATCH ?)
-                            OR title LIKE ? ESCAPE '\\'
-                            OR path LIKE ? ESCAPE '\\'
-                         ORDER BY title, path LIMIT ?",
-                    )
-                    .bind(fts_query)
-                    .bind(&like)
-                    .bind(&like)
-                    .bind(request.limit as i64)
-                    .fetch_all(self.pool())
-                    .await
+                SearchScope::Body => {
+                    builder.push("body LIKE ");
+                    builder.push_bind(pattern);
+                    builder.push(" ESCAPE '\\'");
+                }
+                SearchScope::All => {
+                    builder.push("(path LIKE ");
+                    builder.push_bind(pattern.clone());
+                    builder.push(" ESCAPE '\\' OR title LIKE ");
+                    builder.push_bind(pattern.clone());
+                    builder.push(" ESCAPE '\\' OR body LIKE ");
+                    builder.push_bind(pattern);
+                    builder.push(" ESCAPE '\\')");
                 }
             }
-        };
+        }
 
-        rows.map(|rows| {
-            rows.into_iter()
-                .map(|(path, title)| SearchHit {
-                    path,
-                    title,
-                    snippet: String::new(),
-                })
-                .collect()
-        })
-        .map_err(database_error)
+        let mut stream = builder.build().fetch(self.pool());
+
+        let mut hits: Vec<(f64, SearchHit)> = Vec::new();
+        while let Some(row) = stream.try_next().await.map_err(database_error)? {
+            let path: &str = row.try_get(0).map_err(database_error)?;
+            let title: &str = row.try_get(1).map_err(database_error)?;
+            let body: &str = row.try_get(2).map_err(database_error)?;
+
+            let title_match = terms
+                .iter()
+                .all(|t| contains_ascii_ci(title, t) || contains_ascii_ci(path, t));
+            let body_match = terms.iter().all(|t| contains_ascii_ci(body, t));
+
+            let is_match = match request.scope {
+                SearchScope::Title => title_match,
+                SearchScope::Body => body_match,
+                SearchScope::All => title_match || body_match,
+            };
+
+            if !is_match {
+                continue;
+            }
+
+            let mut score = 0.0;
+            if title_match {
+                score += 10.0;
+            }
+            for t in &terms {
+                let occurrences = count_ascii_ci(body, t);
+                score += (occurrences.min(20) as f64) * 0.5;
+            }
+
+            let snip = snippet(body, &terms);
+
+            hits.push((
+                score,
+                SearchHit {
+                    path: path.to_string(),
+                    title: title.to_string(),
+                    snippet: snip,
+                },
+            ));
+        }
+
+        hits.sort_by(|(score_a, hit_a), (score_b, hit_b)| {
+            score_b
+                .partial_cmp(score_a)
+                .unwrap_or(std::cmp::Ordering::Equal)
+                .then_with(|| hit_a.title.cmp(&hit_b.title))
+                .then_with(|| hit_a.path.cmp(&hit_b.path))
+        });
+
+        hits.truncate(request.limit);
+
+        Ok(hits.into_iter().map(|(_, hit)| hit).collect())
     }
 
-    async fn backlinks(&self, path: &str) -> StoreResult<Vec<Backlink>> {
-        sqlx::query_as::<_, (String, String)>(
-            "SELECT DISTINCT src.path, src.title
-             FROM tb_links link
-             JOIN tb_pages target ON target.id = link.target_id
-             JOIN tb_pages src ON src.id = link.src_id
-             WHERE target.path = ? AND link.kind = 'page'
-             ORDER BY src.title, src.path LIMIT 50",
-        )
-        .bind(page_path(path))
-        .fetch_all(self.pool())
-        .await
-        .map(|rows| {
-            rows.into_iter()
-                .map(|(path, title)| Backlink {
-                    path: path.strip_suffix(".md").unwrap_or(&path).to_string(),
-                    title,
-                })
-                .collect()
-        })
-        .map_err(database_error)
+    /// Link-graph resolution now lives entirely in the hot `MemoryIndex`
+    /// projection (ADR-0019); the durable SQLite projection no longer
+    /// tracks a relational link graph, so this always returns no backlinks.
+    async fn backlinks(&self, _path: &str) -> StoreResult<Vec<Backlink>> {
+        Ok(Vec::new())
     }
 
     async fn mentions_for_target(&self, _path: &str) -> StoreResult<Vec<MentionRecord>> {
@@ -317,182 +370,57 @@ impl IndexReader for SqliteIndex {
             .map_err(database_error)
     }
 
+    /// Tag resolution now lives entirely in the hot `MemoryIndex` projection
+    /// (ADR-0019); the durable SQLite projection no longer maintains a tag
+    /// table, so this always returns no tags.
     async fn tags(&self) -> StoreResult<Vec<TagCount>> {
-        sqlx::query_as::<_, (String, i64)>(
-            "SELECT tag, COUNT(*) FROM tb_tags GROUP BY tag ORDER BY COUNT(*) DESC, tag",
-        )
-        .fetch_all(self.pool())
-        .await
-        .map(|rows| {
-            rows.into_iter()
-                .map(|(tag, count)| TagCount { tag, count })
-                .collect()
-        })
-        .map_err(database_error)
+        Ok(Vec::new())
     }
 
-    async fn pages_with_tag(&self, tag: &str) -> StoreResult<Vec<PageSummary>> {
-        let rows = sqlx::query_as::<_, (String, String, String, i64)>(
-            "SELECT p.path, p.title, p.frontmatter, p.mtime
-             FROM tb_tags t JOIN tb_pages p ON p.id = t.page_id
-             WHERE t.tag = ? ORDER BY p.title, p.path",
-        )
-        .bind(tag)
-        .fetch_all(self.pool())
-        .await
-        .map_err(database_error)?;
-
-        let mut summaries = Vec::with_capacity(rows.len());
-        for (path, title, frontmatter_str, mtime) in rows {
-            let frontmatter = serde_json::from_str(&frontmatter_str)
-                .map_err(|e| StoreError::Operation(format!("invalid frontmatter JSON: {e}")))?;
-            summaries.push(PageSummary {
-                path,
-                title,
-                frontmatter,
-                mtime,
-            });
-        }
-        Ok(summaries)
+    /// See [`SqliteIndex::tags`]: always empty now that tags are memory-only.
+    async fn pages_with_tag(&self, _tag: &str) -> StoreResult<Vec<PageSummary>> {
+        Ok(Vec::new())
     }
 }
 
+/// Writes a page's content and search document only. Per ADR-0020, the
+/// durable SQLite projection stores the raw body text in tb_pages.
 async fn replace_page_conn(
     conn: &mut sqlx::SqliteConnection,
     page: PageIndex,
-    search_enabled: bool,
 ) -> StoreResult<IndexEvent> {
     let path = page.summary.path.clone();
-    let slug = page_slug(&path);
     let frontmatter_str = page.summary.frontmatter.to_string();
     let has_mermaid_int = if page.has_mermaid { 1 } else { 0 };
 
-    let (page_id,): (i64,) = sqlx::query_as(
-        "INSERT INTO tb_pages (path, slug, title, frontmatter, has_mermaid, mtime)
+    sqlx::query(
+        "INSERT INTO tb_pages (path, title, body, frontmatter, has_mermaid, mtime)
          VALUES (?, ?, ?, ?, ?, ?)
          ON CONFLICT (path) DO UPDATE SET
-           slug = EXCLUDED.slug,
            title = EXCLUDED.title,
+           body = EXCLUDED.body,
            frontmatter = EXCLUDED.frontmatter,
            has_mermaid = EXCLUDED.has_mermaid,
-           mtime = EXCLUDED.mtime
-         RETURNING id",
+           mtime = EXCLUDED.mtime",
     )
     .bind(&path)
-    .bind(&slug)
     .bind(&page.summary.title)
+    .bind(&page.body)
     .bind(&frontmatter_str)
     .bind(has_mermaid_int)
     .bind(page.summary.mtime)
-    .fetch_one(&mut *conn)
-    .await
-    .map_err(database_error)?;
-
-    if search_enabled {
-        sqlx::query("DELETE FROM tb_pages_fts WHERE path = ?")
-            .bind(&path)
-            .execute(&mut *conn)
-            .await
-            .map_err(database_error)?;
-
-        sqlx::query("INSERT INTO tb_pages_fts (path, title, body) VALUES (?, ?, ?)")
-            .bind(&path)
-            .bind(&page.summary.title)
-            .bind(&page.body)
-            .execute(&mut *conn)
-            .await
-            .map_err(database_error)?;
-    }
-
-    sqlx::query("DELETE FROM tb_links WHERE src_id = ?")
-        .bind(page_id)
-        .execute(&mut *conn)
-        .await
-        .map_err(database_error)?;
-
-    sqlx::query("DELETE FROM tb_tags WHERE page_id = ?")
-        .bind(page_id)
-        .execute(&mut *conn)
-        .await
-        .map_err(database_error)?;
-
-    sqlx::query("DELETE FROM tb_page_aliases WHERE page_id = ?")
-        .bind(page_id)
-        .execute(&mut *conn)
-        .await
-        .map_err(database_error)?;
-
-    for tag in &page.tags {
-        sqlx::query("INSERT INTO tb_tags (page_id, tag) VALUES (?, ?)")
-            .bind(page_id)
-            .bind(tag)
-            .execute(&mut *conn)
-            .await
-            .map_err(database_error)?;
-    }
-
-    for alias in &page.aliases {
-        sqlx::query("INSERT INTO tb_page_aliases (page_id, alias) VALUES (?, ?)")
-            .bind(page_id)
-            .bind(alias)
-            .execute(&mut *conn)
-            .await
-            .map_err(database_error)?;
-    }
-
-    for link in &page.links {
-        let kind = match link.kind {
-            LinkKind::Page => "page",
-            LinkKind::Asset => "asset",
-        };
-        let is_embed_int = if link.is_embed { 1 } else { 0 };
-        sqlx::query(
-            "INSERT INTO tb_links (src_id, kind, is_embed, target, target_norm, alias)
-             VALUES (?, ?, ?, ?, ?, ?)
-             ON CONFLICT (src_id, kind, target_norm, is_embed) DO NOTHING",
-        )
-        .bind(page_id)
-        .bind(kind)
-        .bind(is_embed_int)
-        .bind(&link.target)
-        .bind(&link.target_norm)
-        .bind(&link.alias)
-        .execute(&mut *conn)
-        .await
-        .map_err(database_error)?;
-    }
-
-    Ok(IndexEvent::PageIndexed { path })
-}
-
-async fn resolve_links_conn(conn: &mut sqlx::SqliteConnection) -> StoreResult<()> {
-    sqlx::query(
-        "UPDATE tb_links
-         SET target_id = (
-           SELECT target.id FROM tb_pages target
-           WHERE (
-             (instr(tb_links.target_norm, '/') > 0
-               AND lower(replace(target.path, '.md', '')) = tb_links.target_norm)
-             OR
-             (instr(tb_links.target_norm, '/') = 0
-               AND target.slug = tb_links.target_norm
-               AND (SELECT COUNT(*) FROM tb_pages candidate WHERE candidate.slug = target.slug) = 1)
-           )
-         )
-         WHERE tb_links.kind = 'page'",
-    )
     .execute(&mut *conn)
     .await
     .map_err(database_error)?;
-    Ok(())
+
+    Ok(IndexEvent::PageIndexed { path })
 }
 
 #[async_trait]
 impl IndexWriter for SqliteIndex {
     async fn replace_page(&self, page: PageIndex) -> StoreResult<IndexEvent> {
         let mut tx = self.pool.begin().await.map_err(database_error)?;
-        let event = replace_page_conn(&mut tx, page, self.search_enabled).await?;
-        resolve_links_conn(&mut tx).await?;
+        let event = replace_page_conn(&mut tx, page).await?;
         tx.commit().await.map_err(database_error)?;
         Ok(event)
     }
@@ -501,9 +429,8 @@ impl IndexWriter for SqliteIndex {
         let mut tx = self.pool.begin().await.map_err(database_error)?;
         let mut events = Vec::with_capacity(pages.len());
         for page in pages {
-            events.push(replace_page_conn(&mut tx, page, self.search_enabled).await?);
+            events.push(replace_page_conn(&mut tx, page).await?);
         }
-        resolve_links_conn(&mut tx).await?;
         tx.commit().await.map_err(database_error)?;
         Ok(events)
     }
@@ -656,14 +583,6 @@ impl IndexWriter for SqliteIndex {
             .await
             .map_err(database_error)?;
 
-        if self.search_enabled {
-            sqlx::query("DELETE FROM tb_pages_fts WHERE path = ?")
-                .bind(&normalized_path)
-                .execute(&mut *tx)
-                .await
-                .map_err(database_error)?;
-        }
-
         // Delete from tb_pages
         sqlx::query("DELETE FROM tb_pages WHERE path = ?")
             .bind(&normalized_path)
@@ -690,17 +609,19 @@ mod tests {
         tags: Vec<&str>,
         links: Vec<miku_domain::LinkRecord>,
     ) -> PageIndex {
+        let aliases = vec![format!("alias-{}", path.trim_end_matches(".md"))];
         PageIndex {
             summary: PageSummary {
                 path: path.to_string(),
                 title: path.trim_end_matches(".md").to_string(),
-                frontmatter: serde_json::json!({"status": "draft"}),
+                frontmatter: serde_json::json!({"status": "draft", "aliases": aliases}),
                 mtime: 12345,
+                aliases: aliases.clone(),
             },
             body: body.to_string(),
             links,
             tags: tags.into_iter().map(String::from).collect(),
-            aliases: vec![format!("alias-{}", path.trim_end_matches(".md"))],
+            aliases,
             has_mermaid: true,
             signals: Default::default(),
         }
@@ -750,7 +671,7 @@ mod tests {
             target: "Second.md".to_string(),
             target_norm: "second".to_string(),
             alias: Some("alias_link".to_string()),
-            kind: LinkKind::Page,
+            kind: miku_domain::LinkKind::Page,
             is_embed: false,
         };
         let page1 = test_page(
@@ -788,6 +709,7 @@ mod tests {
             .expect("search body");
         assert_eq!(hits.len(), 1);
         assert_eq!(hits[0].path, "First.md");
+        assert_eq!(hits[0].snippet, "Miku wiki");
 
         // Search title
         let hits = store
@@ -824,20 +746,19 @@ mod tests {
             .expect("search punctuation");
         assert!(punctuation_hits.is_empty());
 
-        // Backlinks
-        let links = store.backlinks("Second").await.expect("backlinks");
-        assert_eq!(links.len(), 1);
-        assert_eq!(links[0].path, "First");
-
-        // Tags
-        let tags = store.tags().await.expect("tags");
-        assert_eq!(tags.len(), 3);
-        assert_eq!(tags[0].tag, "miku");
-        assert_eq!(tags[0].count, 1);
-
-        let tagged_pages = store.pages_with_tag("note").await.expect("pages with tag");
-        assert_eq!(tagged_pages.len(), 1);
-        assert_eq!(tagged_pages[0].path, "Second.md");
+        // Backlinks and tags are memory-only per ADR-0019; the durable
+        // SQLite projection no longer tracks a link graph or tag table.
+        assert!(store
+            .backlinks("Second")
+            .await
+            .expect("backlinks")
+            .is_empty());
+        assert!(store.tags().await.expect("tags").is_empty());
+        assert!(store
+            .pages_with_tag("note")
+            .await
+            .expect("pages with tag")
+            .is_empty());
 
         // Mentions
         let mention = MentionRecord {
@@ -906,7 +827,44 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_batch_writes_and_transaction_rollback() {
+    async fn test_list_pages_under_scopes_to_the_folder_prefix() {
+        let temp_file = NamedTempFile::new().expect("failed to create temp file");
+        let temp_path = temp_file.path().to_str().expect("temp path");
+        let store = SqliteIndex::open(temp_path).await.expect("open store");
+
+        store
+            .replace_pages(vec![
+                test_page("folder/One.md", "one", vec![], vec![]),
+                test_page("folder/nested/Two.md", "two", vec![], vec![]),
+                test_page("other/Three.md", "three", vec![], vec![]),
+                test_page("folder-sibling/Four.md", "four", vec![], vec![]),
+            ])
+            .await
+            .expect("seed pages");
+
+        let scoped = store
+            .list_pages_under("folder/")
+            .await
+            .expect("list pages under folder/");
+        let mut scoped_paths: Vec<_> = scoped.iter().map(|page| page.path.clone()).collect();
+        scoped_paths.sort();
+        assert_eq!(scoped_paths, vec!["folder/One.md", "folder/nested/Two.md"]);
+
+        let all = store
+            .list_pages_under("")
+            .await
+            .expect("empty prefix lists everything");
+        assert_eq!(all.len(), 4);
+
+        let none = store
+            .list_pages_under("nonexistent/")
+            .await
+            .expect("no match still succeeds");
+        assert!(none.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_batch_writes() {
         let temp_file = NamedTempFile::new().expect("failed to create temp file");
         let temp_path = temp_file.path().to_str().expect("temp path");
         let store = SqliteIndex::open(temp_path).await.expect("open store");
@@ -925,28 +883,10 @@ mod tests {
             .expect("empty batch")
             .is_empty());
 
-        let invalid = test_page(
-            "Broken.md",
-            "must not commit",
-            vec!["duplicate", "duplicate"],
-            vec![],
-        );
-        assert!(store.replace_page(invalid).await.is_err());
-        assert!(store
-            .page("Broken")
-            .await
-            .expect("rollback lookup")
-            .is_none());
-        assert!(store
-            .search(SearchRequest {
-                query: "must not commit".to_string(),
-                scope: SearchScope::Body,
-                limit: 10,
-            })
-            .await
-            .expect("rollback search")
-            .is_empty());
-
+        // A prior duplicate-tag case exercised transaction rollback here via
+        // a tb_tags primary-key conflict; that table is retired per
+        // ADR-0019, and tb_pages/tb_pages_fts have no writer-reachable
+        // conflict left to probe atomicity with.
         store.rebuild_search_index().await.expect("default rebuild");
     }
 
@@ -1118,7 +1058,13 @@ mod tests {
             .await
             .expect("corrupt frontmatter");
         assert!(store.list_pages().await.is_err());
-        assert!(store.pages_with_tag("broken").await.is_err());
+        // pages_with_tag no longer reads frontmatter (tags are memory-only
+        // per ADR-0019), so malformed JSON elsewhere no longer surfaces here.
+        assert!(store
+            .pages_with_tag("broken")
+            .await
+            .expect("pages_with_tag ignores frontmatter")
+            .is_empty());
     }
 
     #[tokio::test]
@@ -1154,5 +1100,50 @@ mod tests {
                 .expect("search reopened");
             assert_eq!(hits.len(), 1);
         }
+    }
+
+    #[tokio::test]
+    async fn test_spike_sqlx_streaming_zero_copy() {
+        use futures_util::TryStreamExt;
+        use sqlx::Row;
+
+        let temp_file = NamedTempFile::new().expect("failed to create temp file");
+        let temp_path = temp_file.path().to_str().expect("temp path");
+        let store = SqliteIndex::open(temp_path).await.expect("open store");
+
+        store
+            .replace_page(test_page(
+                "Doc1.md",
+                "hello world body content",
+                vec![],
+                vec![],
+            ))
+            .await
+            .expect("insert doc1");
+        store
+            .replace_page(test_page(
+                "Doc2.md",
+                "something else entirely",
+                vec![],
+                vec![],
+            ))
+            .await
+            .expect("insert doc2");
+
+        let mut stream = sqlx::query("SELECT path, title, body FROM tb_pages").fetch(store.pool());
+
+        let mut matched_paths = Vec::new();
+        while let Some(row) = stream.try_next().await.expect("stream next") {
+            let path: &str = row.try_get(0).expect("path str");
+            let title: &str = row.try_get(1).expect("title str");
+            let body: &str = row.try_get(2).expect("body str");
+
+            if contains_ascii_ci(body, "world") {
+                matched_paths.push((path.to_string(), title.to_string(), body.to_string()));
+            }
+        }
+
+        assert_eq!(matched_paths.len(), 1);
+        assert_eq!(matched_paths[0].0, "Doc1.md");
     }
 }

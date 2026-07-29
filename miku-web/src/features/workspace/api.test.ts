@@ -9,7 +9,7 @@ const node = (kind: TreeNodeModel["kind"], path: string, title = path): TreeNode
   placementId: `path:${path}`,
   noteId: path,
   parentId: null,
-  note: { id: path, path, title, identityGenerated: false, parents: [] }
+  note: { id: path, path, title, identityGenerated: false, parents: [], aliases: [] }
 });
 
 describe("tree ordering", () => {

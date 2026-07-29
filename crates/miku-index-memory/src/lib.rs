@@ -1,4 +1,4 @@
-//! Deterministic in-memory graph and Tantivy [`miku_domain::IndexStore`] implementation.
+//! Deterministic in-memory graph [`miku_domain::IndexStore`] implementation.
 //!
 //! This is the reference behavior for contract tests and disposable
 //! development. It is not a durable deployment backend.
@@ -12,9 +12,9 @@ use miku_domain::{
 use std::collections::BTreeMap;
 use std::sync::{Arc, RwLock};
 
-mod search;
+mod graph;
 
-use search::SearchProjection;
+use graph::LinkGraph;
 
 type MentionKey = (String, String, String);
 type MentionMap = BTreeMap<MentionKey, MentionRecord>;
@@ -23,9 +23,8 @@ type MentionMap = BTreeMap<MentionKey, MentionRecord>;
 #[derive(Clone)]
 pub struct MemoryIndex {
     pages: Arc<RwLock<BTreeMap<String, PageIndex>>>,
-    backlinks: Arc<RwLock<BTreeMap<String, Vec<Backlink>>>>,
+    graph: Arc<RwLock<LinkGraph>>,
     mentions: Arc<RwLock<MentionMap>>,
-    search: Arc<RwLock<SearchProjection>>,
 }
 
 impl HotProjection for MemoryIndex {}
@@ -42,11 +41,8 @@ impl MemoryIndex {
     pub fn new() -> Self {
         Self {
             pages: Arc::new(RwLock::new(BTreeMap::new())),
-            backlinks: Arc::new(RwLock::new(BTreeMap::new())),
+            graph: Arc::new(RwLock::new(LinkGraph::default())),
             mentions: Arc::new(RwLock::new(BTreeMap::new())),
-            search: Arc::new(RwLock::new(
-                SearchProjection::new().expect("in-memory Tantivy projection must initialize"),
-            )),
         }
     }
 
@@ -66,55 +62,21 @@ impl MemoryIndex {
             .map_err(|_| StoreError::Operation("memory index lock poisoned".to_string()))
     }
 
-    fn rebuild_search(&self) -> StoreResult<()> {
-        let pages = self
-            .pages
-            .read()
-            .map_err(|_| StoreError::Operation("memory index lock poisoned".to_string()))?;
-        self.search
+    fn write_graph(&self) -> StoreResult<std::sync::RwLockWriteGuard<'_, LinkGraph>> {
+        self.graph
             .write()
-            .map_err(|_| StoreError::Operation("memory search lock poisoned".to_string()))?
-            .rebuild(&pages.values().cloned().collect::<Vec<_>>())
+            .map_err(|_| StoreError::Operation("memory graph lock poisoned".to_string()))
     }
 
-    fn rebuild_backlinks(&self) -> StoreResult<()> {
+    fn read_graph(&self) -> StoreResult<std::sync::RwLockReadGuard<'_, LinkGraph>> {
+        self.graph
+            .read()
+            .map_err(|_| StoreError::Operation("memory graph lock poisoned".to_string()))
+    }
+
+    fn rebuild_graph(&self) -> StoreResult<()> {
         let pages = self.read_pages()?;
-        let summaries = pages
-            .values()
-            .map(|page| page.summary.clone())
-            .collect::<Vec<_>>();
-        let mut reverse = BTreeMap::<String, Vec<Backlink>>::new();
-        for page in pages.values() {
-            for link in &page.links {
-                if link.kind != miku_domain::LinkKind::Page {
-                    continue;
-                }
-                let Some(target) = miku_indexer::resolve_link_path(&link.target_norm, &summaries)
-                else {
-                    continue;
-                };
-                if target == page.summary.path {
-                    continue;
-                }
-                reverse.entry(target).or_default().push(Backlink {
-                    path: page.summary.path.clone(),
-                    title: page.summary.title.clone(),
-                });
-            }
-        }
-        for entries in reverse.values_mut() {
-            entries.sort_by(|left, right| {
-                left.title
-                    .cmp(&right.title)
-                    .then(left.path.cmp(&right.path))
-            });
-            entries.dedup_by(|left, right| left.path == right.path);
-        }
-        *self
-            .backlinks
-            .write()
-            .map_err(|_| StoreError::Operation("memory backlinks lock poisoned".to_string()))? =
-            reverse;
+        self.write_graph()?.rebuild_all(&pages);
         Ok(())
     }
 }
@@ -124,7 +86,7 @@ impl IndexReader for MemoryIndex {
     async fn capabilities(&self) -> StoreResult<IndexCapabilities> {
         Ok(IndexCapabilities {
             durable: false,
-            full_text_search: true,
+            full_text_search: false,
             fuzzy_page_search: false,
             transactions: true,
             remote_sync: false,
@@ -146,21 +108,14 @@ impl IndexReader for MemoryIndex {
             .map(|page| page.summary.clone()))
     }
 
-    async fn search(&self, request: SearchRequest) -> StoreResult<Vec<SearchHit>> {
-        self.search
-            .read()
-            .map_err(|_| StoreError::Operation("memory search lock poisoned".to_string()))?
-            .search(&request)
+    async fn search(&self, _request: SearchRequest) -> StoreResult<Vec<SearchHit>> {
+        Ok(Vec::new())
     }
 
     async fn backlinks(&self, path: &str) -> StoreResult<Vec<Backlink>> {
-        Ok(self
-            .backlinks
-            .read()
-            .map_err(|_| StoreError::Operation("memory backlinks lock poisoned".to_string()))?
-            .get(path)
-            .cloned()
-            .unwrap_or_default())
+        let pages = self.read_pages()?;
+        let index = self.read_graph()?;
+        Ok(graph::backlinks_for(&index, path, &pages))
     }
 
     async fn mentions_for_target(&self, path: &str) -> StoreResult<Vec<MentionRecord>> {
@@ -192,10 +147,12 @@ impl IndexReader for MemoryIndex {
     }
 
     async fn pages_with_tag(&self, tag: &str) -> StoreResult<Vec<PageSummary>> {
+        let normalized = miku_markdown::normalize_tag(tag);
+
         Ok(self
             .read_pages()?
             .values()
-            .filter(|page| page.tags.iter().any(|candidate| candidate == tag))
+            .filter(|page| page.tags.iter().any(|candidate| candidate == &normalized))
             .map(|page| page.summary.clone())
             .collect())
     }
@@ -203,17 +160,26 @@ impl IndexReader for MemoryIndex {
 
 #[async_trait]
 impl IndexWriter for MemoryIndex {
-    async fn replace_page(&self, page: PageIndex) -> StoreResult<IndexEvent> {
+    async fn replace_page(&self, mut page: PageIndex) -> StoreResult<IndexEvent> {
         let path = page.summary.path.clone();
-        self.write_pages()?.insert(path.clone(), page);
-        self.rebuild_search()?;
-        self.rebuild_backlinks()?;
+        let links = page.links.clone();
+        page.body.clear();
+        page.body.shrink_to_fit();
+        page.summary.frontmatter = serde_json::Value::Null;
+        let mut pages = self.write_pages()?;
+        let previous = pages.insert(path.clone(), page);
+        self.write_graph()?.upsert_page(
+            &path,
+            &links,
+            previous.as_ref().map(|old| old.links.as_slice()),
+            &pages,
+        );
+        drop(pages);
         Ok(IndexEvent::PageIndexed { path })
     }
 
     async fn rebuild_search_index(&self) -> StoreResult<()> {
-        self.rebuild_search()?;
-        self.rebuild_backlinks()
+        self.rebuild_graph()
     }
 
     async fn replace_pages(&self, pages: Vec<PageIndex>) -> StoreResult<Vec<IndexEvent>> {
@@ -227,13 +193,13 @@ impl IndexWriter for MemoryIndex {
             })
             .collect();
         let mut indexed = self.write_pages()?;
-        for page in pages {
+        for mut page in pages {
+            page.body.clear();
+            page.body.shrink_to_fit();
+            page.summary.frontmatter = serde_json::Value::Null;
             indexed.insert(page.summary.path.clone(), page);
         }
         drop(indexed);
-        // Bulk callers rebuild the search projection once after all batches
-        // have been loaded. Rebuilding here would make a full reconcile
-        // quadratic in the number of batches.
         Ok(events)
     }
 
@@ -317,9 +283,13 @@ impl IndexWriter for MemoryIndex {
     }
 
     async fn delete_page(&self, path: &str) -> StoreResult<IndexEvent> {
-        self.write_pages()?.remove(path);
-        self.rebuild_search()?;
-        self.rebuild_backlinks()?;
+        let mut pages = self.write_pages()?;
+        let removed = pages.remove(path);
+        if let Some(old_page) = &removed {
+            self.write_graph()?
+                .remove_page(path, &old_page.links, &pages);
+        }
+        drop(pages);
         Ok(IndexEvent::PageDeleted {
             path: path.to_string(),
         })
@@ -332,17 +302,23 @@ mod tests {
     use miku_domain::{LinkKind, LinkRecord, PageSummary, SearchScope};
 
     fn page(path: &str, title: &str, body: &str) -> PageIndex {
+        page_with_aliases(path, title, body, Vec::new())
+    }
+
+    fn page_with_aliases(path: &str, title: &str, body: &str, aliases: Vec<&str>) -> PageIndex {
+        let aliases: Vec<String> = aliases.into_iter().map(str::to_string).collect();
         PageIndex {
             summary: PageSummary {
                 path: path.to_string(),
                 title: title.to_string(),
                 frontmatter: serde_json::json!({}),
                 mtime: 1,
+                aliases: aliases.clone(),
             },
             body: body.to_string(),
             links: Vec::new(),
             tags: vec!["notes".to_string()],
-            aliases: Vec::new(),
+            aliases,
             has_mermaid: false,
             signals: Default::default(),
         }
@@ -373,7 +349,7 @@ mod tests {
             })
             .await
             .expect("search works");
-        assert_eq!(hits.len(), 1);
+        assert!(hits.is_empty());
         assert_eq!(
             index.backlinks("Index.md").await.expect("backlinks").len(),
             1
@@ -469,36 +445,314 @@ mod tests {
         assert_eq!(cross_layer[0].path, "same/Explicit.md");
     }
 
+    fn link(target: &str, target_norm: &str) -> LinkRecord {
+        LinkRecord {
+            target: target.to_string(),
+            target_norm: target_norm.to_string(),
+            alias: None,
+            kind: LinkKind::Page,
+            is_embed: false,
+        }
+    }
+
     #[tokio::test]
-    async fn rebuild_removes_deleted_documents_from_tantivy() {
+    async fn backlinks_resolve_standard_markdown_links_not_just_wikilinks() {
+        // ADR-README-style source: only standard [text](path) links, no
+        // wikilinks. Runs real extraction (miku_indexer::build_page_index)
+        // rather than hand-building LinkRecords, so it exercises the actual
+        // Markdown-link regex, not just the graph's generic link handling.
         let index = MemoryIndex::new();
+        let mut source = page(
+            "adr/README.md",
+            "ADR Index",
+            "- [0001](0001-fts-english.md)\n- [0002](0002-other.md)",
+        );
+        source.links = miku_indexer::build_page_index(
+            &source.summary.path,
+            source.body.as_bytes(),
+            source.summary.mtime,
+        )
+        .links;
+        index.replace_page(source).await.expect("source indexed");
         index
-            .replace_page(page("Gone.md", "Gone", "ephemeral content"))
+            .replace_page(page("adr/0001-fts-english.md", "0001", "content"))
             .await
-            .expect("index document");
+            .expect("target indexed");
+
+        let backlinks = index.backlinks("adr/0001-fts-english.md").await.unwrap();
+        assert_eq!(backlinks.len(), 1);
+        assert_eq!(backlinks[0].path, "adr/README.md");
+    }
+
+    #[tokio::test]
+    async fn delete_restores_ambiguous_uniqueness_for_pending_source() {
+        let index = MemoryIndex::new();
+        let mut source = page("Source.md", "Source", "[[Target]]");
+        source.links.push(link("Target", "target"));
+        index.replace_page(source).await.expect("source indexed");
+        index
+            .replace_page(page("same/Target.md", "Target", "t"))
+            .await
+            .expect("unique target indexed");
         assert_eq!(
-            index
-                .search(SearchRequest {
-                    query: "ephemeral".to_string(),
-                    scope: SearchScope::Body,
-                    limit: 10,
-                })
-                .await
-                .expect("search before delete")
-                .len(),
-            1
+            index.backlinks("same/Target.md").await.unwrap().len(),
+            1,
+            "unique slug must resolve"
         );
 
-        index.delete_page("Gone.md").await.expect("delete document");
-        index.rebuild_search_index().await.expect("rebuild search");
-        assert!(index
-            .search(SearchRequest {
-                query: "ephemeral".to_string(),
-                scope: SearchScope::Body,
-                limit: 10,
-            })
+        index
+            .replace_page(page("other/Target.md", "Target", "t"))
             .await
-            .expect("search after delete")
-            .is_empty());
+            .expect("ambiguous duplicate indexed");
+        assert!(
+            index.backlinks("same/Target.md").await.unwrap().is_empty(),
+            "ambiguous slug must retract the prior backlink"
+        );
+
+        index
+            .delete_page("other/Target.md")
+            .await
+            .expect("delete duplicate");
+        assert_eq!(
+            index.backlinks("same/Target.md").await.unwrap().len(),
+            1,
+            "removing the duplicate must restore the unique resolution"
+        );
+    }
+
+    #[tokio::test]
+    async fn updating_a_pages_links_moves_its_backlink_contribution() {
+        let index = MemoryIndex::new();
+        index
+            .replace_page(page("A.md", "A", "a"))
+            .await
+            .expect("A indexed");
+        index
+            .replace_page(page("B.md", "B", "b"))
+            .await
+            .expect("B indexed");
+
+        let mut source = page("Source.md", "Source", "[[A]]");
+        source.links.push(link("A", "a"));
+        index.replace_page(source).await.expect("source -> A");
+        assert_eq!(index.backlinks("A.md").await.unwrap().len(), 1);
+        assert!(index.backlinks("B.md").await.unwrap().is_empty());
+
+        let mut retargeted = page("Source.md", "Source", "[[B]]");
+        retargeted.links.push(link("B", "b"));
+        index.replace_page(retargeted).await.expect("source -> B");
+        assert!(
+            index.backlinks("A.md").await.unwrap().is_empty(),
+            "stale pending registration must not keep A's backlink alive"
+        );
+        assert_eq!(index.backlinks("B.md").await.unwrap().len(), 1);
+    }
+
+    #[tokio::test]
+    async fn incremental_updates_match_full_rebuild() {
+        let mut ambiguous_source = page("same/Source.md", "Source", "[[Target]]");
+        ambiguous_source.links.push(link("Target", "target"));
+        let mut explicit_source = page("same/Explicit.md", "Explicit", "[[other/Target]]");
+        explicit_source
+            .links
+            .push(link("other/Target", "other/target"));
+        let mut self_referencing = page("Self.md", "Self", "[[Self]]");
+        self_referencing.links.push(link("Self", "self"));
+        let mut alias_source = page("Alias-Source.md", "Alias Source", "[[boss log]]");
+        alias_source.links.push(link("boss log", "bosslog"));
+
+        let pages = vec![
+            ambiguous_source,
+            explicit_source,
+            page("same/Target.md", "Target", "t"),
+            page("other/Target.md", "Target", "t"),
+            self_referencing,
+            alias_source,
+            page_with_aliases("aliased/Note.md", "Aliased Note", "n", vec!["Boss-Log"]),
+        ];
+
+        let incremental = MemoryIndex::new();
+        for page in pages.clone() {
+            incremental
+                .replace_page(page)
+                .await
+                .expect("incremental insert");
+        }
+
+        let bulk = MemoryIndex::new();
+        bulk.replace_pages(pages.clone())
+            .await
+            .expect("bulk insert");
+        bulk.rebuild_search_index()
+            .await
+            .expect("full graph rebuild");
+
+        for page in &pages {
+            let path = &page.summary.path;
+            let mut via_incremental = incremental.backlinks(path).await.unwrap();
+            let mut via_full_rebuild = bulk.backlinks(path).await.unwrap();
+            via_incremental.sort_by(|left, right| left.path.cmp(&right.path));
+            via_full_rebuild.sort_by(|left, right| left.path.cmp(&right.path));
+            assert_eq!(
+                via_incremental, via_full_rebuild,
+                "incremental and full-rebuild backlinks diverged for {path}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn backlinks_resolve_wikilinks_by_title_and_alias() {
+        let index = MemoryIndex::new();
+        index
+            .replace_page(page_with_aliases(
+                "elden-ring.md",
+                "Elden Ring",
+                "notes",
+                vec!["ER Boss Log"],
+            ))
+            .await
+            .expect("target indexed");
+
+        let mut by_title = page("BySlug.md", "By Title", "[[Elden Ring]]");
+        by_title.links.push(link("Elden Ring", "eldenring"));
+        index.replace_page(by_title).await.expect("title source");
+
+        let mut by_alias = page("ByAlias.md", "By Alias", "[[ER Boss Log]]");
+        by_alias.links.push(link("ER Boss Log", "erbosslog"));
+        index.replace_page(by_alias).await.expect("alias source");
+
+        let mut by_folded_slug = page("ByFoldedSlug.md", "By Folded Slug", "[[elden ring]]");
+        by_folded_slug.links.push(link("elden ring", "eldenring"));
+        index
+            .replace_page(by_folded_slug)
+            .await
+            .expect("folded slug source");
+
+        let mut backlinks = index.backlinks("elden-ring.md").await.unwrap();
+        backlinks.sort_by(|left, right| left.path.cmp(&right.path));
+        assert_eq!(
+            backlinks
+                .iter()
+                .map(|b| b.path.as_str())
+                .collect::<Vec<_>>(),
+            vec!["ByAlias.md", "ByFoldedSlug.md", "BySlug.md"]
+        );
+    }
+
+    #[tokio::test]
+    async fn editing_an_alias_incrementally_moves_its_backlink_contribution() {
+        let index = MemoryIndex::new();
+        index
+            .replace_page(page_with_aliases(
+                "target.md",
+                "Target",
+                "notes",
+                vec!["Old Alias"],
+            ))
+            .await
+            .expect("target indexed");
+
+        let mut source = page("Source.md", "Source", "[[Old Alias]]");
+        source.links.push(link("Old Alias", "oldalias"));
+        index.replace_page(source).await.expect("source indexed");
+        assert_eq!(index.backlinks("target.md").await.unwrap().len(), 1);
+
+        // Renaming the alias without touching links must retract the stale
+        // resolution: "Old Alias" no longer belongs to any page.
+        index
+            .replace_page(page_with_aliases(
+                "target.md",
+                "Target",
+                "notes",
+                vec!["New Alias"],
+            ))
+            .await
+            .expect("alias renamed");
+        assert!(
+            index.backlinks("target.md").await.unwrap().is_empty(),
+            "stale alias registration must not keep the backlink alive"
+        );
+
+        let mut retargeted = page("Source.md", "Source", "[[New Alias]]");
+        retargeted.links.push(link("New Alias", "newalias"));
+        index
+            .replace_page(retargeted)
+            .await
+            .expect("source -> new alias");
+        assert_eq!(index.backlinks("target.md").await.unwrap().len(), 1);
+    }
+
+    #[tokio::test]
+    async fn ambiguous_titles_do_not_auto_resolve_backlinks() {
+        let index = MemoryIndex::new();
+        let mut source = page("Source.md", "Source", "[[Shared Title]]");
+        source.links.push(link("Shared Title", "sharedtitle"));
+        index.replace_page(source).await.expect("source indexed");
+        index
+            .replace_page(page("one/Note.md", "Shared Title", "a"))
+            .await
+            .expect("first candidate indexed");
+        assert_eq!(index.backlinks("one/Note.md").await.unwrap().len(), 1);
+
+        index
+            .replace_page(page("two/Note.md", "Shared Title", "b"))
+            .await
+            .expect("second candidate indexed");
+        assert!(
+            index.backlinks("one/Note.md").await.unwrap().is_empty(),
+            "ambiguous title must retract the prior backlink"
+        );
+        assert!(index.backlinks("two/Note.md").await.unwrap().is_empty());
+    }
+
+    /// Exercises `LinkGraph` directly (not the full `MemoryIndex` API) so the
+    /// measurement isolates graph-resolution cost from unrelated `RwLock`
+    /// and page-storage overhead, which would otherwise swamp the signal
+    /// this test is checking.
+    #[test]
+    fn single_page_update_cost_does_not_scale_with_corpus_size() {
+        fn seed_and_time_one_update(corpus_size: usize) -> std::time::Duration {
+            let mut graph = LinkGraph::default();
+            let mut all_pages = BTreeMap::new();
+            for i in 0..corpus_size {
+                let target = (i + 1) % corpus_size;
+                let mut note = page(
+                    &format!("Note{i}.md"),
+                    &format!("Note {i}"),
+                    "body text linking onward",
+                );
+                note.links
+                    .push(link(&format!("Note{target}"), &format!("note{target}")));
+                let path = note.summary.path.clone();
+                let links = note.links.clone();
+                all_pages.insert(path.clone(), note);
+                graph.upsert_page(&path, &links, None, &all_pages);
+            }
+
+            let previous = all_pages.get("Note0.md").map(|p| p.links.clone());
+            let mut updated = page("Note0.md", "Note 0", "updated body, same links");
+            updated.links.push(link("Note1", "note1"));
+            all_pages.insert("Note0.md".to_string(), updated.clone());
+            let started = std::time::Instant::now();
+            graph.upsert_page("Note0.md", &updated.links, previous.as_deref(), &all_pages);
+            started.elapsed()
+        }
+
+        let small = seed_and_time_one_update(200);
+        let large = seed_and_time_one_update(4_000);
+
+        println!(
+            "benchmark=single-page-update small_pages=200 small_us={:.1} large_pages=4000 large_us={:.1}",
+            small.as_secs_f64() * 1e6,
+            large.as_secs_f64() * 1e6,
+        );
+
+        // A full-corpus rescan would grow roughly linearly with page count
+        // (20x here); an O(1) incremental update stays flat. Generous
+        // headroom and an absolute floor keep this stable under CI noise.
+        assert!(
+            large.as_secs_f64() < small.as_secs_f64() * 10.0 + 0.010,
+            "single-page update cost scaled with corpus size: small={small:?} large={large:?}"
+        );
     }
 }
