@@ -41,4 +41,10 @@ describe("Markdown reader navigation", () => {
     expect(mermaidTheme("light")).toBe("default");
     expect(mermaidTheme("dark")).toBe("dark");
   });
+
+  it("prepends current note subfolder path to relative wikilinks", () => {
+    expect(noteHref("klara-and-the-sun", undefined, "apricot/maps/books-map.md")).toBe("/p/apricot/maps/klara-and-the-sun.md");
+    expect(expandWikiLinks("[[klara-and-the-sun]]", undefined, "apricot/maps/books-map.md")).toContain("/p/apricot/maps/klara-and-the-sun.md");
+  });
 });
+

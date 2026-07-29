@@ -51,7 +51,7 @@ export function resolveAssetSrc(src: string, currentPath: string): string {
   return "/api/v1/assets/" + normalized.map(encodeURIComponent).join("/");
 }
 
-export function noteHref(target: string, resolveLink?: TargetResolver): string {
+export function noteHref(target: string, resolveLink?: TargetResolver, currentPath?: string): string {
   const trimmed = target.trim();
   if (resolveLink) {
     const resolved = resolveLink(trimmed);
@@ -59,7 +59,11 @@ export function noteHref(target: string, resolveLink?: TargetResolver): string {
       return "/p/" + resolved.split("/").map(encodeURIComponent).join("/");
     }
   }
-  const path = trimmed.endsWith(".md") ? trimmed : trimmed + ".md";
+  let path = trimmed.endsWith(".md") ? trimmed : `${trimmed}.md`;
+  if (currentPath && !path.includes("/")) {
+    const folder = currentPath.split("/").slice(0, -1).join("/");
+    if (folder) path = `${folder}/${path}`;
+  }
   return "/p/" + path.split("/").map(encodeURIComponent).join("/");
 }
 
@@ -68,7 +72,7 @@ export function resolveMarkdownHref(href: string, currentPath: string, resolveLi
   if (!trimmed || trimmed.startsWith("#") || /^[a-z][a-z\d+.-]*:/i.test(trimmed)) return null;
   if (trimmed.startsWith("/p/")) {
     const [target, hash] = trimmed.slice(3).split("#", 2);
-    return noteHref(target, resolveLink) + (hash ? `#${hash}` : "");
+    return noteHref(target, resolveLink, currentPath) + (hash ? `#${hash}` : "");
   }
   if (trimmed.startsWith("/tags/") || trimmed.startsWith("/assets/")) return trimmed;
   const [target, hash] = trimmed.split("#", 2);
@@ -80,20 +84,24 @@ export function resolveMarkdownHref(href: string, currentPath: string, resolveLi
     if (segment === "..") normalized.pop();
     else normalized.push(segment);
   }
-  return noteHref(normalized.join("/"), resolveLink) + (hash ? `#${hash}` : "");
+  return noteHref(normalized.join("/"), resolveLink, currentPath) + (hash ? `#${hash}` : "");
 }
 
-export function expandWikiLinks(markdown: string, resolveLink?: TargetResolver): string {
+export function expandWikiLinks(markdown: string, resolveLink?: TargetResolver, currentPath?: string): string {
   const withEmbeds = markdown.replace(/!\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (_match, target: string, label?: string) => {
     const trimmedTarget = target.trim();
     const trimmedLabel = label?.trim() || trimmedTarget;
     if (isAssetFile(trimmedTarget)) {
       return `![${trimmedLabel}](${trimmedTarget})`;
     }
-    return `> Embedded note: [${trimmedLabel}](${noteHref(trimmedTarget, resolveLink)})`;
+    return `> Embedded note: [${trimmedLabel}](${noteHref(trimmedTarget, resolveLink, currentPath)})`;
   });
-  return withEmbeds.replace(/(?<!!)\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (_match, target: string, label?: string) => "[" + (label?.trim() || target.trim()) + "](" + noteHref(target, resolveLink) + ")");
+  return withEmbeds.replace(
+    /(?<!!)\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g,
+    (_match, target: string, label?: string) => "[" + (label?.trim() || target.trim()) + "](" + noteHref(target, resolveLink, currentPath) + ")"
+  );
 }
+
 
 export function expandInlineTags(markdown: string): string {
   const segments = markdown.split(/(```[\s\S]*?```|`[^`]*`)/g);
@@ -270,7 +278,8 @@ export function MarkdownReader({
           }
         }}
       >
-        {expandInlineTags(expandWikiLinks(value, resolver))}
+        {expandInlineTags(expandWikiLinks(value, resolver, path))}
+
       </ReactMarkdown>
     </article>
   );
