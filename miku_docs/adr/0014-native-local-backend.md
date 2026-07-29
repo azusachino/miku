@@ -4,7 +4,7 @@ type: adr
 title: ADR-0014 — Native local backend
 slug: native-local-backend
 status: Superseded by ADR-0016
-updated: 2026-07-14
+updated: 2026-07-29
 date-proposed: 2026-07-14
 date-accepted: 2026-07-14
 deciders: [haru]
@@ -24,4 +24,4 @@ This decision is superseded by ADR-0016. It is retained as the numbered decision
 ## Current boundary
 
 The local runtime selects SQLite with `MIKU_INDEX_BACKEND=sqlite` and stores the database at `miku_docs/.miku-index.sqlite` by default. The backend implements the domain contract through SQLx and
-SQLite FTS5.
+a plain `TEXT` body column searched in parallel Rust code; ADR-0020 removed FTS5 and Tantivy.

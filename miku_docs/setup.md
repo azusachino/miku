@@ -3,7 +3,7 @@ title: Miku Development Setup
 type: guide
 status: active
 tags: [miku, setup, development]
-updated: 2026-07-16
+updated: 2026-07-29
 ---
 
 # Setup
@@ -15,13 +15,13 @@ updated: 2026-07-16
 
 ## Native dev stack (no containers — Linux & macOS)
 
-The default path is SQLite durability with a MemoryIndex/Tantivy hot projection:
+The default path uses SQLite for durable metadata and full-text search, plus MemoryIndex for the rebuildable in-process graph:
 
 ```bash
 make dev
 ```
 
-The default runtime uses SQLite plus the in-memory/Tantivy projection. Postgres and Valkey are optional service-backed profiles.
+Postgres and Valkey remain optional service-backed profiles. Tantivy is not part of the current runtime.
 
 Override the backend with MIKU_INDEX_BACKEND, DATABASE_URL, or VALKEY_URL.
 

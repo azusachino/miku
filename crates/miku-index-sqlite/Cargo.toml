@@ -1,6 +1,6 @@
 [package]
 name = "miku-index-sqlite"
-version = "0.0.4"
+version = "0.0.5"
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
@@ -9,7 +9,7 @@ description = "SQLite IndexStore implementation for Miku"
 [dependencies]
 async-trait.workspace = true
 futures-util = "0.3"
-miku-domain = { version = "0.0.4", path = "../miku-domain" }
+miku-domain = { version = "0.0.5", path = "../miku-domain" }
 rayon = "1"
 serde_json.workspace = true
 sqlx = { version = "0.8.6", default-features = false, features = ["sqlite", "runtime-tokio", "migrate", "macros"] }

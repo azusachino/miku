@@ -3,7 +3,7 @@ title: Miku Architecture
 type: architecture
 status: active
 tags: [miku, architecture, rust, markdown]
-updated: 2026-07-28
+updated: 2026-07-29
 ---
 
 # Miku Architecture
@@ -36,8 +36,8 @@ miku_docs/\*_/_.md and user assets are authoritative. miku-vault owns safe path 
 miku-domain defines the stable vocabulary shared by the vault, indexer, application, and projection backends: notes, links, tags, revisions, search requests, and index capabilities. It intentionally
 contains no filesystem or database implementation.
 
-The index is disposable. The default runtime composes a local SQLite durable projection with an in-memory/Tantivy hot projection. Postgres and Valkey are optional scale components. Rebuilding any
-projection from miku_docs/ must recover the same searchable relationships.
+The index is disposable. The default runtime uses local SQLite for durable metadata and full-text search, with MemoryIndex as a rebuildable in-process graph projection. Postgres and Valkey are
+optional scale components. Tantivy was removed by ADR-0020. Rebuilding any projection from miku_docs/ must recover the same searchable relationships.
 
 ## Runtime flow
 
@@ -50,10 +50,10 @@ projection from miku_docs/ must recover the same searchable relationships.
 HTTP handlers read projections and source documents. They do not synchronously rebuild indexes. A save writes atomically; the watcher schedules reconciliation. Startup reconciliation catches changes
 missed while the process was stopped.
 
-## Reconcile and hot-projection rebuild, as implemented
+## Historical reconcile and Tantivy rebuild (pre-ADR-0020)
 
-This section documents actual current behavior, verified against the code at the line numbers cited, not an idealized description. It exists because the workflow has a real, non-obvious constraint
-(below) that any future change to page-body memory handling must not silently break.
+This section preserves the measured pre-ADR-0020 workflow that motivated removal of Tantivy. It is historical evidence, not current runtime documentation. The current implementation stores bodies
+once in SQLite, searches its plain body column in parallel Rust code, and keeps body-free graph metadata in MemoryIndex. See ADR-0020 and “What is actually stored where” below.
 
 ### User story: editing one note while Miku is running
 
@@ -163,7 +163,7 @@ Four separate stores exist, not one "index." None of them holds the same shape o
 Opening a note is read-only. It never writes to SQLite or `MemoryIndex`, and never triggers a reconcile. `GET /api/v1/notes/{id}` (`crates/miku/src/http_api.rs:220-231`) calls
 `application.read_note` → `resolve_document` (`crates/miku-app/src/application.rs:111-145`), which:
 
-1. Checks `self.index.page(path)` — a cheap existence/metadata check against whichever projection is currently `active()` (SQLite before `ready`, `MemoryIndex` after). This never returns a body.
+1. Checks `self.index.page(path)` against the durable projection—a cheap existence/metadata check that never returns a body.
 2. Calls `read_document_path` (`application.rs:99-109`), which checks the 128-entry `documents_cache` **first**. On hit, returns the cached `VaultDocument` — no disk read, no index touched.
 3. On a cache miss, reads the file directly from disk via `self.vault.read(path)` (`application.rs:103`), then inserts it into `documents_cache`, evicting the least-recently-touched entry if the cache
    is already at 128.
@@ -177,7 +177,7 @@ channel the reconcile workflow above sends on). So editing *any* file, even one 
 ```mermaid
 flowchart TD
     A["GET /api/v1/notes/:id"] --> B["resolve_document (application.rs:111)"]
-    B --> C["index.page(path): SQLite if not ready, else MemoryIndex — metadata only, no body"]
+    B --> C["index.page(path): durable projection metadata only, no body"]
     C -->|not found| D[404]
     C -->|found| E["read_document_path (application.rs:99)"]
     E --> F{in documents_cache LRU, 128 entries?}
@@ -222,4 +222,3 @@ The frontend performs zero global page prefetching or client-side link resolutio
 1. OS Filesystem Events (`notify` watcher) for local disk file edits.
 2. Synchronous `save_note()` writes (`ComposedIndexWriter`) for Web UI edits.
 3. Startup file mtime reconcile sweeps (`reconcile_store()`) on server restarts.
-

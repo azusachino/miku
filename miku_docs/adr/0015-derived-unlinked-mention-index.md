@@ -3,7 +3,7 @@ id: ADR-0015
 type: adr
 title: ADR-0015 — Derived unlinked-mention index
 status: Accepted
-updated: 2026-07-14
+updated: 2026-07-29
 date-accepted: 2026-07-14
 mirror: asobi:miku:decision:derived-unlinked-mention-index
 tags: [index, links, mentions]
@@ -25,8 +25,8 @@ frontmatter, and self-references. The page route will only read this relation; i
 The durable page projection remains the source for rebuilding the relation. The relation is disposable and may be empty or stale while reconciliation is running. Linked forward links and backlinks
 remain authoritative and immediately available through the normal index projection.
 
-SQLite FTS5 remains the general-purpose full-text candidate/search engine. It may accelerate a rebuild or provide a fallback candidate set, but it is not the source of truth for mention semantics or
-promotion safety.
+SQLite plain-content search remains the general-purpose search engine. It may accelerate a rebuild or provide a fallback candidate set, but it is not the source of truth for mention semantics or
+promotion safety. ADR-0020 replaced the earlier FTS5 implementation.
 
 ## Why
 

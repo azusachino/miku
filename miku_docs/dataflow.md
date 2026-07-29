@@ -3,7 +3,7 @@ title: Miku Dataflow
 type: architecture
 status: active
 tags: [miku, architecture, dataflow, mermaid]
-updated: 2026-07-16
+updated: 2026-07-29
 ---
 
 # Dataflow & Workflows
@@ -12,12 +12,12 @@ All diagrams are Mermaid. See `miku_docs/architecture.md` for the prose design a
 
 ## 1. System overview
 
-Files are the source of truth; the memory graph plus Tantivy are the default disposable projections, with SQLite and Postgres available as explicit profiles. HTTP handlers only **read** the index; the
-background indexer is the **only** writer.
+Files are the source of truth. SQLite is the default durable metadata and search projection, while MemoryIndex supplies the disposable in-process graph. Postgres remains an explicit profile. HTTP
+handlers only **read** projections; the background indexer is the **only** writer.
 
 ```mermaid
 flowchart LR
-  Browser["Browser<br/>(rendered HTML + textarea)"]
+  Browser["Browser<br/>(React reader + CodeMirror source mode)"]
 
   subgraph Server["Miku — Rust single binary"]
     HTTP["axum HTTP layer<br/>(read-only on index)"]
@@ -38,9 +38,9 @@ flowchart LR
   Indexer -->|"reindex tx"| PG
 ```
 
-## 2. Rendering model — view vs edit (v0)
+## 2. Rendering model — reader vs source mode
 
-The readonly rendered view is the **primary** mode; editing is opt-in. Classic wiki model, no client JS.
+The React reader is the **primary** mode; CodeMirror source editing is opt-in and loaded lazily.
 
 ```mermaid
 flowchart TD
@@ -49,7 +49,7 @@ flowchart TD
   X -- no --> NEW["offer: create Foo?"]
 
   RO -->|"click Edit"| E["PUT /api/v1/notes/Foo.md"]
-  E --> T["read Foo.md -> textarea"]
+  E --> T["load CodeMirror source editor"]
   T -->|"Save"| P["PUT /api/v1/notes/Foo.md"]
   P --> S["atomic save"]
   S --> RD["watcher reindexes Foo.md"]
@@ -67,7 +67,7 @@ sequenceDiagram
   participant FS as miku_docs/*.md
   participant W as notify watcher
   participant I as Indexer
-  participant PG as Postgres
+  participant PG as Index projection
 
   B->>H: PUT /api/v1/notes/Foo.md (markdown body + revision)
   H->>FS: write Foo.md.tmp + fsync (miku_docs/)
@@ -83,7 +83,7 @@ sequenceDiagram
 
 ## 4. Reindex-one-page transaction
 
-One page reindex is a single Postgres transaction.
+One page reindex is one backend transaction. SQLite is the default; Postgres uses the same writer contract in its optional profile.
 
 ```mermaid
 flowchart TD
@@ -128,7 +128,7 @@ stateDiagram-v2
 
 ## 7. Read-path queries (no filesystem touch)
 
-Backlinks, tags, and search read **only** Postgres — never the filesystem — and are paginated so the full edge set is never loaded at once.
+Backlinks, tags, and search read **only** the selected index projection—SQLite by default—never the filesystem.
 
 ```mermaid
 flowchart LR
@@ -137,7 +137,7 @@ flowchart LR
     TG["GET /api/v1/tags/:tag/notes"]
     SR["GET /api/v1/search?q="]
   end
-  BL -->|"links.target_id = Foo.id<br/>LIMIT/OFFSET"| PG[("Postgres")]
+  BL -->|"indexed backlinks"| PG[("SQLite / selected projection")]
   TG -->|"tags.tag = :tag"| PG
   SR -->|"body_tsv @@ query (GIN)"| PG
 ```

@@ -1,6 +1,6 @@
 [package]
 name = "miku-index-memory"
-version = "0.0.4"
+version = "0.0.5"
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
@@ -8,9 +8,9 @@ description = "In-memory reference IndexStore for Miku"
 
 [dependencies]
 async-trait.workspace = true
-miku-domain = { version = "0.0.4", path = "../miku-domain" }
-miku-indexer = { version = "0.0.4", path = "../miku-indexer" }
-miku-markdown = { version = "0.0.4", path = "../miku-markdown" }
+miku-domain = { version = "0.0.5", path = "../miku-domain" }
+miku-indexer = { version = "0.0.5", path = "../miku-indexer" }
+miku-markdown = { version = "0.0.5", path = "../miku-markdown" }
 
 serde_json.workspace = true
 tokio.workspace = true
