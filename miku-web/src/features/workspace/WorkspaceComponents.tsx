@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useNavigate, useParams } from "react-router-dom";
 import { createWorkspaceClient, sortTreeNodes, type BacklinkModel, type NoteModel, type OutgoingLinkModel, type TreeNodeModel } from "./api";
 import { normalizeNotePath } from "./noteRoute";
@@ -10,6 +10,7 @@ import { extractOutgoingLinks } from "../markdown/noteLinks";
 
 const MarkdownEditor = lazy(() => import("../markdown/MarkdownEditor"));
 const MarkdownReader = lazy(() => import("../markdown/MarkdownReader").then((module) => ({ default: module.MarkdownReader })));
+const TAG_PAGE_SIZE = 50;
 const FRONTMATTER_ORDER = ["type", "status", "id", "slug", "aliases", "parents", "updated"] as const;
 const FRONTMATTER_HIDDEN = new Set(["title", "tags", "icon"]);
 
@@ -548,24 +549,28 @@ export function WorkspaceUtility({
   const navigate = useNavigate();
   const wildcard = useParams()["*"] ?? "";
   const tag = route === "tags" && wildcard ? decodeURIComponent(wildcard) : "";
-  const tags = useQuery({ queryKey: ["tags"], queryFn: client.tags, enabled: route === "tags" });
+  const tags = useInfiniteQuery({
+    queryKey: ["tags"],
+    queryFn: ({ pageParam }) => client.tags(pageParam, TAG_PAGE_SIZE),
+    initialPageParam: 0,
+    getNextPageParam: (lastPage, pages) => (lastPage.length < TAG_PAGE_SIZE ? undefined : pages.length * TAG_PAGE_SIZE),
+    enabled: route === "tags"
+  });
   const tagNotes = useQuery({ queryKey: ["tag-notes", tag], queryFn: () => client.tagNotes(tag), enabled: route === "tags" && Boolean(tag) });
-  const [tagLimit, setTagLimit] = useState(10);
   const tagSentinelRef = useRef<HTMLDivElement>(null);
   const recent = route === "recent" ? (JSON.parse(localStorage.getItem("miku-recent") ?? "[]") as string[]).slice(0, 20) : [];
-  const visibleTags = tags.data?.slice(0, tagLimit) ?? [];
-  useEffect(() => setTagLimit(10), [tags.data]);
+  const visibleTags = tags.data?.pages.flat() ?? [];
   useEffect(() => {
     if (route !== "tags" || tag || !tagSentinelRef.current) return;
     const observer = new IntersectionObserver(
       (entries) => {
-        if (entries[0]?.isIntersecting) setTagLimit((current) => Math.min(current + 10, tags.data?.length ?? current));
+        if (entries[0]?.isIntersecting && tags.hasNextPage && !tags.isFetchingNextPage) void tags.fetchNextPage();
       },
       { rootMargin: "120px" }
     );
     observer.observe(tagSentinelRef.current);
     return () => observer.disconnect();
-  }, [route, tag, tags.data]);
+  }, [route, tag, tags.fetchNextPage, tags.hasNextPage, tags.isFetchingNextPage]);
   return (
     <div className="workspace-utility" data-theme={theme}>
       <div className="utility-page-header">

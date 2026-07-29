@@ -17,6 +17,7 @@ User-facing changes to Miku Note are recorded here. See [[Index]] for the starti
 - Added an accessible mobile navigation drawer, calmer dark scrollbars, theme-aware favicon behavior, and curated real frontmatter properties.
 - Fixed active tabs reopening during close navigation and cleared quick-search input after selecting a note.
 - Reduced folder tree reads to one representative row per immediate child and kept folder-scoped parent IDs consistent.
+- Replaced client-only tag slicing with bounded `/api/v1/tags` pagination and incremental page fetching.
 - Folded the former workspace-cleanup unreleased notes into the shipped v0.0.3 record below.
 
 ## v0.0.4 — note save performance & trilium editor layout (2026-07-28)

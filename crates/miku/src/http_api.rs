@@ -13,7 +13,7 @@ use miku_domain::{workspace::NoteId, Backlink, SearchRequest, SearchScope};
 
 use miku_vault::VaultDocument;
 use serde::{Deserialize, Serialize};
-use utoipa::ToSchema;
+use utoipa::{IntoParams, ToSchema};
 
 use crate::{AppError, AppState};
 
@@ -177,6 +177,21 @@ pub struct SearchResponse {
 pub struct TagResponse {
     pub tag: String,
     pub count: i64,
+}
+
+#[derive(Debug, Deserialize, IntoParams)]
+pub struct TagQuery {
+    /// Maximum tags returned per page (default 50, maximum 200).
+    limit: Option<usize>,
+    /// Number of sorted tags to skip.
+    offset: Option<usize>,
+}
+
+fn tag_page(query: &TagQuery) -> (usize, usize) {
+    (
+        query.offset.unwrap_or(0),
+        query.limit.unwrap_or(50).clamp(1, 200),
+    )
 }
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -378,11 +393,17 @@ pub async fn search(
     }))
 }
 
-#[utoipa::path(get, path = "/api/v1/tags", responses((status = 200, body = [TagResponse])))]
-pub async fn tags(State(state): State<AppState>) -> Result<Json<Vec<TagResponse>>, AppError> {
+#[utoipa::path(get, path = "/api/v1/tags", params(TagQuery), responses((status = 200, body = [TagResponse])))]
+pub async fn tags(
+    Query(query): Query<TagQuery>,
+    State(state): State<AppState>,
+) -> Result<Json<Vec<TagResponse>>, AppError> {
     let tags = state.application.tags().await.map_err(application_error)?;
+    let (offset, limit) = tag_page(&query);
     Ok(Json(
         tags.into_iter()
+            .skip(offset)
+            .take(limit)
             .map(|tag| TagResponse {
                 tag: tag.tag,
                 count: tag.count,
@@ -666,5 +687,23 @@ mod tests {
             Some("geektime-docs/AI-\u{5927}\u{6570}\u{636e}".to_string())
         );
         assert_eq!(tree_parent_id(&RelativePath::root(), None), None);
+    }
+
+    #[test]
+    fn tag_pages_default_and_cap_the_response_window() {
+        assert_eq!(
+            tag_page(&TagQuery {
+                limit: None,
+                offset: None
+            }),
+            (0, 50)
+        );
+        assert_eq!(
+            tag_page(&TagQuery {
+                limit: Some(10_000),
+                offset: Some(75)
+            }),
+            (75, 200)
+        );
     }
 }

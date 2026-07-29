@@ -3,7 +3,7 @@ title: Miku Note Features
 type: guide
 status: active
 tags: [miku, features, markdown]
-updated: 2026-07-16
+updated: 2026-07-29
 ---
 
 # Miku Note Features
@@ -101,8 +101,8 @@ tags: [project/miku, markdown]
 This note is also discoverable through #project/miku.
 ```
 
-Tags are clickable in the note metadata and Context panel. The Tags page starts with ten tags and loads another ten when its list reaches the scroll sentinel; selecting a tag opens its indexed note
-list.
+Tags are clickable in note properties. The Tags page fetches 50 indexed tags at a time and requests the next API page when its list reaches the scroll sentinel; selecting a tag opens its indexed note
+list. Tag results remain server-owned derived data and are not copied into browser localStorage.
 
 - `/tags` shows the tag index and loads more results as you scroll;
 - `/tags/<tag>` shows matching pages and also uses scroll-triggered paging;

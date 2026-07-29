@@ -146,7 +146,9 @@ def main() -> int:
     print(f"ok: search latency={search_latency_ms:.2f}ms (<200ms)")
 
     # Tags & Tag Notes
-    tags = json_get("/api/v1/tags")
+    tags = json_get("/api/v1/tags?limit=50&offset=0")
+    if len(tags) > 50:
+        raise AssertionError("tag endpoint ignored its page limit")
     if tags:
         tag = urllib.parse.quote(tags[0]["tag"], safe="")
         json_get(f"/api/v1/tags/{tag}/notes")
