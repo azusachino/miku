@@ -19,13 +19,23 @@
    * contract and component styles so the vendored reference is not runtime code.
    */
   font-family:
-    Inter,
+    "Inter",
+    "Nerd Font",
+    "Symbols Nerd Font",
+    "Noto Sans CJK SC",
+    "Noto Sans CJK JP",
+    "Noto Sans SC",
+    "Noto Sans JP",
+    "PingFang SC",
+    "Hiragino Sans",
+    "Microsoft YaHei",
     ui-sans-serif,
     system-ui,
     -apple-system,
     BlinkMacSystemFont,
     "Segoe UI",
     sans-serif;
+
   color: var(--text);
   background: var(--bg);
   font-synthesis: none;
@@ -756,7 +766,16 @@ input:focus-visible {
   border-radius: 8px;
   color: var(--code-text) !important;
   background: var(--surface-code) !important;
-  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-family:
+    "Google Sans Code",
+    "Google Sans Mono",
+    "FiraCode Nerd Font",
+    "JetBrainsMono Nerd Font",
+    "SFMono-Regular",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+
   font-size: 0.82rem;
   line-height: 1.65;
   text-shadow: none !important;
