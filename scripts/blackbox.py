@@ -143,9 +143,10 @@ def main() -> int:
     if empty_tag_notes != []:
         raise AssertionError("non-existent tag notes must return empty list")
 
-    print("ok: full API coverage (happy, evil 404/escaping, limit-clamping, latency <200ms) verified")
+    print(
+        "ok: full API coverage (happy, evil 404/escaping, limit-clamping, latency <200ms) verified"
+    )
     return 0
-
 
 
 if __name__ == "__main__":

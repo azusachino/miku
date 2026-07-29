@@ -16,6 +16,7 @@ opt-in through environment variables so local development stays lightweight.
 
 from __future__ import annotations
 
+import argparse
 import http.client
 import os
 import shutil
@@ -24,7 +25,6 @@ import sys
 import time
 import urllib.error
 import urllib.request
-
 
 
 def run(
@@ -40,9 +40,14 @@ def server_ready(url: str) -> bool:
     try:
         with urllib.request.urlopen(f"{url}/healthz", timeout=1) as response:
             return response.status == 200
-    except (urllib.error.URLError, TimeoutError, http.client.RemoteDisconnected, ConnectionResetError, OSError):
+    except (
+        urllib.error.URLError,
+        TimeoutError,
+        http.client.RemoteDisconnected,
+        ConnectionResetError,
+        OSError,
+    ):
         return False
-
 
 
 def cargo(*args: str) -> None:
