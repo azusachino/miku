@@ -41,4 +41,14 @@ describe("extractOutgoingLinks", () => {
     const links = extractOutgoingLinks("[[elden ring]]", notes);
     expect(links).toEqual([{ path: "elden-ring.md", title: "Elden Ring", isMissing: false }]);
   });
+
+  it("resolves outgoing links in subfolders to their real canonical path", () => {
+    const notes = [{ path: "apricot/maps/philosophy-map.md", title: "Philosophy" }];
+    const links = extractOutgoingLinks("- [[philosophy-map]]\n- [[uncreated-note]]", notes, "apricot/maps/books-map.md");
+    expect(links).toEqual([
+      { path: "apricot/maps/philosophy-map.md", title: "Philosophy", isMissing: false },
+      { path: "apricot/maps/uncreated-note.md", title: "uncreated-note", isMissing: true }
+    ]);
+  });
 });
+

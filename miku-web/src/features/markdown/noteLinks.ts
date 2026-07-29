@@ -107,9 +107,9 @@ export function createTargetResolver(notes: NoteCandidate[], currentPath?: strin
 
 export type OutgoingLinkItem = { path: string; title: string; isMissing: boolean };
 
-export function extractOutgoingLinks(body: string, notes?: NoteCandidate[]): OutgoingLinkItem[] {
+export function extractOutgoingLinks(body: string, notes?: NoteCandidate[], currentPath?: string): OutgoingLinkItem[] {
   if (!body) return [];
-  const resolver = notes ? createTargetResolver(notes) : null;
+  const resolver = notes ? createTargetResolver(notes, currentPath) : null;
   const seen = new Set<string>();
   const results: OutgoingLinkItem[] = [];
 
@@ -127,8 +127,17 @@ export function extractOutgoingLinks(body: string, notes?: NoteCandidate[]): Out
 
     const resolvedPath = resolver ? resolver(cleanTarget) : null;
     const isMissing = !resolvedPath;
-    const rawPath = resolvedPath || (cleanTarget.endsWith(".md") ? cleanTarget : `${cleanTarget}.md`);
-    const finalPath = rawPath.replace(/^\/+/, "");
+
+    let finalPath: string;
+    if (resolvedPath) {
+      finalPath = resolvedPath.replace(/^\/+/, "");
+    } else if (currentPath && !cleanTarget.includes("/")) {
+      const folderDir = currentPath.split("/").slice(0, -1).join("/");
+      const subPath = cleanTarget.endsWith(".md") ? cleanTarget : `${cleanTarget}.md`;
+      finalPath = folderDir ? `${folderDir}/${subPath}` : subPath;
+    } else {
+      finalPath = (cleanTarget.endsWith(".md") ? cleanTarget : `${cleanTarget}.md`).replace(/^\/+/, "");
+    }
 
     if (seen.has(finalPath)) return;
     seen.add(finalPath);
@@ -139,6 +148,7 @@ export function extractOutgoingLinks(body: string, notes?: NoteCandidate[]): Out
 
     results.push({ path: finalPath, title, isMissing });
   };
+
 
   // 1. [[wikilink|label]]
   for (const match of body.matchAll(/(?<!!)\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g)) {

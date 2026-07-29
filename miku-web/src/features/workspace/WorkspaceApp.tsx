@@ -43,6 +43,7 @@ export function WorkspaceScreen() {
   const utilityRoute = location.pathname.startsWith("/tags") ? "tags" : location.pathname === "/recent" ? "recent" : undefined;
   const activeId = isNoteRoute ? normalizeNotePath(routeId ?? state.activeId) : "";
   const workspace = useQuery({ queryKey: ["workspace"], queryFn: client.workspace });
+  const pagesQuery = useQuery({ queryKey: ["pages"], queryFn: client.pages });
   const tree = useQuery({ queryKey: ["tree"], queryFn: () => client.tree() });
   const folder = useQuery({ queryKey: ["folder", folderPath], queryFn: () => client.tree(folderPath), enabled: Boolean(folderPath) });
   const context = useQuery({
@@ -68,6 +69,23 @@ export function WorkspaceScreen() {
   const isWorkspaceRoot = location.pathname === "/";
   const visibleTree = useMemo(() => [...(tree.data ?? []), ...(context.data?.children ?? [])], [context.data?.children, tree.data]);
   const treeNotes = useMemo(() => visibleTree.map((node) => ({ ...node.note, icon: "file-text", updated: "indexed", body: "", backlinks: [], tags: [] })), [visibleTree]);
+  const pagesNotes = useMemo(
+    () =>
+      (pagesQuery.data ?? []).map((summary) => ({
+        id: summary.path,
+        path: summary.path,
+        title: summary.title,
+        icon: "file-text",
+        parents: [],
+        aliases: summary.aliases ?? [],
+        updated: "indexed",
+        body: "",
+        backlinks: [],
+        tags: [],
+        identityGenerated: summary.identity_generated
+      })),
+    [pagesQuery.data]
+  );
   const contextualNote = useMemo(() => context.data?.note, [context.data]);
   useEffect(() => {
     if (contextualNote) setNoteCache((current) => ({ ...current, [contextualNote.id]: contextualNote }));
@@ -82,7 +100,7 @@ export function WorkspaceScreen() {
     }
   }, [activeId, contextualNote, context.isPlaceholderData, isNoteRoute, navigate]);
   const notes = useMemo(() => {
-    const combined = [...treeNotes, ...Object.values(noteCache)];
+    const combined = [...pagesNotes, ...treeNotes, ...Object.values(noteCache)];
     const map = new Map<string, NoteModel>();
     for (const candidate of combined) {
       if (candidate.id) map.set(candidate.id, candidate);
@@ -90,7 +108,8 @@ export function WorkspaceScreen() {
       if (candidate.path) map.set(normalizeNotePath(candidate.path), candidate);
     }
     return Array.from(map.values());
-  }, [noteCache, treeNotes]);
+  }, [noteCache, pagesNotes, treeNotes]);
+
   const normActiveId = normalizeNotePath(activeId);
   const activeNote = contextualNote ??
     notes.find((candidate) => candidate.id === activeId || candidate.path === activeId || normalizeNotePath(candidate.path) === normActiveId) ?? {

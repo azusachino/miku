@@ -333,7 +333,8 @@ export function ContextPanel({
         <ActionIcon name="chevron-left" />
       </button>
     );
-  const outgoingLinks = extractOutgoingLinks(note.body, notes);
+  const outgoingLinks = extractOutgoingLinks(note.body, notes, note.path);
+
 
   return (
     <aside className="context-panel" data-region={shellRegions[3]}>

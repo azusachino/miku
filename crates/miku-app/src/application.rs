@@ -317,6 +317,13 @@ impl VaultReader for FileMikuApplication {
         })
     }
 
+    async fn list_pages(&self) -> Result<Vec<PageSummary>, ApplicationError> {
+        self.index
+            .list_pages()
+            .await
+            .map_err(ApplicationError::from)
+    }
+
     async fn read_note(&self, note: NoteRef) -> Result<VaultDocument, ApplicationError> {
         self.resolve_document(note).await
     }

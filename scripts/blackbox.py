@@ -76,6 +76,7 @@ def main() -> int:
         raise AssertionError("workspace contains no Markdown notes")
 
     json_get("/api/v1/tree")
+    json_get("/api/v1/pages")
     json_get("/api/openapi.json")
 
     content_root = Path(os.environ.get("MIKU_CONTENT_ROOT", "miku_docs"))

@@ -232,9 +232,11 @@ export function createWorkspaceClient(onSource: (source: ApiSource) => void) {
         return response.results.map((result) => ({ ...result, id: result.path, icon: "file-text" }));
       }),
     tags: (): Promise<TagModel[]> => live(() => request<Schemas["TagResponse"][]>("/api/v1/tags")),
-    tagNotes: (tag: string): Promise<TagNoteModel[]> => live(() => request<Schemas["TagNoteResponse"][]>(`/api/v1/tags/${encodeURIComponent(tag)}/notes`))
+    tagNotes: (tag: string): Promise<TagNoteModel[]> => live(() => request<Schemas["TagNoteResponse"][]>(`/api/v1/tags/${encodeURIComponent(tag)}/notes`)),
+    pages: (): Promise<Schemas["NoteSummary"][]> => live(() => request<Schemas["NoteSummary"][]>("/api/v1/pages"))
   };
 }
+
 
 export function subscribeToWorkspaceEvents(onInvalidate: () => void): () => void {
   if (typeof EventSource === "undefined") return () => undefined;

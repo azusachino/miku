@@ -188,6 +188,7 @@ impl From<VaultError> for ApplicationError {
 pub trait VaultReader: Send + Sync {
     async fn vault_info(&self) -> Result<VaultInfo, ApplicationError>;
     async fn file_tree(&self, request: FileTreeRequest) -> Result<FileTree, ApplicationError>;
+    async fn list_pages(&self) -> Result<Vec<PageSummary>, ApplicationError>;
     async fn read_note(&self, note: NoteRef) -> Result<VaultDocument, ApplicationError>;
     async fn note_context(&self, note: NoteRef) -> Result<NoteContext, ApplicationError>;
     async fn read_raw_asset(&self, path: &str) -> Result<Vec<u8>, ApplicationError>;
@@ -267,6 +268,10 @@ mod tests {
                     generated_identity_count: 0,
                     first_note: Some(note_path("Index.md")),
                 })
+            }
+
+            async fn list_pages(&self) -> Result<Vec<PageSummary>, ApplicationError> {
+                Ok(Vec::new())
             }
 
             async fn file_tree(

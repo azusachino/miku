@@ -63,6 +63,7 @@ pub(super) fn router(state: AppState) -> Router {
         .route("/readyz", get(readyz))
         .route("/metrics", get(metrics))
         .route("/api/v1/workspace", get(http_api::workspace))
+        .route("/api/v1/pages", get(http_api::pages))
         .route("/api/v1/tree", get(http_api::tree))
         .route(
             "/api/v1/notes/{*id}",

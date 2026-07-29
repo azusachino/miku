@@ -8,7 +8,8 @@ use miku_app::{
     ApplicationError, FileNode, FileNodeKind, FileTreeRequest, NotePath, NoteRef, RelativePath,
     SaveNoteCommand,
 };
-use miku_domain::{workspace::NoteId, Backlink, SearchRequest, SearchScope};
+use miku_domain::{workspace::NoteId, Backlink, PageSummary, SearchRequest, SearchScope};
+
 use miku_vault::VaultDocument;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -216,6 +217,17 @@ pub async fn tree(
         parent_id: query.parent_id.clone(),
         nodes: tree.nodes.into_iter().map(tree_node).collect(),
     }))
+}
+
+/// Returns compact summaries for all indexed notes in the vault.
+#[utoipa::path(get, path = "/api/v1/pages", responses((status = 200, body = [NoteSummary])))]
+pub async fn pages(State(state): State<AppState>) -> Result<Json<Vec<NoteSummary>>, AppError> {
+    let pages = state
+        .application
+        .list_pages()
+        .await
+        .map_err(application_error)?;
+    Ok(Json(pages.into_iter().map(page_summary_node).collect()))
 }
 
 /// Returns one note by stable identity.
@@ -435,6 +447,18 @@ fn node_id(node: &FileNode) -> String {
         .as_ref()
         .map(|id| id.as_str().to_string())
         .unwrap_or_else(|| node.path.as_str().to_string())
+}
+
+fn page_summary_node(page: PageSummary) -> NoteSummary {
+    let identity_generated = page.frontmatter.get("id").is_none();
+    NoteSummary {
+        note_id: page.path.clone(),
+        path: page.path,
+        title: page.title,
+        order: None,
+        identity_generated,
+        aliases: page.aliases,
+    }
 }
 
 fn note_summary_node(node: FileNode) -> NoteSummary {
