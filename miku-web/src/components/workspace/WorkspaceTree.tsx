@@ -9,6 +9,7 @@ export function WorkspaceTree({
   activeId,
   onSelect,
   hoisted,
+  onExpandTree,
   client
 }: {
   notes: NoteModel[];
@@ -16,6 +17,7 @@ export function WorkspaceTree({
   activeId: string;
   onSelect: (id: string) => void;
   hoisted: boolean;
+  onExpandTree: () => void;
   client: ReturnType<typeof createWorkspaceClient>;
 }) {
   const noteMap = useMemo(() => new Map(notes.map((note) => [note.id, note])), [notes]);
@@ -24,7 +26,7 @@ export function WorkspaceTree({
     return new Set(persisted.filter((path) => !persisted.some((parent) => parent !== path && path.startsWith(`${parent}/`))));
   });
   const [loaded, setLoaded] = useState<Record<string, TreeNodeModel[]>>({});
-  const roots = sortTreeNodes(nodes.filter((node) => node.parentId === null));
+  const roots = useMemo(() => sortTreeNodes(nodes.filter((node) => node.parentId === null)), [nodes]);
 
   useEffect(() => {
     if (!activeId || hoisted) return;
@@ -62,13 +64,17 @@ export function WorkspaceTree({
   }, [client, expanded, loaded, roots]);
 
   const branch = (node: TreeNodeModel, depth: number) => {
-    const note = noteMap.get(node.noteId) ?? { ...node.note, icon: "file-text", updated: "unknown", body: "", backlinks: [], tags: [] };
+    const note = noteMap.get(node.noteId) ?? { ...node.note, icon: "file-text", frontmatter: {}, updated: "unknown", body: "", backlinks: [], tags: [] };
     const children = sortTreeNodes(loaded[node.path] ?? []);
     const isFolder = node.kind === "folder";
     const isExpanded = expanded.has(node.path);
     const indexNote = children.find((child) => child.kind === "markdown" && child.path === `${node.path}/index.md`);
     const title = isFolder ? (indexNote?.note.title ?? node.note.title) : note.title;
     const toggleFolder = async () => {
+      if (hoisted) {
+        onExpandTree();
+        if (isExpanded) return;
+      }
       if (isExpanded) {
         setExpanded((current) => new Set([...current].filter((path) => path !== node.path)));
         return;

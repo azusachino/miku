@@ -3,12 +3,22 @@ title: Changelog
 type: changelog
 status: active
 tags: [miku, release]
-updated: 2026-07-16
+updated: 2026-07-29
 ---
 
 # Changelog
 
-User-facing changes to Miku Note are recorded here. See [[Index]] for the starting point and [[Features]] for the current product boundary. #release
+User-facing changes to Miku Note are recorded here. See [[index|Miku Note]] for the starting point and [[features|Features]] for the current product boundary. #release
+
+## v0.0.5 — workspace consistency and SQLite-only search (2026-07-29)
+
+- Removed Tantivy and SQLite FTS5; SQLite now stores one body copy and performs parallel plain-content search, while MemoryIndex retains only graph metadata.
+- Added backend-resolved outgoing links, ignored links inside inline/fenced code, and corrected lazy tree parent/expansion behavior.
+- Added an accessible mobile navigation drawer, calmer dark scrollbars, theme-aware favicon behavior, and curated real frontmatter properties.
+- Fixed active tabs reopening during close navigation and cleared quick-search input after selecting a note.
+- Reduced folder tree reads to one representative row per immediate child and kept folder-scoped parent IDs consistent.
+- Replaced client-only tag slicing with bounded `/api/v1/tags` pagination and incremental page fetching.
+- Folded the former workspace-cleanup unreleased notes into the shipped v0.0.3 record below.
 
 ## v0.0.4 — note save performance & trilium editor layout (2026-07-28)
 
@@ -27,9 +37,6 @@ User-facing changes to Miku Note are recorded here. See [[Index]] for the starti
 - Added Mermaid, GitHub-style alerts, KaTeX math, table-of-contents navigation, lazy tags, and folder/file browsing to the reader surface.
 - Fixed language-less and highlighted code blocks so their contrast, padding, scrolling, and theme colors remain readable in both light and dark mode.
 - Split the Rust workspace into domain, vault, Markdown, index, cache, application, and HTTP layers with SQLite as the default durable projection.
-
-## Unreleased — workspace cleanup (2026-07-16)
-
 - Replaced the former server-rendered/Alpine frontend description with the current React, Vite, Tailwind, Prism, Mermaid, and KaTeX architecture.
 - Organized the frontend source by app, workspace, Markdown, components, and shared helpers.
 - Removed duplicate planning notes and stale pre-workspace documentation.
@@ -59,7 +66,7 @@ User-facing changes to Miku Note are recorded here. See [[Index]] for the starti
 - Added lazy Mermaid rendering with diagram zoom.
 - Added lazy Prism highlighting and code-block copy actions.
 - Added dollar math parsing and lazy KaTeX rendering for inline `$...$` and display `$$...$$` equations.
-- Updated [[Sandbox]] with Mermaid, code, and math fixtures for browser acceptance checks.
+- Updated [[sandbox|Sandbox]] with Mermaid, code, and math fixtures for browser acceptance checks.
 
 ### Scope clarification
 

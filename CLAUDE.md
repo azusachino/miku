@@ -39,4 +39,4 @@ All daily operations go through the Makefile. Python automation runs through uv 
 
 Run make check before committing and make validate before opening a PR. Use conventional commits and stage files explicitly. Never commit local indexes, runtime artifacts, screenshots, or secrets.
 
-See miku_docs/architecture.md, miku_docs/Features.md, and miku_docs/adr/ for the current product and architecture contracts.
+See miku_docs/architecture.md, miku_docs/features.md, and miku_docs/adr/ for the current product and architecture contracts.

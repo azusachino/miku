@@ -75,6 +75,22 @@
 }
 * {
   box-sizing: border-box;
+  scrollbar-color: color-mix(in srgb, var(--faint) 62%, transparent) transparent;
+  scrollbar-width: thin;
+}
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+  background: transparent;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--faint) 62%, transparent);
+  background-clip: content-box;
 }
 body {
   margin: 0;
@@ -114,6 +130,7 @@ input:focus-visible {
   font-size: 1.15em;
 }
 .app-shell {
+  color-scheme: dark;
   color: var(--text);
   background: var(--bg);
 }
@@ -249,6 +266,11 @@ input:focus-visible {
 .quiet-button:hover,
 .tool-button:hover {
   color: var(--text);
+}
+.mobile-nav-toggle,
+.mobile-nav-close,
+.mobile-nav-backdrop {
+  display: none;
 }
 .workspace-layout {
 }
@@ -688,36 +710,55 @@ input:focus-visible {
   letter-spacing: -0.04em;
   line-height: 1.1;
 }
-.note-meta-list {
-  margin: 0;
-  padding-left: 18px;
-  list-style: disc;
-  color: var(--muted);
-  font-size: 0.72rem;
-  line-height: 1.8;
-}
-.note-meta-list li::marker {
-  color: var(--accent);
-}
-.note-meta-list .note-meta-tags {
-  margin-left: -18px;
-  list-style: none;
-}
-.note-meta-list code {
+.note-file-state {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  margin-top: 8px;
   color: var(--faint);
-  font: inherit;
-  overflow-wrap: anywhere;
+  font-size: 0.68rem;
 }
-.meta-label {
-  display: inline-block;
-  min-width: 54px;
-  margin-right: 5px;
+.note-file-state .saved-state {
+  display: inline-flex;
+}
+.frontmatter-panel {
+  display: grid;
+  grid-template-columns: minmax(88px, max-content) minmax(0, 1fr);
+  margin: -8px auto 30px;
+  padding: 10px 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  font-size: 0.72rem;
+}
+.frontmatter-row {
+  display: contents;
+}
+.frontmatter-row dt,
+.frontmatter-row dd {
+  min-width: 0;
+  margin: 0;
+  padding: 5px 10px;
+}
+.frontmatter-row dt {
   color: var(--faint);
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 0.66rem;
 }
-.note-meta-list .saved-state {
-  display: inline-flex;
+.frontmatter-row dd {
+  color: var(--reader-muted);
+  overflow-wrap: anywhere;
+}
+.frontmatter-row code {
+  color: inherit;
+  font: inherit;
+}
+.frontmatter-values,
+.frontmatter-row .tag-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.frontmatter-value {
+  color: var(--reader-text);
 }
 .tag-row {
   display: flex;
@@ -1542,6 +1583,28 @@ input:focus-visible {
   .brand-mark {
     width: auto;
   }
+  .brand-mark span {
+    display: none;
+  }
+  .mobile-nav-toggle,
+  .mobile-nav-close {
+    display: inline-flex;
+  }
+  .mobile-nav-toggle {
+    flex: 0 0 auto;
+  }
+  .mobile-nav-backdrop {
+    display: block;
+    position: fixed;
+    z-index: 19;
+    inset: var(--shell-topbar-height) 0 0;
+    width: 100%;
+    height: auto;
+    border: 0;
+    border-radius: 0;
+    background: rgb(0 0 0 / 42%);
+    backdrop-filter: blur(2px);
+  }
   .workspace-source {
     display: none;
   }
@@ -1552,7 +1615,29 @@ input:focus-visible {
     display: none;
   }
   .sidebar {
-    flex-basis: 200px;
+    position: fixed;
+    z-index: 20;
+    top: var(--shell-topbar-height);
+    bottom: 0;
+    left: 0;
+    width: min(84vw, 320px);
+    max-width: 320px;
+    flex-basis: auto;
+    box-shadow: 16px 0 40px rgb(0 0 0 / 24%);
+    transform: translateX(-105%);
+    transition: transform 160ms ease;
+  }
+  .sidebar.is-mobile-open {
+    transform: translateX(0);
+  }
+  .sidebar-resizer {
+    display: none;
+  }
+  .sidebar-toolbar {
+    gap: 6px;
+  }
+  .sidebar-toolbar .mobile-nav-close {
+    order: 2;
   }
   .context-panel {
     display: none;
@@ -1579,6 +1664,11 @@ input:focus-visible {
   }
   .note-pane.is-split {
     min-width: 0;
+  }
+}
+@media (max-width: 760px) and (prefers-reduced-motion: reduce) {
+  .sidebar {
+    transition: none;
   }
 }
 [data-theme="light"] {
@@ -1608,6 +1698,9 @@ input:focus-visible {
   --reader-border: #e9e9e7;
   --reader-muted: #787774;
   --relation: #805ad5;
+}
+[data-theme="light"] {
+  color-scheme: light;
 }
 [data-theme="light"] .launch-bar {
   background: color-mix(in srgb, var(--panel) 92%, transparent);

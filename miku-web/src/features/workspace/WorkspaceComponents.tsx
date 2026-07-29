@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useNavigate, useParams } from "react-router-dom";
 import { createWorkspaceClient, sortTreeNodes, type BacklinkModel, type NoteModel, type OutgoingLinkModel, type TreeNodeModel } from "./api";
 import { normalizeNotePath } from "./noteRoute";
@@ -10,6 +10,32 @@ import { extractOutgoingLinks } from "../markdown/noteLinks";
 
 const MarkdownEditor = lazy(() => import("../markdown/MarkdownEditor"));
 const MarkdownReader = lazy(() => import("../markdown/MarkdownReader").then((module) => ({ default: module.MarkdownReader })));
+const TAG_PAGE_SIZE = 50;
+const FRONTMATTER_ORDER = ["type", "status", "id", "slug", "aliases", "parents", "updated"] as const;
+const FRONTMATTER_HIDDEN = new Set(["title", "tags", "icon"]);
+
+export function curatedFrontmatter(frontmatter: Record<string, unknown>): [string, unknown][] {
+  const rank = new Map<string, number>(FRONTMATTER_ORDER.map((key, index) => [key, index]));
+  return Object.entries(frontmatter)
+    .filter(([key, value]) => !FRONTMATTER_HIDDEN.has(key) && value !== null && value !== "" && !(Array.isArray(value) && value.length === 0))
+    .sort(([left], [right]) => (rank.get(left) ?? FRONTMATTER_ORDER.length) - (rank.get(right) ?? FRONTMATTER_ORDER.length) || left.localeCompare(right));
+}
+
+function FrontmatterValue({ value }: { value: unknown }) {
+  if (Array.isArray(value)) {
+    return (
+      <span className="frontmatter-values">
+        {value.map((item, index) => (
+          <span className="frontmatter-value" key={`${String(item)}-${index}`}>
+            {String(item)}
+          </span>
+        ))}
+      </span>
+    );
+  }
+  if (typeof value === "object" && value !== null) return <code>{JSON.stringify(value)}</code>;
+  return <span className="frontmatter-value">{String(value)}</span>;
+}
 
 function noteHeadings(markdown: string): { id: string; text: string; level: number }[] {
   const headings: { id: string; text: string; level: number }[] = [];
@@ -26,10 +52,34 @@ function noteHeadings(markdown: string): { id: string; text: string; level: numb
   return headings;
 }
 
-export function LaunchBar({ onSearch, theme, onToggleTheme }: { onSearch: () => void; theme: "dark" | "light"; onToggleTheme: () => void }) {
+export function LaunchBar({
+  onSearch,
+  theme,
+  onToggleTheme,
+  mobileNavOpen,
+  onToggleMobileNav,
+  mobileNavButtonRef
+}: {
+  onSearch: () => void;
+  theme: "dark" | "light";
+  onToggleTheme: () => void;
+  mobileNavOpen: boolean;
+  onToggleMobileNav: () => void;
+  mobileNavButtonRef: React.RefObject<HTMLButtonElement | null>;
+}) {
   const navigate = useNavigate();
   return (
     <header className="launch-bar" data-region={shellRegions[0]}>
+      <button
+        ref={mobileNavButtonRef}
+        className="quiet-button mobile-nav-toggle"
+        aria-label={mobileNavOpen ? "Close workspace navigation" : "Open workspace navigation"}
+        aria-controls="workspace-navigation"
+        aria-expanded={mobileNavOpen}
+        onClick={onToggleMobileNav}
+      >
+        <ActionIcon name={mobileNavOpen ? "close" : "menu"} />
+      </button>
       <button className="brand-mark" onClick={() => navigate("/")} aria-label="Go to workspace home">
         <img className="brand-icon" src={`/miku-icon-${theme}.svg`} alt="" />
         <span>miku note</span>
@@ -60,7 +110,9 @@ export function Sidebar({
   onRecent,
   onSettings,
   noteCount,
-  onResizeStart
+  onResizeStart,
+  mobileOpen,
+  onCloseMobile
 }: {
   notes: NoteModel[];
   nodes: TreeNodeModel[];
@@ -74,12 +126,17 @@ export function Sidebar({
   onSettings: () => void;
   noteCount: number;
   onResizeStart: (event: React.PointerEvent<HTMLButtonElement>) => void;
+  mobileOpen: boolean;
+  onCloseMobile: () => void;
 }) {
   return (
-    <aside className="sidebar" data-region={shellRegions[1]}>
+    <aside id="workspace-navigation" className={`sidebar ${mobileOpen ? "is-mobile-open" : ""}`} data-region={shellRegions[1]} aria-label="Workspace navigation">
       <button className="sidebar-resizer" onPointerDown={onResizeStart} aria-label="Resize workspace navigation" />
       <div className="sidebar-toolbar">
         <span className="eyebrow">Workspace</span>
+        <button className="tool-button mobile-nav-close" onClick={onCloseMobile} aria-label="Close workspace navigation">
+          <ActionIcon name="close" />
+        </button>
         <button
           className={`tool-button ${hoisted ? "is-on" : ""}`}
           onClick={onToggleHoist}
@@ -94,7 +151,7 @@ export function Sidebar({
         <span>All notes</span>
         <span className="count-pill">{noteCount}</span>
       </div>
-      <WorkspaceTree notes={notes} nodes={nodes} activeId={activeId} onSelect={onSelect} hoisted={hoisted} client={client} />
+      <WorkspaceTree notes={notes} nodes={nodes} activeId={activeId} onSelect={onSelect} hoisted={hoisted} onExpandTree={onToggleHoist} client={client} />
       <div className="sidebar-bottom">
         <button className="sidebar-link" onClick={onRecent}>
           <ActionIcon name="clock" /> Recent
@@ -201,6 +258,10 @@ export function NotePane({
   const [draft, setDraft] = useState(note.body);
   const [saveState, setSaveState] = useState("saved");
   const [sourceMode, setSourceMode] = useState(false);
+  const properties = curatedFrontmatter(note.frontmatter).filter(([key]) => key !== "id" || !note.identityGenerated);
+  const frontmatterTags = Array.isArray(note.frontmatter.tags)
+    ? note.frontmatter.tags.filter((tag): tag is string => typeof tag === "string").map((tag) => tag.replace(/^#/, ""))
+    : [];
   useEffect(() => {
     setDraft(note.body);
     setSaveState("saved");
@@ -271,33 +332,38 @@ export function NotePane({
           </span>
           <div className="note-heading-copy">
             <h1>{note.title}</h1>
-            <ul className="note-meta-list">
-              <li>
-                <span className="meta-label">type</span> Markdown note
-              </li>
-              <li>
-                <span className="meta-label">status</span>{" "}
-                <span className="saved-state">
-                  <span className="saved-dot" /> {sourceMode ? saveState : "reading"}
-                </span>
-              </li>
-              <li>
-                <span className="meta-label">updated</span> {note.updated}
-              </li>
-              {note.tags.length > 0 && (
-                <li className="note-meta-tags">
-                  <span className="tag-row">
-                    {note.tags.map((tag) => (
-                      <button className="tag" key={tag} onClick={() => onTagSearch(tag)}>
-                        #{tag}
-                      </button>
-                    ))}
-                  </span>
-                </li>
-              )}
-            </ul>
+            <div className="note-file-state">
+              <span className="saved-state">
+                <span className="saved-dot" /> {sourceMode ? saveState : "reading"}
+              </span>
+              {!Object.hasOwn(note.frontmatter, "updated") && <span>Modified {note.updated}</span>}
+            </div>
           </div>
         </div>
+        {(properties.length > 0 || frontmatterTags.length > 0) && (
+          <dl className="frontmatter-panel" aria-label="Frontmatter properties">
+            {properties.map(([key, value]) => (
+              <div className="frontmatter-row" key={key}>
+                <dt>{key}</dt>
+                <dd>
+                  <FrontmatterValue value={value} />
+                </dd>
+              </div>
+            ))}
+            {frontmatterTags.length > 0 && (
+              <div className="frontmatter-row">
+                <dt>tags</dt>
+                <dd className="tag-row">
+                  {frontmatterTags.map((tag) => (
+                    <button className="tag" key={tag} onClick={() => onTagSearch(tag)}>
+                      #{tag}
+                    </button>
+                  ))}
+                </dd>
+              </div>
+            )}
+          </dl>
+        )}
         {sourceMode ? (
           <Suspense fallback={<div className="markdown-editor-loading">Loading editor…</div>}>
             <MarkdownEditor
@@ -483,24 +549,28 @@ export function WorkspaceUtility({
   const navigate = useNavigate();
   const wildcard = useParams()["*"] ?? "";
   const tag = route === "tags" && wildcard ? decodeURIComponent(wildcard) : "";
-  const tags = useQuery({ queryKey: ["tags"], queryFn: client.tags, enabled: route === "tags" });
+  const tags = useInfiniteQuery({
+    queryKey: ["tags"],
+    queryFn: ({ pageParam }) => client.tags(pageParam, TAG_PAGE_SIZE),
+    initialPageParam: 0,
+    getNextPageParam: (lastPage, pages) => (lastPage.length < TAG_PAGE_SIZE ? undefined : pages.length * TAG_PAGE_SIZE),
+    enabled: route === "tags"
+  });
   const tagNotes = useQuery({ queryKey: ["tag-notes", tag], queryFn: () => client.tagNotes(tag), enabled: route === "tags" && Boolean(tag) });
-  const [tagLimit, setTagLimit] = useState(10);
   const tagSentinelRef = useRef<HTMLDivElement>(null);
   const recent = route === "recent" ? (JSON.parse(localStorage.getItem("miku-recent") ?? "[]") as string[]).slice(0, 20) : [];
-  const visibleTags = tags.data?.slice(0, tagLimit) ?? [];
-  useEffect(() => setTagLimit(10), [tags.data]);
+  const visibleTags = tags.data?.pages.flat() ?? [];
   useEffect(() => {
     if (route !== "tags" || tag || !tagSentinelRef.current) return;
     const observer = new IntersectionObserver(
       (entries) => {
-        if (entries[0]?.isIntersecting) setTagLimit((current) => Math.min(current + 10, tags.data?.length ?? current));
+        if (entries[0]?.isIntersecting && tags.hasNextPage && !tags.isFetchingNextPage) void tags.fetchNextPage();
       },
       { rootMargin: "120px" }
     );
     observer.observe(tagSentinelRef.current);
     return () => observer.disconnect();
-  }, [route, tag, tags.data]);
+  }, [route, tag, tags.fetchNextPage, tags.hasNextPage, tags.isFetchingNextPage]);
   return (
     <div className="workspace-utility" data-theme={theme}>
       <div className="utility-page-header">

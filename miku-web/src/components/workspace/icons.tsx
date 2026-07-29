@@ -10,6 +10,7 @@ import { FileText } from "@phosphor-icons/react/dist/icons/FileText";
 import { Folder } from "@phosphor-icons/react/dist/icons/Folder";
 import { GearSix } from "@phosphor-icons/react/dist/icons/GearSix";
 import { Hash } from "@phosphor-icons/react/dist/icons/Hash";
+import { List } from "@phosphor-icons/react/dist/icons/List";
 import { MagnifyingGlass } from "@phosphor-icons/react/dist/icons/MagnifyingGlass";
 import { Moon } from "@phosphor-icons/react/dist/icons/Moon";
 import { Rocket } from "@phosphor-icons/react/dist/icons/Rocket";
@@ -18,7 +19,7 @@ import { TreeStructure } from "@phosphor-icons/react/dist/icons/TreeStructure";
 import { X } from "@phosphor-icons/react/dist/icons/X";
 import type { Icon } from "@phosphor-icons/react";
 
-export type ActionIconName = "arrow-up" | "arrow-up-right" | "chevron-down" | "chevron-left" | "chevron-right" | "close" | "hash" | "moon" | "search" | "settings" | "sun" | "tree" | "clock";
+export type ActionIconName = "arrow-up" | "arrow-up-right" | "chevron-down" | "chevron-left" | "chevron-right" | "close" | "hash" | "menu" | "moon" | "search" | "settings" | "sun" | "tree" | "clock";
 
 export function ActionIcon({ name }: { name: ActionIconName }) {
   const icons: Record<ActionIconName, Icon> = {
@@ -29,6 +30,7 @@ export function ActionIcon({ name }: { name: ActionIconName }) {
     "chevron-right": CaretRight,
     close: X,
     hash: Hash,
+    menu: List,
     moon: Moon,
     search: MagnifyingGlass,
     settings: GearSix,

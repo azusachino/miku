@@ -35,13 +35,13 @@ This makes the vault easy to inspect, back up, version, or edit with another too
 | Knowledge graph | Backlinks, linked mentions, tags, and paginated tag views                                                  |
 | Search          | Metadata quick-switch plus embedded full-text content search powered by Rust's grep/ignore crates          |
 | Editing         | Browser editor, inline reader editing, preview, atomic writes, and conflict-aware saves                    |
-| Runtime         | MemoryIndex/Tantivy hot projection by default; optional SQLite/Postgres durability and Valkey shared cache |
+| Runtime         | SQLite search and durable metadata by default; MemoryIndex graph; optional Postgres and Valkey profiles    |
 | UX              | Light/dark themes, reading-width modes, lazy editor/highlighter loading, and a focused command palette     |
 
 ## Quick start
 
-The default development path uses SQLite as the durable projection and MemoryIndex/Tantivy as the hot projection. PostgreSQL and Valkey are optional infrastructure layers; Valkey is a shared cache,
-not a replacement for Tantivy.
+The default development path uses SQLite for durable metadata and full-text search, with MemoryIndex as a rebuildable in-process graph projection. PostgreSQL and Valkey are optional infrastructure
+layers. Tantivy is no longer part of the runtime.
 
 ```bash
 git clone https://github.com/azusachino/miku.git
@@ -117,7 +117,7 @@ Before opening a pull request, run `make check`. Keep user content, local indexe
 
 ## Project status
 
-Miku Note is an early, actively evolving project. The current milestone is `v0.0.3`; the user-facing changelog is [`miku_docs/Changelog.md`](miku_docs/Changelog.md). APIs, templates, and configuration
+Miku Note is an early, actively evolving project. The current milestone is `v0.0.5`; the user-facing changelog is [`miku_docs/changelog.md`](miku_docs/changelog.md). APIs, templates, and configuration
 may change while the core filesystem-first invariant remains stable.
 
 ## Contributing

@@ -13,7 +13,7 @@ use miku_domain::{workspace::NoteId, Backlink, SearchRequest, SearchScope};
 
 use miku_vault::VaultDocument;
 use serde::{Deserialize, Serialize};
-use utoipa::ToSchema;
+use utoipa::{IntoParams, ToSchema};
 
 use crate::{AppError, AppState};
 
@@ -179,6 +179,21 @@ pub struct TagResponse {
     pub count: i64,
 }
 
+#[derive(Debug, Deserialize, IntoParams)]
+pub struct TagQuery {
+    /// Maximum tags returned per page (default 50, maximum 200).
+    limit: Option<usize>,
+    /// Number of sorted tags to skip.
+    offset: Option<usize>,
+}
+
+fn tag_page(query: &TagQuery) -> (usize, usize) {
+    (
+        query.offset.unwrap_or(0),
+        query.limit.unwrap_or(50).clamp(1, 200),
+    )
+}
+
 #[derive(Debug, Serialize, ToSchema)]
 pub struct TagNoteResponse {
     pub path: String,
@@ -229,9 +244,14 @@ pub async fn tree(
         .file_tree(FileTreeRequest { folder })
         .await
         .map_err(application_error)?;
+    let parent_id = tree_parent_id(&tree.folder, query.parent_id.clone());
     Ok(Json(TreeResponse {
-        parent_id: query.parent_id.clone(),
-        nodes: tree.nodes.into_iter().map(tree_node).collect(),
+        parent_id: parent_id.clone(),
+        nodes: tree
+            .nodes
+            .into_iter()
+            .map(|node| tree_node_with_parent(node, parent_id.clone()))
+            .collect(),
     }))
 }
 
@@ -373,11 +393,17 @@ pub async fn search(
     }))
 }
 
-#[utoipa::path(get, path = "/api/v1/tags", responses((status = 200, body = [TagResponse])))]
-pub async fn tags(State(state): State<AppState>) -> Result<Json<Vec<TagResponse>>, AppError> {
+#[utoipa::path(get, path = "/api/v1/tags", params(TagQuery), responses((status = 200, body = [TagResponse])))]
+pub async fn tags(
+    Query(query): Query<TagQuery>,
+    State(state): State<AppState>,
+) -> Result<Json<Vec<TagResponse>>, AppError> {
     let tags = state.application.tags().await.map_err(application_error)?;
+    let (offset, limit) = tag_page(&query);
     Ok(Json(
         tags.into_iter()
+            .skip(offset)
+            .take(limit)
             .map(|tag| TagResponse {
                 tag: tag.tag,
                 count: tag.count,
@@ -434,15 +460,18 @@ fn application_error(error: ApplicationError) -> AppError {
     }
 }
 
-fn tree_node(node: FileNode) -> TreeNode {
-    tree_node_with_parent(node, None)
+fn tree_parent_id(folder: &RelativePath, compatibility_parent: Option<String>) -> Option<String> {
+    if folder.as_str().is_empty() {
+        compatibility_parent
+    } else {
+        Some(folder.as_str().to_string())
+    }
 }
 
 /// Builds a `TreeNode`, tagging it with `parent_id` when the caller knows
 /// it (e.g. mapping a note's `children` to entries parented by that note --
 /// `FileNode` itself carries no parent reference, so this can't be derived
-/// from `node` alone). `/api/v1/tree`'s root/folder-scoped nodes have no
-/// such relationship yet and keep using `tree_node` (`parent_id`: None).
+/// from `node` alone).
 fn tree_node_with_parent(node: FileNode, parent_id: Option<String>) -> TreeNode {
     let note_id = node
         .note_id
@@ -634,10 +663,11 @@ mod tests {
     }
 
     #[test]
-    fn tree_node_has_no_parent_by_default() {
-        // /api/v1/tree's root/folder-scoped nodes have no known parent
-        // note relationship yet.
-        assert_eq!(tree_node(file_node("Notes/N1.md")).parent_id, None);
+    fn root_tree_node_has_no_parent() {
+        assert_eq!(
+            tree_node_with_parent(file_node("Notes/N1.md"), None).parent_id,
+            None
+        );
     }
 
     #[test]
@@ -647,5 +677,33 @@ mod tests {
         // None in every response regardless of the actual relationship.
         let node = tree_node_with_parent(file_node("Notes/Child.md"), Some("parent-1".to_string()));
         assert_eq!(node.parent_id, Some("parent-1".to_string()));
+    }
+
+    #[test]
+    fn folder_scoped_tree_applies_parent_to_the_response_and_every_child() {
+        let folder = RelativePath::new("geektime-docs/AI-\u{5927}\u{6570}\u{636e}").unwrap();
+        assert_eq!(
+            tree_parent_id(&folder, None),
+            Some("geektime-docs/AI-\u{5927}\u{6570}\u{636e}".to_string())
+        );
+        assert_eq!(tree_parent_id(&RelativePath::root(), None), None);
+    }
+
+    #[test]
+    fn tag_pages_default_and_cap_the_response_window() {
+        assert_eq!(
+            tag_page(&TagQuery {
+                limit: None,
+                offset: None
+            }),
+            (0, 50)
+        );
+        assert_eq!(
+            tag_page(&TagQuery {
+                limit: Some(10_000),
+                offset: Some(75)
+            }),
+            (75, 200)
+        );
     }
 }

@@ -4,19 +4,24 @@ type: adr
 title: ADR-0019 — In-memory document-graph index
 slug: document-graph-index
 status: Accepted
-updated: 2026-07-28
+updated: 2026-07-29
 date-proposed: 2026-07-28
 date-accepted: 2026-07-28
 deciders: [haru]
 mirror: asobi:miku:decision:document-graph-index
 supersedes: []
 superseded-by:
-relates-to: [ADR-0009, ADR-0015, ADR-0016, ADR-0018]
+relates-to: [ADR-0009, ADR-0015, ADR-0016, ADR-0018, ADR-0020]
 impacts: [crates/miku-domain, crates/miku-index-memory, crates/miku-index-sqlite]
 tags: [index, links, performance, architecture]
 ---
 
 # ADR-0019 — In-memory document-graph index
+
+## Current status
+
+The in-memory graph decision remains active. ADR-0020 supersedes this record's historical FTS5/Tantivy search details and completed the memory-cap follow-up by moving body search to SQLite's plain
+`TEXT` column and stripping bodies from MemoryIndex.
 
 ## Decision
 
@@ -51,7 +56,7 @@ That estimate describes the graph structures only. It does **not** cover, and wa
 - Accepted that the page graph becomes fully process-local and rebuilds from scratch on cold start; this is consistent with ADR-0018's existing hot-projection rebuild behavior for Tantivy and does not introduce a new consistency risk.
 - Deferred alias- and tag-index restructuring beyond what is needed for slug/backlink resolution; `tb_tags`/`tb_page_aliases` removal from the relational schema follows once the memory-side structures cover the same queries.
 
-## Implementation status
+## Historical implementation status before ADR-0020
 
 **Partially implemented.** The link-graph resolution work is done: `crates/miku-index-memory` resolves links via `LinkGraph`'s `slug_index`/`path_index` with incremental `upsert_page`/`remove_page` (no full-corpus rebuild on single-page writes), and `crates/miku-index-sqlite` no longer performs relational link/tag/alias resolution; `tb_links`, `tb_tags`, and `tb_page_aliases` are removed from the schema. This part was tracked as `miku:document-graph-index` in asobi (tasks 1-5, all DONE).
 

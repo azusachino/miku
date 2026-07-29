@@ -3,12 +3,12 @@ title: Performance Baseline
 type: reference
 status: active
 tags: [miku, performance, benchmark]
-updated: 2026-07-16
+updated: 2026-07-29
 ---
 
 # Indexing performance baseline
 
-This document records the current 0.0.2 SQLite/SQLx profile. Historical backend measurements remain archival context.
+This document records the current 0.0.5 SQLite/SQLx profile. Historical backend measurements remain archival context.
 
 ## Corpus
 
@@ -20,13 +20,13 @@ This document records the current 0.0.2 SQLite/SQLx profile. Historical backend 
 
 ## Verified current properties
 
-- The local durable index is SQLite via SQLx with WAL mode, foreign keys, a five-second busy timeout, and SQLite FTS5.
+- The local durable index is SQLite via SQLx with WAL mode, foreign keys, a five-second busy timeout, and a plain `TEXT` body column searched in parallel Rust code.
 - The index is disposable and rebuilt from `miku_docs/**/*.md`.
-- Page, link, tag, alias, mention, and FTS writes are transactional at the backend boundary.
+- Page, link, tag, alias, mention, and body writes are transactional at the backend boundary.
 - HTTP reads use the backend-neutral `IndexReader` contract; the filesystem remains the source of truth.
-- The default backend is selected with `MIKU_INDEX_BACKEND=memory` and uses the rebuildable memory/Tantivy projection; SQLite remains available with `MIKU_INDEX_BACKEND=sqlite`.
+- The default backend is `MIKU_INDEX_BACKEND=sqlite`. MemoryIndex supplies the rebuildable graph projection; SQLite serves search regardless of graph readiness.
 
-## Dependency closure
+## Historical dependency closure (0.0.2)
 
 The migration reduced the root package's normal dependency tree from 403 unique packages to 254, a reduction of 149 packages (36.9%). The complete lockfile resolution fell from 482 package records to
 312, a reduction of 170 records (35.3%). Both figures count the complete resolved dependency set, including transitive packages.

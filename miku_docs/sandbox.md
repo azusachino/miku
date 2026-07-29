@@ -1,5 +1,7 @@
 ---
 title: Markdown Sandbox
+aliases:
+  - Sandbox
 type: sandbox
 status: active
 tags: [miku, demo, markdown]
@@ -63,19 +65,19 @@ $$
 
 Miku Note uses wikilinks to connect your notes into a network. Try clicking these links:
 
-- [[Index]] — the main landing page and entry point to the wiki.
-- [[Features]] — a detailed walkthrough of each Miku capability.
-- [[Usage]] — how to set up and run Miku Note locally.
-- [[Changelog]] — release notes and version history.
+- [[index|Miku Note]] — the main landing page and entry point to the wiki.
+- [[features|Features]] — a detailed walkthrough of each Miku capability.
+- [[usage|Usage]] — how to set up and run Miku Note locally.
+- [[changelog|Changelog]] — release notes and version history.
 
-You can also use link text overrides: [[Index|Back to Home]] displays as "Back to Home" but links to [[Index]].
+You can also use link text overrides: [[index|Back to Home]] displays as "Back to Home" but links to [[index|Miku Note]].
 
 ## Tags in Context
 
 This page uses the #demo tag to mark it as a playground for new users. Other pages use #feature, #guide, #docs, and #release to organize content by type. Browse the tag index to see how pages cluster.
 #demo
 
-The [[Features]] page discusses tags in detail — how they're extracted, indexed, and used to filter and explore your wiki.
+The [[features|Features]] page discusses tags in detail — how they're extracted, indexed, and used to filter and explore your wiki.
 
 ## What Next?
 
@@ -83,11 +85,13 @@ Explore the wiki:
 
 1. Click through the wikilinks above to see backlinks in action.
 2. Use content search (top of the page) to find phrases like "atomic saves" or "background indexer". The same search is available in the Content tab of `Cmd-K`.
-3. Browse the [[Index]] to see the wiki structure.
-4. Read [[Features]] to understand how wikilinks, tags, and backlinks work behind the scenes.
+3. Browse the [[index|Miku Note]] to see the wiki structure.
+4. Read [[features|Features]] to understand how wikilinks, tags, and backlinks work behind the scenes.
 
-For hands-on setup instructions, see [[Usage]]. For historical context and version information, see [[Changelog]].
+For hands-on setup instructions, see [[usage|Usage]]. For historical context and version information, see [[changelog|Changelog]].
 
 ---
 
 Happy wiki writing!
+
+it's my not fault to do the thing.

@@ -1,4 +1,4 @@
-.PHONY: dev fmt fmt-check css lint test check check-all-features check-integration experiments compose-experiments \
+.PHONY: dev fmt fmt-check css lint test kb-check check check-all-features check-integration experiments compose-experiments \
   check-blackbox check-ux-smoke check-ux-soak check-ux-browser benchmark \
   benchmark-real-vault release validate
 
@@ -21,7 +21,10 @@ lint:
 test:
 	uv run python scripts/orchestrate.py test
 
-check:
+kb-check:
+	uv run scripts/check_kb_conventions.py
+
+check: kb-check
 	uv run python scripts/orchestrate.py check
 
 check-all-features:

@@ -1,5 +1,7 @@
 ---
 title: Miku Note
+aliases:
+  - Index
 type: index
 status: active
 tags: [miku, guide]
@@ -21,10 +23,10 @@ tags, mentions, and search. #docs #feature
 
 ## Start here
 
-- [[Features]] — the current feature inventory and scope boundary.
-- [[Usage]] — local setup, content paths, and the development commands.
-- [[Sandbox]] — live examples of Markdown, diagrams, code, math, and links.
-- [[Changelog]] — shipped and in-progress product changes. #release
+- [[features|Features]] — the current feature inventory and scope boundary.
+- [[usage|Usage]] — local setup, content paths, and the development commands.
+- [[sandbox|Sandbox]] — live examples of Markdown, diagrams, code, math, and links.
+- [[changelog|Changelog]] — shipped and in-progress product changes. #release
 
 ## Project knowledge
 
@@ -33,7 +35,7 @@ tags, mentions, and search. #docs #feature
 - [[setup]] — local development, backends, and verification commands.
 - [[runtime-workflow]] — how filesystem changes become reader state.
 - [[product]] — product direction and UX constraints.
-- [[adr/README]] — verified ADR index; individual records live below `adr/`.
+- [[adr/readme|Architecture Decision Records]] — verified ADR index; individual records live below `adr/`.
 - [[api]] — current JSON and browser route contract.
 
 ## Core invariant
@@ -42,4 +44,4 @@ tags, mentions, and search. #docs #feature
 
 ## Release history
 
-The original MVP shipped as v0.0.1. The current working line is the Miku Note frontend and reader refresh; see [[Changelog]] for the details and status.
+The original MVP shipped as v0.0.1. The current working line is the Miku Note frontend and reader refresh; see [[changelog|Changelog]] for the details and status.

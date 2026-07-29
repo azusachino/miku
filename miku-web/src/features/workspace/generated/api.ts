@@ -458,7 +458,12 @@ export interface operations {
   };
   tags: {
     parameters: {
-      query?: never;
+      query?: {
+        /** @description Maximum tags returned per page (default 50, maximum 200). */
+        limit?: number;
+        /** @description Number of sorted tags to skip. */
+        offset?: number;
+      };
       header?: never;
       path?: never;
       cookie?: never;

@@ -708,7 +708,7 @@ mod tests {
 
     /// Coarse process RSS via `ps`, used only to report an order-of-magnitude
     /// memory delta for the opt-in real-vault benchmark. Includes allocator
-    /// and Tokio/Tantivy overhead, not just the page-graph structures.
+    /// and Tokio overhead, not just the page-graph structures.
     fn current_rss_kb() -> u32 {
         let pid = std::process::id().to_string();
         let output = std::process::Command::new("ps")

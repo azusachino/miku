@@ -16,10 +16,10 @@ TIMEOUT = float(os.environ.get("MIKU_UX_SOAK_TIMEOUT_SECONDS", "10"))
 MAX_P95 = float(os.environ.get("MIKU_UX_SOAK_MAX_P95_SECONDS", "5"))
 
 PAGE_PATHS = (
-    "Index.md",
-    "Changelog.md",
-    "Features.md",
-    "Usage.md",
+    "index.md",
+    "changelog.md",
+    "features.md",
+    "usage.md",
 )
 
 

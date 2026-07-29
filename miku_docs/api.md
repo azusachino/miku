@@ -3,7 +3,7 @@ title: Miku HTTP API
 type: reference
 status: active
 tags: [miku, api, rust]
-updated: 2026-07-16
+updated: 2026-07-29
 ---
 
 # Miku HTTP API
@@ -34,10 +34,12 @@ All application JSON routes use the /api/v1 prefix.
 | GET    | /api/v1/note-context/{id}  | Note, metadata, backlinks, and context    |
 | GET    | /api/v1/note-children/{id} | Child placements for a note               |
 | GET    | /api/v1/search             | Title, content, or combined search        |
-| GET    | /api/v1/tags               | Indexed tags and counts                   |
+| GET    | /api/v1/tags               | Indexed tags and counts (`limit`/`offset`) |
 | GET    | /api/v1/tags/{tag}/notes   | Notes carrying one tag                    |
 
 The {id} value is a URL-encoded Markdown-relative path, normally ending in .md. The API never exposes a workspace-root label as a user-facing breadcrumb.
+
+`GET /api/v1/tags` returns 50 tags by default, accepts `offset`, and caps `limit` at 200. The browser requests subsequent pages only as the tag list scrolls.
 
 ## Save contract
 

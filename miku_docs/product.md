@@ -3,7 +3,7 @@ title: Miku Product
 type: product
 status: active
 tags: [miku, product, local-first]
-updated: 2026-07-16
+updated: 2026-07-29
 ---
 
 # Miku — Product & Positioning
@@ -33,7 +33,7 @@ disposable. Audit is `git log` over the notes directory.
 Notes across five courses; the connections exams test get lost. Tags `#thermodynamics`, links `[[entropy]]`. Two weeks before finals she revises by _following the graph_ through backlinks instead of
 re-reading everything.
 
-- **Leans on:** tags, backlinks-as-revision-tool, dead-simple textarea capture.
+- **Leans on:** tags, backlinks-as-revision-tool, and explicit Markdown source editing.
 - **Before:** linear Google Docs; no way to see how concepts connected.
 
 ### 4. Lucas — freelance investigative journalist
@@ -56,7 +56,7 @@ Manuscript and wiki are the same plain files.
 
 | Tension from the stories                                                      | Design response                                                                                               |
 | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| Mei & Lucas need frictionless capture                                         | Keep v0 textarea, but make **quick-create / quick-open (fuzzy by title)** a first-class flow.                 |
+| Mei & Lucas need frictionless capture                                         | Keep source editing explicit and make **quick-open (title/content)** a first-class flow.                      |
 | Aiko & Lucas have large, dense graphs                                         | Non-negotiable: never recompute the graph on a keystroke; paginate/virtualize backlinks.                      |
 | Tanaka-san needs the rebuildable-index promise _provable_                     | "Drop DB → rebuild from files" is a real command someone can run — that demo _is_ the compliance sale.        |
 | Everyone also edits files outside the editor (git pull, sed, another machine) | The `notify` watcher as the sole index trigger makes external edits reindex identically. Single-writer holds. |
@@ -74,10 +74,10 @@ grep, your editor, your backup) can't touch the data.
 
 - **You own the files.** Plain `.md` in one folder. Delete Miku tomorrow; your knowledge is untouched.
 - **Connections, found for you.** `[[links]]` → backlinks, tags, FTS built in the background. The valuable graph, without hand-maintenance.
-- **The projections are disposable, on purpose.** Memory/Tantivy is the local default and SQLite/Postgres are optional; nuke any projection and Miku rebuilds from files. Nothing important lives
-  anywhere but your disk.
+- **The projections are disposable, on purpose.** SQLite search and the MemoryIndex graph are local derived state; Postgres remains optional. Delete a projection and Miku rebuilds it from files.
+  Nothing important lives anywhere but your disk.
 - **Self-host or run local.** No account, no telemetry, no cloud.
-- **It gets out of your way.** Browser editor over a textarea. No bundler, no app to learn, no migration the day you need it most.
+- **It gets out of your way.** The React workspace keeps reading primary and opens CodeMirror source editing only when requested.
 
 **One line:** _Obsidian's linking and a real search engine — but the files are unarguably yours, and the index is something you can throw away._
 

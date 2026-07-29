@@ -4,7 +4,7 @@ type: adr
 title: ADR-0018 — Composed durable and hot projections
 slug: composed-projections
 status: Superseded by ADR-0020
-updated: 2026-07-28
+updated: 2026-07-29
 date-proposed: 2026-07-16
 date-accepted: 2026-07-16
 deciders: [haru]
@@ -19,8 +19,8 @@ tags: [architecture, projections, tantivy, sqlite, valkey, postgres]
 ## Status
 
 Superseded by ADR-0020 for the search/Tantivy framing specifically: this record's "hot projection: MemoryIndex (page graph + Tantivy)" and its measured "hot Tantivy rebuild" restart cost
-(Implementation status below) no longer describe the system — Tantivy is removed, and SQLite FTS5 is the sole search projection regardless of `ready` state. The durable+hot composition boundary and
-`ready`-gated reader switch this record establishes remain in effect for page-graph reads; only the search-engine choice changes.
+(Implementation status below) no longer describe the system—Tantivy and FTS5 are removed. The durable+hot composition boundary and
+`ready`-gated reader switch this record establishes remain in effect for page-graph reads; current search uses SQLite's plain body column regardless of graph readiness.
 
 ## Decision
 
