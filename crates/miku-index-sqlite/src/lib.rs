@@ -184,6 +184,61 @@ impl IndexReader for SqliteIndex {
         Ok(summaries)
     }
 
+    async fn list_tree_pages(&self, prefix: &str) -> StoreResult<Vec<PageSummary>> {
+        let escaped_prefix = prefix
+            .replace('\\', "\\\\")
+            .replace('%', "\\%")
+            .replace('_', "\\_");
+        let rows = sqlx::query_as::<_, (String, String, String, i64)>(
+            "WITH scoped AS (
+                 SELECT path,
+                        CASE
+                            WHEN instr(substr(path, length(?) + 1), '/') = 0
+                                THEN substr(path, length(?) + 1)
+                            ELSE substr(
+                                substr(path, length(?) + 1),
+                                1,
+                                instr(substr(path, length(?) + 1), '/') - 1
+                            )
+                        END AS child
+                 FROM tb_pages
+                 WHERE path LIKE ? ESCAPE '\\'
+             ),
+             selected AS (
+                 SELECT min(path) AS path
+                 FROM scoped
+                 GROUP BY child
+             )
+             SELECT page.path, page.title, page.frontmatter, page.mtime
+             FROM tb_pages AS page
+             JOIN selected ON selected.path = page.path
+             ORDER BY page.title, page.path",
+        )
+        .bind(prefix)
+        .bind(prefix)
+        .bind(prefix)
+        .bind(prefix)
+        .bind(format!("{escaped_prefix}%"))
+        .fetch_all(self.pool())
+        .await
+        .map_err(database_error)?;
+
+        let mut summaries = Vec::with_capacity(rows.len());
+        for (path, title, frontmatter_str, mtime) in rows {
+            let frontmatter: serde_json::Value = serde_json::from_str(&frontmatter_str)
+                .map_err(|e| StoreError::Operation(format!("invalid frontmatter JSON: {e}")))?;
+            let aliases = frontmatter_aliases(&frontmatter);
+            summaries.push(PageSummary {
+                path,
+                title,
+                frontmatter,
+                mtime,
+                aliases,
+            });
+        }
+        Ok(summaries)
+    }
+
     async fn page(&self, path: &str) -> StoreResult<Option<PageSummary>> {
         let row = sqlx::query_as::<_, (String, String, String, i64)>(
             "SELECT path, title, frontmatter, mtime FROM tb_pages WHERE path = ?",
@@ -836,6 +891,7 @@ mod tests {
             .replace_pages(vec![
                 test_page("folder/One.md", "one", vec![], vec![]),
                 test_page("folder/nested/Two.md", "two", vec![], vec![]),
+                test_page("folder/nested/Three.md", "three nested", vec![], vec![]),
                 test_page("other/Three.md", "three", vec![], vec![]),
                 test_page("folder-sibling/Four.md", "four", vec![], vec![]),
             ])
@@ -848,13 +904,42 @@ mod tests {
             .expect("list pages under folder/");
         let mut scoped_paths: Vec<_> = scoped.iter().map(|page| page.path.clone()).collect();
         scoped_paths.sort();
-        assert_eq!(scoped_paths, vec!["folder/One.md", "folder/nested/Two.md"]);
+        assert_eq!(
+            scoped_paths,
+            vec![
+                "folder/One.md",
+                "folder/nested/Three.md",
+                "folder/nested/Two.md"
+            ]
+        );
+
+        let tree_pages = store
+            .list_tree_pages("folder/")
+            .await
+            .expect("list one folder tree level");
+        assert_eq!(tree_pages.len(), 2);
+        assert!(tree_pages.iter().any(|page| page.path == "folder/One.md"));
+        assert_eq!(
+            tree_pages
+                .iter()
+                .filter(|page| page.path.starts_with("folder/nested/"))
+                .count(),
+            1
+        );
 
         let all = store
             .list_pages_under("")
             .await
             .expect("empty prefix lists everything");
-        assert_eq!(all.len(), 4);
+        assert_eq!(all.len(), 5);
+        assert_eq!(
+            store
+                .list_tree_pages("")
+                .await
+                .expect("list root tree level")
+                .len(),
+            3
+        );
 
         let none = store
             .list_pages_under("nonexistent/")

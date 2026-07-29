@@ -268,6 +268,13 @@ pub trait IndexReader: Send + Sync {
         })
     }
 
+    /// Return only the indexed rows needed to build one lazy tree level:
+    /// direct Markdown files plus one representative descendant per child
+    /// folder. Backends may override this to avoid loading every descendant.
+    async fn list_tree_pages(&self, prefix: &str) -> StoreResult<Vec<PageSummary>> {
+        self.list_pages_under(prefix).await
+    }
+
     /// Load one indexed page summary, if it exists.
     async fn page(&self, path: &str) -> StoreResult<Option<PageSummary>>;
 

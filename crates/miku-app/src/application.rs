@@ -340,7 +340,7 @@ impl VaultReader for FileMikuApplication {
         };
         let pages = self
             .index
-            .list_pages_under(&prefix)
+            .list_tree_pages(&prefix)
             .await
             .map_err(ApplicationError::from)?;
         Ok(FileTree {

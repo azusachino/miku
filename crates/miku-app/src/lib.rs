@@ -179,6 +179,11 @@ impl IndexApi {
         self.reader.list_pages_under(prefix).await
     }
 
+    /// Return the minimal projection required for one lazy tree level.
+    pub async fn list_tree_pages(&self, prefix: &str) -> StoreResult<Vec<PageSummary>> {
+        self.reader.list_tree_pages(prefix).await
+    }
+
     /// Load one page summary.
     pub async fn page(&self, path: &str) -> StoreResult<Option<PageSummary>> {
         self.reader.page(path).await

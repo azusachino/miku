@@ -26,10 +26,34 @@ function noteHeadings(markdown: string): { id: string; text: string; level: numb
   return headings;
 }
 
-export function LaunchBar({ onSearch, theme, onToggleTheme }: { onSearch: () => void; theme: "dark" | "light"; onToggleTheme: () => void }) {
+export function LaunchBar({
+  onSearch,
+  theme,
+  onToggleTheme,
+  mobileNavOpen,
+  onToggleMobileNav,
+  mobileNavButtonRef
+}: {
+  onSearch: () => void;
+  theme: "dark" | "light";
+  onToggleTheme: () => void;
+  mobileNavOpen: boolean;
+  onToggleMobileNav: () => void;
+  mobileNavButtonRef: React.RefObject<HTMLButtonElement | null>;
+}) {
   const navigate = useNavigate();
   return (
     <header className="launch-bar" data-region={shellRegions[0]}>
+      <button
+        ref={mobileNavButtonRef}
+        className="quiet-button mobile-nav-toggle"
+        aria-label={mobileNavOpen ? "Close workspace navigation" : "Open workspace navigation"}
+        aria-controls="workspace-navigation"
+        aria-expanded={mobileNavOpen}
+        onClick={onToggleMobileNav}
+      >
+        <ActionIcon name={mobileNavOpen ? "close" : "menu"} />
+      </button>
       <button className="brand-mark" onClick={() => navigate("/")} aria-label="Go to workspace home">
         <img className="brand-icon" src={`/miku-icon-${theme}.svg`} alt="" />
         <span>miku note</span>
@@ -60,7 +84,9 @@ export function Sidebar({
   onRecent,
   onSettings,
   noteCount,
-  onResizeStart
+  onResizeStart,
+  mobileOpen,
+  onCloseMobile
 }: {
   notes: NoteModel[];
   nodes: TreeNodeModel[];
@@ -74,12 +100,17 @@ export function Sidebar({
   onSettings: () => void;
   noteCount: number;
   onResizeStart: (event: React.PointerEvent<HTMLButtonElement>) => void;
+  mobileOpen: boolean;
+  onCloseMobile: () => void;
 }) {
   return (
-    <aside className="sidebar" data-region={shellRegions[1]}>
+    <aside id="workspace-navigation" className={`sidebar ${mobileOpen ? "is-mobile-open" : ""}`} data-region={shellRegions[1]} aria-label="Workspace navigation">
       <button className="sidebar-resizer" onPointerDown={onResizeStart} aria-label="Resize workspace navigation" />
       <div className="sidebar-toolbar">
         <span className="eyebrow">Workspace</span>
+        <button className="tool-button mobile-nav-close" onClick={onCloseMobile} aria-label="Close workspace navigation">
+          <ActionIcon name="close" />
+        </button>
         <button
           className={`tool-button ${hoisted ? "is-on" : ""}`}
           onClick={onToggleHoist}

@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import os
+import re
 from pathlib import Path
 
 from playwright.sync_api import Page, sync_playwright
@@ -149,16 +150,47 @@ def main() -> int:
         page.wait_for_url("**/p/Features.md")
 
         page.set_viewport_size({"width": 390, "height": 844})
-        for path in ("Index.md", "Usage.md", "Changelog.md", "Sandbox.md"):
-            title = path.removesuffix(".md")
-            page.locator(".tree-row").filter(has_text=title).last.click()
+        page.wait_for_timeout(200)
+        mobile_nav = page.locator(".mobile-nav-toggle")
+        mobile_nav.wait_for()
+        if mobile_nav.get_attribute("aria-label") != "Open workspace navigation":
+            raise AssertionError("mobile workspace navigation trigger is not labelled")
+        if mobile_nav.get_attribute("aria-expanded") != "false":
+            raise AssertionError("mobile workspace navigation is not closed by default")
+        sidebar = page.locator("#workspace-navigation")
+        sidebar_box = sidebar.bounding_box()
+        if sidebar_box and sidebar_box["x"] >= 0:
+            raise AssertionError("closed mobile workspace navigation remains on canvas")
+        for path, title in (
+            ("Index.md", "Miku Note"),
+            ("Usage.md", "Using Miku Note"),
+            ("Changelog.md", "Changelog"),
+            ("Sandbox.md", "Markdown Sandbox"),
+        ):
+            mobile_nav.click()
+            page.get_by_role("button", name="Close workspace navigation").last.wait_for()
+            if mobile_nav.get_attribute("aria-expanded") != "true":
+                raise AssertionError("mobile workspace navigation did not expose expanded state")
+            exact_label = page.locator(".tree-label", has_text=re.compile(f"^{re.escape(title)}$"))
+            page.locator(".tree-row").filter(has=exact_label).last.click()
             page.wait_for_url(f"**/p/{path}")
+            mobile_nav.wait_for()
+            if mobile_nav.get_attribute("aria-expanded") != "false":
+                raise AssertionError("mobile workspace navigation did not close after navigation")
             page.wait_for_timeout(250)
+        mobile_nav.click()
+        page.keyboard.press("Escape")
+        if mobile_nav.get_attribute("aria-expanded") != "false":
+            raise AssertionError("Escape did not close mobile workspace navigation")
+        if not mobile_nav.evaluate("element => element === document.activeElement"):
+            raise AssertionError("closing mobile workspace navigation did not restore focus")
         tabs = page.locator(".tabs")
         if tabs.evaluate("el => getComputedStyle(el).overflowX") not in ("auto", "scroll"):
             raise AssertionError("open tabs are not horizontally scrollable")
         if not tabs.evaluate("el => el.scrollWidth > el.clientWidth"):
             raise AssertionError("multiple open tabs did not overflow horizontally")
+        page.set_viewport_size({"width": 1440, "height": 900})
+        page.wait_for_timeout(200)
 
         page.goto(f"{BASE_URL}/p/does-not-exist.md", wait_until="domcontentloaded")
         page.wait_for_url(f"{BASE_URL}/p/Index.md", timeout=10_000)
@@ -184,7 +216,7 @@ def main() -> int:
         page.screenshot(path=str(ARTIFACT_DIR / "reading.png"), full_page=True)
         page.set_viewport_size({"width": 390, "height": 844})
         page.reload(wait_until="domcontentloaded")
-        page.get_by_text("All notes").wait_for()
+        page.locator(".mobile-nav-toggle").wait_for()
         if page.locator("body").evaluate("el => el.scrollWidth > el.clientWidth"):
             raise AssertionError("narrow viewport has horizontal overflow")
         page.screenshot(path=str(ARTIFACT_DIR / "narrow.png"), full_page=True)

@@ -17,6 +17,7 @@ export function WorkspaceScreen() {
   const [searchScope, setSearchScope] = useState<SearchScope>("all");
   const [searchSelection, setSearchSelection] = useState(-1);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(() => Number(localStorage.getItem("miku-sidebar-width") ?? 244));
   const [contextWidth, setContextWidth] = useState(() => Number(localStorage.getItem("miku-context-width") ?? 235));
   const [notice, setNotice] = useState<string | null>(null);
@@ -24,6 +25,7 @@ export function WorkspaceScreen() {
   const [apiSource, setApiSource] = useState<ApiSource>("connecting");
   const [theme, setTheme] = useState<Theme>(readTheme);
   const searchPanelRef = useRef<HTMLDivElement>(null);
+  const mobileNavButtonRef = useRef<HTMLButtonElement>(null);
   const resizingSidebar = useRef(false);
   const resizingContext = useRef(false);
   const navigate = useNavigate();
@@ -206,6 +208,19 @@ export function WorkspaceScreen() {
   useEffect(() => {
     localStorage.setItem("miku-context-width", String(contextWidth));
   }, [contextWidth]);
+  useEffect(() => {
+    if (!mobileNavOpen) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      setMobileNavOpen(false);
+      mobileNavButtonRef.current?.focus();
+    };
+    document.addEventListener("keydown", closeOnEscape);
+    return () => document.removeEventListener("keydown", closeOnEscape);
+  }, [mobileNavOpen]);
+  useEffect(() => {
+    setMobileNavOpen(false);
+  }, [location.pathname]);
 
   useEffect(() => {
     if (!searchOpen) return;
@@ -286,7 +301,14 @@ export function WorkspaceScreen() {
   const secondaryNote = notes.find((candidate) => candidate.id === (state.tabs.find((tab) => tab !== activeId) ?? "welcome")) ?? activeNote;
   return (
     <div className="app-shell flex h-screen min-h-0 flex-col bg-miku-bg text-miku-text" data-theme={theme} data-ui-state-version={UI_STATE_VERSION}>
-      <LaunchBar onSearch={openSearch} theme={theme} onToggleTheme={toggleTheme} />
+      <LaunchBar
+        onSearch={openSearch}
+        theme={theme}
+        onToggleTheme={toggleTheme}
+        mobileNavOpen={mobileNavOpen}
+        onToggleMobileNav={() => setMobileNavOpen((current) => !current)}
+        mobileNavButtonRef={mobileNavButtonRef}
+      />
       {searchOpen && (
         <div className="search-popover" ref={searchPanelRef} data-region="quick-open">
           <div className="search-popover-head">
@@ -363,6 +385,16 @@ export function WorkspaceScreen() {
         </div>
       )}
       <WorkspaceNotice message={notice} onDismiss={() => setNotice(null)} />
+      {mobileNavOpen && (
+        <button
+          className="mobile-nav-backdrop"
+          aria-label="Close workspace navigation"
+          onClick={() => {
+            setMobileNavOpen(false);
+            mobileNavButtonRef.current?.focus();
+          }}
+        />
+      )}
       <div
         className="workspace-layout flex h-[calc(100vh-var(--shell-topbar-height))] min-h-0 overflow-hidden"
         style={{ "--shell-sidebar-width": `${sidebarWidth}px`, "--shell-context-width": `${contextWidth}px` } as React.CSSProperties}
@@ -379,6 +411,11 @@ export function WorkspaceScreen() {
           onRecent={() => navigate("/recent")}
           onSettings={() => setSettingsOpen(true)}
           noteCount={workspace.data?.noteCount ?? 0}
+          mobileOpen={mobileNavOpen}
+          onCloseMobile={() => {
+            setMobileNavOpen(false);
+            mobileNavButtonRef.current?.focus();
+          }}
           onResizeStart={(event) => {
             event.preventDefault();
             resizingSidebar.current = true;
