@@ -1189,6 +1189,7 @@ name = "miku-index-sqlite"
 version = "0.0.4"
 dependencies = [
  "async-trait",
+ "futures-util",
  "miku-domain",
  "rayon",
  "serde_json",

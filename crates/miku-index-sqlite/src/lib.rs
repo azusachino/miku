@@ -1,11 +1,13 @@
 //! SQLite implementation of Miku's backend-neutral index contract.
 
 use async_trait::async_trait;
-use rayon::prelude::*;
+use futures_util::TryStreamExt;
 use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions};
-use sqlx::SqlitePool;
+use sqlx::{Row, SqlitePool};
 use std::str::FromStr;
 use std::time::Duration;
+
+
 
 use miku_domain::{
     Backlink, DurableProjection, IndexCapabilities, IndexEvent, IndexReader, IndexWriter,
@@ -227,51 +229,50 @@ impl IndexReader for SqliteIndex {
             }
         }
 
-        let rows = builder
-            .build_query_as::<(String, String, String)>()
-            .fetch_all(self.pool())
-            .await
-            .map_err(database_error)?;
+        let mut stream = builder.build().fetch(self.pool());
 
-        let mut hits: Vec<(f64, SearchHit)> = rows
-            .into_par_iter()
-            .filter_map(|(path, title, body)| {
-                let title_match = terms
-                    .iter()
-                    .all(|t| contains_ascii_ci(&title, t) || contains_ascii_ci(&path, t));
-                let body_match = terms.iter().all(|t| contains_ascii_ci(&body, t));
+        let mut hits: Vec<(f64, SearchHit)> = Vec::new();
+        while let Some(row) = stream.try_next().await.map_err(database_error)? {
+            let path: &str = row.try_get(0).map_err(database_error)?;
+            let title: &str = row.try_get(1).map_err(database_error)?;
+            let body: &str = row.try_get(2).map_err(database_error)?;
 
-                let is_match = match request.scope {
-                    SearchScope::Title => title_match,
-                    SearchScope::Body => body_match,
-                    SearchScope::All => title_match || body_match,
-                };
+            let title_match = terms
+                .iter()
+                .all(|t| contains_ascii_ci(title, t) || contains_ascii_ci(path, t));
+            let body_match = terms.iter().all(|t| contains_ascii_ci(body, t));
 
-                if !is_match {
-                    return None;
-                }
+            let is_match = match request.scope {
+                SearchScope::Title => title_match,
+                SearchScope::Body => body_match,
+                SearchScope::All => title_match || body_match,
+            };
 
-                let mut score = 0.0;
-                if title_match {
-                    score += 10.0;
-                }
-                for t in &terms {
-                    let occurrences = count_ascii_ci(&body, t);
-                    score += (occurrences.min(20) as f64) * 0.5;
-                }
+            if !is_match {
+                continue;
+            }
 
-                let snip = snippet(&body, &terms);
+            let mut score = 0.0;
+            if title_match {
+                score += 10.0;
+            }
+            for t in &terms {
+                let occurrences = count_ascii_ci(body, t);
+                score += (occurrences.min(20) as f64) * 0.5;
+            }
 
-                Some((
-                    score,
-                    SearchHit {
-                        path,
-                        title,
-                        snippet: snip,
-                    },
-                ))
-            })
-            .collect();
+            let snip = snippet(body, &terms);
+
+            hits.push((
+                score,
+                SearchHit {
+                    path: path.to_string(),
+                    title: title.to_string(),
+                    snippet: snip,
+                },
+            ));
+        }
+
 
         hits.sort_by(|(score_a, hit_a), (score_b, hit_b)| {
             score_b
@@ -1034,4 +1035,44 @@ mod tests {
             assert_eq!(hits.len(), 1);
         }
     }
+
+    #[tokio::test]
+    async fn test_spike_sqlx_streaming_zero_copy() {
+        use futures_util::TryStreamExt;
+        use sqlx::Row;
+
+
+        let temp_file = NamedTempFile::new().expect("failed to create temp file");
+        let temp_path = temp_file.path().to_str().expect("temp path");
+        let store = SqliteIndex::open(temp_path).await.expect("open store");
+
+        store
+            .replace_page(test_page("Doc1.md", "hello world body content", vec![], vec![]))
+            .await
+            .expect("insert doc1");
+        store
+            .replace_page(test_page("Doc2.md", "something else entirely", vec![], vec![]))
+            .await
+            .expect("insert doc2");
+
+        let mut stream = sqlx::query("SELECT path, title, body FROM tb_pages")
+            .fetch(store.pool());
+
+        let mut matched_paths = Vec::new();
+        while let Some(row) = stream.try_next().await.expect("stream next") {
+            let path: &str = row.try_get(0).expect("path str");
+            let title: &str = row.try_get(1).expect("title str");
+            let body: &str = row.try_get(2).expect("body str");
+
+            if contains_ascii_ci(body, "world") {
+                matched_paths.push((path.to_string(), title.to_string(), body.to_string()));
+            }
+        }
+
+        assert_eq!(matched_paths.len(), 1);
+        assert_eq!(matched_paths[0].0, "Doc1.md");
+    }
 }
+
+
+
