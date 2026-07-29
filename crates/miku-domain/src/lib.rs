@@ -84,6 +84,34 @@ pub struct HeadingSummary {
     pub text: String,
 }
 
+/// Fold whitespace, hyphens, and underscores out of a name so that
+/// "elden ring", "elden-ring", and "Elden_Ring" compare equal.
+pub fn fold_name(value: &str) -> String {
+    value
+        .trim()
+        .to_lowercase()
+        .trim_end_matches(".md")
+        .chars()
+        .filter(|ch| !ch.is_whitespace() && *ch != '-' && *ch != '_')
+        .collect()
+}
+
+/// Every name a wikilink might use to reach a page: its filename stem,
+/// its title, and its frontmatter aliases.
+pub fn page_names(path: &str, title: &str, aliases: &[String]) -> Vec<String> {
+    let stem = path
+        .split('/')
+        .next_back()
+        .unwrap_or(path)
+        .trim_end_matches(".md")
+        .to_string();
+    let mut names = Vec::with_capacity(2 + aliases.len());
+    names.push(stem);
+    names.push(title.to_string());
+    names.extend(aliases.iter().cloned());
+    names
+}
+
 /// An outgoing page or asset link in a page projection.
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct LinkRecord {

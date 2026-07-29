@@ -300,18 +300,23 @@ mod tests {
     use miku_domain::{LinkKind, LinkRecord, PageSummary, SearchScope};
 
     fn page(path: &str, title: &str, body: &str) -> PageIndex {
+        page_with_aliases(path, title, body, Vec::new())
+    }
+
+    fn page_with_aliases(path: &str, title: &str, body: &str, aliases: Vec<&str>) -> PageIndex {
+        let aliases: Vec<String> = aliases.into_iter().map(str::to_string).collect();
         PageIndex {
             summary: PageSummary {
                 path: path.to_string(),
                 title: title.to_string(),
                 frontmatter: serde_json::json!({}),
                 mtime: 1,
-                aliases: Vec::new(),
+                aliases: aliases.clone(),
             },
             body: body.to_string(),
             links: Vec::new(),
             tags: vec!["notes".to_string()],
-            aliases: Vec::new(),
+            aliases,
             has_mermaid: false,
             signals: Default::default(),
         }
@@ -522,6 +527,8 @@ mod tests {
             .push(link("other/Target", "other/target"));
         let mut self_referencing = page("Self.md", "Self", "[[Self]]");
         self_referencing.links.push(link("Self", "self"));
+        let mut alias_source = page("Alias-Source.md", "Alias Source", "[[boss log]]");
+        alias_source.links.push(link("boss log", "bosslog"));
 
         let pages = vec![
             ambiguous_source,
@@ -529,6 +536,8 @@ mod tests {
             page("same/Target.md", "Target", "t"),
             page("other/Target.md", "Target", "t"),
             self_referencing,
+            alias_source,
+            page_with_aliases("aliased/Note.md", "Aliased Note", "n", vec!["Boss-Log"]),
         ];
 
         let incremental = MemoryIndex::new();
@@ -558,6 +567,111 @@ mod tests {
                 "incremental and full-rebuild backlinks diverged for {path}"
             );
         }
+    }
+
+    #[tokio::test]
+    async fn backlinks_resolve_wikilinks_by_title_and_alias() {
+        let index = MemoryIndex::new();
+        index
+            .replace_page(page_with_aliases(
+                "elden-ring.md",
+                "Elden Ring",
+                "notes",
+                vec!["ER Boss Log"],
+            ))
+            .await
+            .expect("target indexed");
+
+        let mut by_title = page("BySlug.md", "By Title", "[[Elden Ring]]");
+        by_title.links.push(link("Elden Ring", "eldenring"));
+        index.replace_page(by_title).await.expect("title source");
+
+        let mut by_alias = page("ByAlias.md", "By Alias", "[[ER Boss Log]]");
+        by_alias.links.push(link("ER Boss Log", "erbosslog"));
+        index.replace_page(by_alias).await.expect("alias source");
+
+        let mut by_folded_slug = page("ByFoldedSlug.md", "By Folded Slug", "[[elden ring]]");
+        by_folded_slug.links.push(link("elden ring", "eldenring"));
+        index
+            .replace_page(by_folded_slug)
+            .await
+            .expect("folded slug source");
+
+        let mut backlinks = index.backlinks("elden-ring.md").await.unwrap();
+        backlinks.sort_by(|left, right| left.path.cmp(&right.path));
+        assert_eq!(
+            backlinks
+                .iter()
+                .map(|b| b.path.as_str())
+                .collect::<Vec<_>>(),
+            vec!["ByAlias.md", "ByFoldedSlug.md", "BySlug.md"]
+        );
+    }
+
+    #[tokio::test]
+    async fn editing_an_alias_incrementally_moves_its_backlink_contribution() {
+        let index = MemoryIndex::new();
+        index
+            .replace_page(page_with_aliases(
+                "target.md",
+                "Target",
+                "notes",
+                vec!["Old Alias"],
+            ))
+            .await
+            .expect("target indexed");
+
+        let mut source = page("Source.md", "Source", "[[Old Alias]]");
+        source.links.push(link("Old Alias", "oldalias"));
+        index.replace_page(source).await.expect("source indexed");
+        assert_eq!(index.backlinks("target.md").await.unwrap().len(), 1);
+
+        // Renaming the alias without touching links must retract the stale
+        // resolution: "Old Alias" no longer belongs to any page.
+        index
+            .replace_page(page_with_aliases(
+                "target.md",
+                "Target",
+                "notes",
+                vec!["New Alias"],
+            ))
+            .await
+            .expect("alias renamed");
+        assert!(
+            index.backlinks("target.md").await.unwrap().is_empty(),
+            "stale alias registration must not keep the backlink alive"
+        );
+
+        let mut retargeted = page("Source.md", "Source", "[[New Alias]]");
+        retargeted.links.push(link("New Alias", "newalias"));
+        index
+            .replace_page(retargeted)
+            .await
+            .expect("source -> new alias");
+        assert_eq!(index.backlinks("target.md").await.unwrap().len(), 1);
+    }
+
+    #[tokio::test]
+    async fn ambiguous_titles_do_not_auto_resolve_backlinks() {
+        let index = MemoryIndex::new();
+        let mut source = page("Source.md", "Source", "[[Shared Title]]");
+        source.links.push(link("Shared Title", "sharedtitle"));
+        index.replace_page(source).await.expect("source indexed");
+        index
+            .replace_page(page("one/Note.md", "Shared Title", "a"))
+            .await
+            .expect("first candidate indexed");
+        assert_eq!(index.backlinks("one/Note.md").await.unwrap().len(), 1);
+
+        index
+            .replace_page(page("two/Note.md", "Shared Title", "b"))
+            .await
+            .expect("second candidate indexed");
+        assert!(
+            index.backlinks("one/Note.md").await.unwrap().is_empty(),
+            "ambiguous title must retract the prior backlink"
+        );
+        assert!(index.backlinks("two/Note.md").await.unwrap().is_empty());
     }
 
     /// Exercises `LinkGraph` directly (not the full `MemoryIndex` API) so the

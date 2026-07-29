@@ -6,7 +6,7 @@ use crate::{
     VaultReader, VaultWriter, WorkspaceService, WorkspaceServiceError,
 };
 use async_trait::async_trait;
-use miku_domain::{workspace::NoteId, PageSummary, SearchHit, SearchRequest};
+use miku_domain::{fold_name, workspace::NoteId, PageSummary, SearchHit, SearchRequest};
 use miku_vault::{Vault, VaultDocument};
 use std::{
     collections::{BTreeMap, HashMap, VecDeque},
@@ -176,7 +176,11 @@ impl FileMikuApplication {
         }
         let matches: Vec<_> = pages
             .iter()
-            .filter(|page| page_names(page).any(|name| fold_name(&name) == target_folded))
+            .filter(|page| {
+                miku_domain::page_names(&page.path, &page.title, &page.aliases)
+                    .into_iter()
+                    .any(|name| fold_name(&name) == target_folded)
+            })
             .collect();
 
         if matches.len() == 1 {
@@ -271,33 +275,6 @@ impl FileMikuApplication {
 
         folders.into_values().chain(files.into_values()).collect()
     }
-}
-
-/// Fold whitespace, hyphens, and underscores out of a name so that
-/// "elden ring", "elden-ring", and "Elden_Ring" compare equal.
-fn fold_name(value: &str) -> String {
-    value
-        .trim()
-        .to_lowercase()
-        .trim_end_matches(".md")
-        .chars()
-        .filter(|ch| !ch.is_whitespace() && *ch != '-' && *ch != '_')
-        .collect()
-}
-
-/// Every name a wikilink might use to reach this page: its filename stem,
-/// its title, and its frontmatter aliases.
-fn page_names(page: &PageSummary) -> impl Iterator<Item = String> + '_ {
-    let stem = page
-        .path
-        .split('/')
-        .next_back()
-        .unwrap_or(&page.path)
-        .trim_end_matches(".md")
-        .to_string();
-    std::iter::once(stem)
-        .chain(std::iter::once(page.title.clone()))
-        .chain(page.aliases.iter().cloned())
 }
 
 #[async_trait]
