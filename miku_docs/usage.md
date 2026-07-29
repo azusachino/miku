@@ -1,5 +1,7 @@
 ---
 title: Using Miku Note
+aliases:
+  - Usage
 type: guide
 status: active
 tags: [miku, guide, setup]
@@ -39,11 +41,11 @@ The compose service uses Postgres and exposes Miku Note on port `3000`.
 Pages live under `miku_docs/` and are plain Markdown files. For example:
 
 ```text
-miku_docs/Features.md
+miku_docs/features.md
 miku_docs/guides/Getting Started.md
 ```
 
-They are available at `/p/Features.md` and `/p/guides/Getting%20Started.md`. Wikilink matching is case-insensitive and supports aliases: `[[Features|What it does]]`.
+They are available at `/p/features.md` and `/p/guides/Getting%20Started.md`. Wikilink matching is case-insensitive and supports aliases: `[[features|What it does]]`.
 
 Miku does not create a Trash directory. Assets belong in `miku_docs/assets/`; path changes and file removal remain ordinary filesystem operations outside the v0.0.2 UI.
 
@@ -55,7 +57,7 @@ Miku Note uses Comrak with GFM-style tables, task lists, strikethrough, autolink
 - fenced code blocks, Mermaid diagrams, and `$...$` / `$$...$$` math;
 - `![[asset.png]]` embeds.
 
-See [[Sandbox]] for examples and [[Features]] for the complete current list.
+See [[sandbox|Sandbox]] for examples and [[features|Features]] for the complete current list.
 
 ## Editing and external changes
 

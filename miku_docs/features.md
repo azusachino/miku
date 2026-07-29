@@ -1,5 +1,7 @@
 ---
 title: Miku Note Features
+aliases:
+  - Features
 type: guide
 status: active
 tags: [miku, features, markdown]
@@ -83,7 +85,7 @@ source.
 
 ## Wikilinks, backlinks, and mentions
 
-Write `[[PageName]]` to connect notes. Matching is case-insensitive, and links can include a display alias such as `[[Index|Home]]`.
+Write `[[PageName]]` to connect notes. Matching is case-insensitive, and links can include a display alias such as `[[index|Home]]`.
 
 When a note links to another note, the target page shows explicit backlinks. Each backlink shows the source note title and path and opens that source note; the indexer also records plain-text mentions
 as a secondary discovery surface.
@@ -147,4 +149,4 @@ The following items remain outside the current feature set:
 - Dataview-style queries and daily-note/calendar workflows;
 - MDX/JSX as a Markdown rendering requirement.
 
-For a hands-on compatibility page, see [[Sandbox]]. For setup instructions, see [[Usage]].
+For a hands-on compatibility page, see [[sandbox|Sandbox]]. For setup instructions, see [[usage|Usage]].

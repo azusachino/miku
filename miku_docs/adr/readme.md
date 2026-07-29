@@ -1,5 +1,7 @@
 ---
 title: Architecture Decision Records
+aliases:
+  - README
 type: index
 status: active
 tags: [miku, architecture, adr]

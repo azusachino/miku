@@ -48,7 +48,7 @@ def main() -> int:
         if page.locator(".tree-row").filter(has_text="architecture").count() != 1:
             raise AssertionError("migrated architecture note is missing from the vault tree")
         page.locator(".tree-row").filter(has_text="Sandbox").click()
-        page.wait_for_url("**/p/Sandbox.md")
+        page.wait_for_url("**/p/sandbox.md")
         page.locator(".note-scroll h1").filter(has_text="Sandbox").first.wait_for()
         if page.locator(".note-scroll h1").first.inner_text() != "Markdown Sandbox":
             raise AssertionError("clicking a note did not update the reader")
@@ -61,7 +61,7 @@ def main() -> int:
         for source in ("Changelog", "Features", "Index", "Usage"):
             if source not in backlink_text:
                 raise AssertionError(f"Sandbox is missing its self-doc backlink from {source}")
-        if "Sandbox.md" in backlink_text:
+        if "sandbox.md" in backlink_text:
             raise AssertionError("a note must not list itself as a backlink")
         if (
             page.locator(".markdown-alert-note").count() != 1
@@ -78,7 +78,7 @@ def main() -> int:
         page.locator(".frontmatter-panel .tag", has_text="#demo").click()
         page.wait_for_url("**/tags/demo")
         page.get_by_role("button", name="Markdown Sandbox", exact=True).first.wait_for()
-        page.goto(f"{BASE_URL}/p/Sandbox.md", wait_until="domcontentloaded")
+        page.goto(f"{BASE_URL}/p/sandbox.md", wait_until="domcontentloaded")
         page.locator(".toc-item").first.click()
         if "#" not in page.url:
             raise AssertionError("TOC click did not update the URL fragment")
@@ -154,7 +154,7 @@ def main() -> int:
         page.locator("#quick-open-results [role='option']").first.wait_for()
         quick_search.press("ArrowDown")
         quick_search.press("Enter")
-        page.wait_for_url("**/p/Features.md")
+        page.wait_for_url("**/p/features.md")
         page.get_by_role("button", name="Open quick search").click()
         if page.get_by_label("Quick search input").input_value() != "":
             raise AssertionError("quick search retained its previous query after navigation")
@@ -173,10 +173,10 @@ def main() -> int:
         if sidebar_box and sidebar_box["x"] >= 0:
             raise AssertionError("closed mobile workspace navigation remains on canvas")
         for path, title in (
-            ("Index.md", "Miku Note"),
-            ("Usage.md", "Using Miku Note"),
-            ("Changelog.md", "Changelog"),
-            ("Sandbox.md", "Markdown Sandbox"),
+            ("index.md", "Miku Note"),
+            ("usage.md", "Using Miku Note"),
+            ("changelog.md", "Changelog"),
+            ("sandbox.md", "Markdown Sandbox"),
         ):
             mobile_nav.click()
             page.get_by_role("button", name="Close workspace navigation").last.wait_for()
@@ -192,7 +192,7 @@ def main() -> int:
         open_tabs = page.locator(".tab")
         tab_count = open_tabs.count()
         page.locator(".tab.is-active .tab-close").click()
-        page.wait_for_url("**/p/Changelog.md")
+        page.wait_for_url("**/p/changelog.md")
         if open_tabs.count() != tab_count - 1:
             raise AssertionError("closing the active navigation tab reopened it")
         if page.get_by_role("tab", name=re.compile("Markdown Sandbox")).count() != 0:
@@ -212,9 +212,9 @@ def main() -> int:
         page.wait_for_timeout(200)
 
         page.goto(f"{BASE_URL}/p/does-not-exist.md", wait_until="domcontentloaded")
-        page.wait_for_url(f"{BASE_URL}/p/Index.md", timeout=10_000)
+        page.wait_for_url(f"{BASE_URL}/p/index.md", timeout=10_000)
         page.get_by_role("alert").filter(has_text="Note not found").wait_for()
-        page.goto(f"{BASE_URL}/p/Sandbox.md", wait_until="domcontentloaded")
+        page.goto(f"{BASE_URL}/p/sandbox.md", wait_until="domcontentloaded")
         page.locator(".note-scroll h1").filter(has_text="Sandbox").first.wait_for()
         page.goto(f"{BASE_URL}/tags/not-a-real-tag", wait_until="domcontentloaded")
         page.get_by_role("heading", name="#not-a-real-tag").wait_for()

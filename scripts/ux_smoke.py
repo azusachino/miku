@@ -54,8 +54,8 @@ def main() -> int:
         raise AssertionError("workspace tree has no root nodes")
     expect(get("/api/v1/tree?folder=dedao-docs")[0], {200}, "/api/v1/tree folder")
 
-    status, content_type, body = get("/api/v1/notes/Index.md")
-    expect(status, {200}, "/api/v1/notes/Index.md")
+    status, content_type, body = get("/api/v1/notes/index.md")
+    expect(status, {200}, "/api/v1/notes/index.md")
     title = json.loads(body)["title"]
     if "application/json" not in content_type or title not in ("Index", "Miku Note"):
         raise AssertionError("note API did not return the Index contract")
@@ -70,7 +70,7 @@ def main() -> int:
     expect(get("/api/v1/tags")[0], {200}, "/api/v1/tags")
     expect(get("/api/openapi.json")[0], {200}, "/api/openapi.json")
 
-    page_paths = ["Index.md", "Changelog.md", "Features.md", "Usage.md"]
+    page_paths = ["index.md", "changelog.md", "features.md", "usage.md"]
 
     started = time.monotonic()
     with ThreadPoolExecutor(max_workers=6) as pool:

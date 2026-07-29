@@ -8,7 +8,7 @@ updated: 2026-07-29
 
 # Changelog
 
-User-facing changes to Miku Note are recorded here. See [[Index]] for the starting point and [[Features]] for the current product boundary. #release
+User-facing changes to Miku Note are recorded here. See [[index|Miku Note]] for the starting point and [[features|Features]] for the current product boundary. #release
 
 ## v0.0.5 — workspace consistency and SQLite-only search (2026-07-29)
 
@@ -66,7 +66,7 @@ User-facing changes to Miku Note are recorded here. See [[Index]] for the starti
 - Added lazy Mermaid rendering with diagram zoom.
 - Added lazy Prism highlighting and code-block copy actions.
 - Added dollar math parsing and lazy KaTeX rendering for inline `$...$` and display `$$...$$` equations.
-- Updated [[Sandbox]] with Mermaid, code, and math fixtures for browser acceptance checks.
+- Updated [[sandbox|Sandbox]] with Mermaid, code, and math fixtures for browser acceptance checks.
 
 ### Scope clarification
 

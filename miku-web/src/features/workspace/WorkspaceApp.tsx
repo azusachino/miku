@@ -9,7 +9,7 @@ import { closeTab, normalizeNotePath, useNoteRouteRecovery } from "./noteRoute";
 import { UI_STATE_VERSION, moveSearchSelection, readTheme, shellRegions, writeTheme, type Theme } from "../../shared/ui";
 import { initialWorkspaceState, workspaceReducer } from "./state";
 
-const INDEX_NOTE_PATH = "Index.md";
+const INDEX_NOTE_PATH = "index.md";
 export function WorkspaceScreen() {
   const [state, dispatch] = useReducer(workspaceReducer, initialWorkspaceState);
   const [query, setQuery] = useState("");
