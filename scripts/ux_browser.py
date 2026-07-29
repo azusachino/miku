@@ -155,6 +155,10 @@ def main() -> int:
         quick_search.press("ArrowDown")
         quick_search.press("Enter")
         page.wait_for_url("**/p/Features.md")
+        page.get_by_role("button", name="Open quick search").click()
+        if page.get_by_label("Quick search input").input_value() != "":
+            raise AssertionError("quick search retained its previous query after navigation")
+        page.keyboard.press("Escape")
 
         page.set_viewport_size({"width": 390, "height": 844})
         page.wait_for_timeout(200)

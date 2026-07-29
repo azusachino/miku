@@ -253,6 +253,8 @@ export function WorkspaceScreen() {
     dispatch({ type: "open", id: targetId });
     navigate(`/p/${targetId.split("/").map(encodeURIComponent).join("/")}`);
     setSearchOpen(false);
+    setQuery("");
+    setSearchSelection(-1);
     const recent = JSON.parse(localStorage.getItem("miku-recent") ?? "[]") as string[];
     localStorage.setItem("miku-recent", JSON.stringify([targetId, ...recent.filter((path) => path !== targetId)].slice(0, 20)));
   };
