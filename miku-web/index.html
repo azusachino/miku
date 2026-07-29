@@ -7,7 +7,7 @@
     <meta name="application-name" content="Miku Note" />
     <link id="miku-favicon" rel="icon" type="image/svg+xml" href="/miku-icon-light.svg" />
     <title>Miku Note</title>
-    <script>document.getElementById('miku-favicon').href = matchMedia('(prefers-color-scheme: dark)').matches ? '/miku-icon-dark.svg' : '/miku-icon-light.svg';</script>
+    <script>document.getElementById('miku-favicon').href = (localStorage.getItem('miku:ui:v2') || localStorage.getItem('miku-theme')) === 'light' ? '/miku-icon-light.svg' : '/miku-icon-dark.svg';</script>
   </head>
   <body>
     <div id="root"></div>

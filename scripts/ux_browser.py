@@ -114,12 +114,18 @@ def main() -> int:
             )
 
         theme = page.locator(".app-shell").get_attribute("data-theme")
+        favicon = page.locator("#miku-favicon")
+        if not favicon.get_attribute("href").endswith(f"/miku-icon-{theme}.svg"):
+            raise AssertionError("favicon does not match the active shell theme")
         dark_background = page.locator(".app-shell").evaluate(
             "el => getComputedStyle(el).backgroundColor"
         )
         page.get_by_role("button", name="Toggle theme").click()
-        if page.locator(".app-shell").get_attribute("data-theme") == theme:
+        toggled_theme = page.locator(".app-shell").get_attribute("data-theme")
+        if toggled_theme == theme:
             raise AssertionError("theme toggle did not change the shell theme")
+        if not favicon.get_attribute("href").endswith(f"/miku-icon-{toggled_theme}.svg"):
+            raise AssertionError("favicon did not follow the shell theme toggle")
         light_background = page.locator(".app-shell").evaluate(
             "el => getComputedStyle(el).backgroundColor"
         )

@@ -47,6 +47,12 @@ export function WorkspaceScreen() {
   const workspace = useQuery({ queryKey: ["workspace"], queryFn: client.workspace });
   const tree = useQuery({ queryKey: ["tree"], queryFn: () => client.tree() });
   const folder = useQuery({ queryKey: ["folder", folderPath], queryFn: () => client.tree(folderPath), enabled: Boolean(folderPath) });
+
+  useEffect(() => {
+    const favicon = document.querySelector<HTMLLinkElement>("#miku-favicon");
+    if (favicon) favicon.href = `/miku-icon-${theme}.svg`;
+  }, [theme]);
+
   const context = useQuery({
     queryKey: ["context", activeId],
     queryFn: () => client.context(activeId),
