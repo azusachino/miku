@@ -105,8 +105,12 @@ def main() -> int:
         page.get_by_role("button", name="Collapse workspace tree").click()
         if page.locator(".tree-row").filter(has_text=NOTE_TITLE).count() != 0:
             raise AssertionError("collapsed workspace tree still shows descendants")
-        page.get_by_role("button", name="Expand workspace tree").click()
+        nested_folder.click()
         page.locator(".tree-row").filter(has_text=NOTE_TITLE).first.wait_for()
+        if page.get_by_role("button", name="Collapse workspace tree").count() != 1:
+            raise AssertionError(
+                "clicking an expanded root did not reopen the globally collapsed tree"
+            )
 
         theme = page.locator(".app-shell").get_attribute("data-theme")
         dark_background = page.locator(".app-shell").evaluate(

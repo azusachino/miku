@@ -28,6 +28,10 @@ static EXTERNAL_LINK_REGEX: std::sync::LazyLock<Regex> = std::sync::LazyLock::ne
     Regex::new(r"^[a-zA-Z][a-zA-Z\d+.-]*:").expect("external link regex")
 });
 
+static CODE_RANGE_REGEX: std::sync::LazyLock<Regex> = std::sync::LazyLock::new(|| {
+    Regex::new(r"(?s)```.*?```|~~~.*?~~~|`[^`\n]*`").expect("code range regex")
+});
+
 /// Mirrors the frontend's `/^[a-z][a-z\d+.-]*:/i` scheme-prefix check
 /// (`noteLinks.ts`) so external URLs (`https:`, `mailto:`, ...) are never
 /// treated as page/asset targets.
@@ -48,9 +52,19 @@ pub fn build_page_index(path: &str, raw: &[u8], mtime: i64) -> PageIndex {
             text: heading.text,
         })
         .collect();
+    let code_ranges = CODE_RANGE_REGEX
+        .find_iter(body)
+        .map(|matched| matched.start()..matched.end())
+        .collect::<Vec<_>>();
 
     let mut links: Vec<LinkRecord> = WIKILINK_REGEX
         .captures_iter(body)
+        .filter(|capture| {
+            let matched = capture.get(0).expect("wikilink capture has a full match");
+            !code_ranges
+                .iter()
+                .any(|range| range.start <= matched.start() && matched.end() <= range.end)
+        })
         .map(|capture| {
             let target = capture[2].trim().to_string();
             let is_embed = !capture[1].is_empty();
@@ -73,6 +87,14 @@ pub fn build_page_index(path: &str, raw: &[u8], mtime: i64) -> PageIndex {
     links.extend(
         MARKDOWN_LINK_REGEX
             .captures_iter(body)
+            .filter(|capture| {
+                let matched = capture
+                    .get(0)
+                    .expect("markdown link capture has a full match");
+                !code_ranges
+                    .iter()
+                    .any(|range| range.start <= matched.start() && matched.end() <= range.end)
+            })
             .filter_map(|capture| {
                 let target = capture[3].trim().to_string();
                 if target.is_empty() || target.starts_with('#') || is_external_link(&target) {
@@ -228,6 +250,19 @@ mod tests {
             .unwrap();
         assert!(embed.is_embed);
         assert_eq!(embed.kind, LinkKind::Asset);
+    }
+
+    #[test]
+    fn skips_links_inside_fenced_and_inline_code() {
+        let page = build_page_index(
+            "Code.md",
+            b"```markdown\n[wikilinks](/p/wikilinks.md)\n[[fenced-wikilink]]\n```\n~~~md\n[tilde](/p/tilde.md)\n~~~\n`[inline](/p/inline.md)`\n[Visible](/p/visible.md)",
+            1,
+        );
+
+        assert_eq!(page.links.len(), 1);
+        assert_eq!(page.links[0].target, "/p/visible.md");
+        assert_eq!(page.links[0].alias.as_deref(), Some("Visible"));
     }
 
     #[test]

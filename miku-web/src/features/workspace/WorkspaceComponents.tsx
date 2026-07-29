@@ -94,7 +94,7 @@ export function Sidebar({
         <span>All notes</span>
         <span className="count-pill">{noteCount}</span>
       </div>
-      <WorkspaceTree notes={notes} nodes={nodes} activeId={activeId} onSelect={onSelect} hoisted={hoisted} client={client} />
+      <WorkspaceTree notes={notes} nodes={nodes} activeId={activeId} onSelect={onSelect} hoisted={hoisted} onExpandTree={onToggleHoist} client={client} />
       <div className="sidebar-bottom">
         <button className="sidebar-link" onClick={onRecent}>
           <ActionIcon name="clock" /> Recent

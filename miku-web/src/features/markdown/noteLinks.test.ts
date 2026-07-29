@@ -81,5 +81,12 @@ describe("extractOutgoingLinks", () => {
       { path: "vault/maps/uncreated-note.md", title: "uncreated-note", isMissing: true }
     ]);
   });
-});
 
+  it("ignores links inside fenced and inline code", () => {
+    const body = ["```markdown", "[wikilinks](/p/wikilinks.md)", "[[fenced-wikilink]]", "```", "~~~md", "[tilde](/p/tilde.md)", "~~~", "`[inline](/p/inline.md)`", "[visible](/p/visible.md)"].join(
+      "\n"
+    );
+
+    expect(extractOutgoingLinks(body)).toEqual([{ path: "visible.md", title: "visible", isMissing: true }]);
+  });
+});

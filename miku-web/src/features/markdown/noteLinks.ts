@@ -1,6 +1,10 @@
 export type NoteCandidate = { id?: string; path: string; title?: string; aliases?: string[] };
 export type TargetResolver = (target: string) => string | null;
 
+function proseSegments(markdown: string): string[] {
+  return markdown.split(/(```[\s\S]*?```|~~~[\s\S]*?~~~|`[^`\n]*`)/g).filter((_, index) => index % 2 === 0);
+}
+
 export function isAssetFile(path: string): boolean {
   const lower = path.trim().toLowerCase();
   return (
@@ -171,17 +175,17 @@ export function extractOutgoingLinks(body: string, notes?: NoteCandidate[], curr
     results.push({ path: finalPath, title, isMissing });
   };
 
+  for (const segment of proseSegments(body)) {
+    // 1. [[wikilink|label]]
+    for (const match of segment.matchAll(/(?<!!)\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g)) {
+      addLink(match[1], match[2]);
+    }
 
-  // 1. [[wikilink|label]]
-  for (const match of body.matchAll(/(?<!!)\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g)) {
-    addLink(match[1], match[2]);
-  }
-
-  // 2. [label](/p/target) or [label](target.md)
-  for (const match of body.matchAll(/(?<!!)\[([^\]]+)\]\(([^)]+)\)/g)) {
-    addLink(match[2], match[1]);
+    // 2. [label](/p/target) or [label](target.md)
+    for (const match of segment.matchAll(/(?<!!)\[([^\]]+)\]\(([^)]+)\)/g)) {
+      addLink(match[2], match[1]);
+    }
   }
 
   return results;
 }
-
