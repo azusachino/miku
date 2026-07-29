@@ -26,6 +26,7 @@ export function WorkspaceScreen() {
   const [theme, setTheme] = useState<Theme>(readTheme);
   const searchPanelRef = useRef<HTMLDivElement>(null);
   const mobileNavButtonRef = useRef<HTMLButtonElement>(null);
+  const closingTabRef = useRef<string | null>(null);
   const resizingSidebar = useRef(false);
   const resizingContext = useRef(false);
   const navigate = useNavigate();
@@ -140,6 +141,7 @@ export function WorkspaceScreen() {
     isError: context.isError,
     hasNote: Boolean(context.data?.note),
     canonicalId: contextualNote && !context.isPlaceholderData ? normalizeNotePath(contextualNote.path) : undefined,
+    closingIdRef: closingTabRef,
     tabs: state.tabs,
     dispatch,
     navigate,
@@ -254,7 +256,12 @@ export function WorkspaceScreen() {
     const recent = JSON.parse(localStorage.getItem("miku-recent") ?? "[]") as string[];
     localStorage.setItem("miku-recent", JSON.stringify([targetId, ...recent.filter((path) => path !== targetId)].slice(0, 20)));
   };
-  const closeTabHandler = (id: string) => closeTab({ id, tabs: state.tabs, activeId, dispatch, navigate });
+  const closeTabHandler = (id: string) => {
+    if (normalizeNotePath(id) === normalizeNotePath(activeId)) {
+      closingTabRef.current = normalizeNotePath(id);
+    }
+    closeTab({ id, tabs: state.tabs, activeId, dispatch, navigate });
+  };
   const openBreadcrumbPath = (path: string) => {
     if (!path) {
       navigate("/");

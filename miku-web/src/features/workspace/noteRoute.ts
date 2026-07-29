@@ -1,4 +1,4 @@
-import { useEffect, useRef, type Dispatch } from "react";
+import { useEffect, useRef, type Dispatch, type MutableRefObject } from "react";
 import type { NavigateFunction } from "react-router-dom";
 import type { WorkspaceAction } from "./state";
 
@@ -50,13 +50,14 @@ type NoteRouteRecoveryOptions = {
    * redirect lands and re-opens under the canonical id instead.
    */
   canonicalId?: string;
+  closingIdRef: MutableRefObject<string | null>;
   tabs: string[];
   dispatch: Dispatch<WorkspaceAction>;
   navigate: NavigateFunction;
   setNotice: (notice: string) => void;
 };
 
-export function useNoteRouteRecovery({ activeId, isNoteRoute, isError, hasNote, canonicalId, tabs, dispatch, navigate, setNotice }: NoteRouteRecoveryOptions): void {
+export function useNoteRouteRecovery({ activeId, isNoteRoute, isError, hasNote, canonicalId, closingIdRef, tabs, dispatch, navigate, setNotice }: NoteRouteRecoveryOptions): void {
   const handledInvalidRoute = useRef<string | null>(null);
 
   useEffect(() => {
@@ -82,9 +83,13 @@ export function useNoteRouteRecovery({ activeId, isNoteRoute, isError, hasNote, 
       return;
     }
     handledInvalidRoute.current = null;
+    if (closingIdRef.current && closingIdRef.current !== normActiveId) {
+      closingIdRef.current = null;
+    }
     const awaitingCanonicalRedirect = canonicalId !== undefined && canonicalId !== normActiveId;
-    if (hasNote && !awaitingCanonicalRedirect && !tabs.map(normalizeNotePath).includes(normActiveId)) {
+    const closingCurrentRoute = closingIdRef.current === normActiveId;
+    if (hasNote && !awaitingCanonicalRedirect && !closingCurrentRoute && !tabs.map(normalizeNotePath).includes(normActiveId)) {
       dispatch({ type: "open", id: normActiveId });
     }
-  }, [activeId, canonicalId, dispatch, hasNote, isError, isNoteRoute, navigate, setNotice, tabs]);
+  }, [activeId, canonicalId, closingIdRef, dispatch, hasNote, isError, isNoteRoute, navigate, setNotice, tabs]);
 }

@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from "vitest";
 import { renderHook } from "@testing-library/react";
+import { createRef } from "react";
 import type { NavigateFunction } from "react-router-dom";
 import { closeTab, normalizeNotePath, useNoteRouteRecovery } from "./noteRoute";
 
@@ -17,6 +18,7 @@ describe("useNoteRouteRecovery", () => {
     isNoteRoute: true,
     isError: false,
     hasNote: true,
+    closingIdRef: createRef<string | null>(),
     tabs: [] as string[],
     dispatch: vi.fn(),
     navigate: vi.fn() as unknown as NavigateFunction,
@@ -44,6 +46,13 @@ describe("useNoteRouteRecovery", () => {
     const options = baseOptions();
     renderHook(() => useNoteRouteRecovery({ ...options, canonicalId: undefined }));
     expect(options.dispatch).toHaveBeenCalledWith({ type: "open", id: "target-title.md" });
+  });
+
+  it("does not reopen the active route while its tab is closing", () => {
+    const options = baseOptions();
+    options.closingIdRef.current = "target-title.md";
+    renderHook(() => useNoteRouteRecovery({ ...options, canonicalId: "target-title.md" }));
+    expect(options.dispatch).not.toHaveBeenCalled();
   });
 });
 

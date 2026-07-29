@@ -52,8 +52,9 @@ def main() -> int:
         page.locator(".note-scroll h1").filter(has_text="Sandbox").first.wait_for()
         if page.locator(".note-scroll h1").first.inner_text() != "Markdown Sandbox":
             raise AssertionError("clicking a note did not update the reader")
-        if page.locator(".note-meta-tags .tag", has_text="#demo").count() != 1:
-            raise AssertionError("sandbox inline tag is missing from note metadata")
+        frontmatter_tags = page.locator(".frontmatter-panel .tag").all_inner_texts()
+        if frontmatter_tags != ["#miku", "#demo", "#markdown"]:
+            raise AssertionError("sandbox frontmatter tags do not match the YAML source")
         if page.locator(".context-title", has_text="Tags").count() != 0:
             raise AssertionError("tags are duplicated in the Context panel")
         backlink_text = "\n".join(page.locator(".backlink-row").all_inner_texts())
@@ -74,7 +75,7 @@ def main() -> int:
             raise AssertionError("sandbox math did not render")
         if page.locator('a[href="/tags/demo"]').count() < 1:
             raise AssertionError("sandbox inline tag link is missing")
-        page.locator(".note-meta-tags .tag", has_text="#demo").click()
+        page.locator(".frontmatter-panel .tag", has_text="#demo").click()
         page.wait_for_url("**/tags/demo")
         page.get_by_role("button", name="Markdown Sandbox", exact=True).first.wait_for()
         page.goto(f"{BASE_URL}/p/Sandbox.md", wait_until="domcontentloaded")
@@ -184,6 +185,14 @@ def main() -> int:
             if mobile_nav.get_attribute("aria-expanded") != "false":
                 raise AssertionError("mobile workspace navigation did not close after navigation")
             page.wait_for_timeout(250)
+        open_tabs = page.locator(".tab")
+        tab_count = open_tabs.count()
+        page.locator(".tab.is-active .tab-close").click()
+        page.wait_for_url("**/p/Changelog.md")
+        if open_tabs.count() != tab_count - 1:
+            raise AssertionError("closing the active navigation tab reopened it")
+        if page.get_by_role("tab", name=re.compile("Markdown Sandbox")).count() != 0:
+            raise AssertionError("closed navigation tab remains visible")
         mobile_nav.click()
         page.keyboard.press("Escape")
         if mobile_nav.get_attribute("aria-expanded") != "false":
