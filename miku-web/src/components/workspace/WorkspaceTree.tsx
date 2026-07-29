@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createWorkspaceClient, sortTreeNodes, type NoteModel, type TreeNodeModel } from "../../features/workspace/api";
 import { readExpandedPaths, writeExpandedPaths } from "../../shared/ui";
 import { ActionIcon, NoteIcon } from "./icons";
@@ -18,7 +18,7 @@ export function WorkspaceTree({
   hoisted: boolean;
   client: ReturnType<typeof createWorkspaceClient>;
 }) {
-  const noteMap = new Map(notes.map((note) => [note.id, note]));
+  const noteMap = useMemo(() => new Map(notes.map((note) => [note.id, note])), [notes]);
   const [expanded, setExpanded] = useState<Set<string>>(() => {
     const persisted = readExpandedPaths();
     return new Set(persisted.filter((path) => !persisted.some((parent) => parent !== path && path.startsWith(`${parent}/`))));

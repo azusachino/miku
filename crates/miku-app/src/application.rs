@@ -166,38 +166,64 @@ impl FileMikuApplication {
         Err(ApplicationError::NotFound(requested_str))
     }
 
-    /// Match a wikilink target against each page's filename, title, and
-    /// frontmatter aliases, folding whitespace/hyphen/underscore so that
-    /// "elden ring" and "elden-ring" resolve to the same page.
-    fn resolve_named_path(target: &str, pages: &[PageSummary]) -> Option<String> {
+    /// Build a folded-name (filename, title, alias) -> page index once, so
+    /// resolving many wikilink targets against the same page list (e.g.
+    /// every outgoing link in one note) doesn't re-scan the whole vault
+    /// per link. A single `resolve_named_path` call still pays the same
+    /// O(pages) cost either way, but the per-note-context loop over every
+    /// outgoing link previously paid O(links * pages) -- 2.5s+ on a real
+    /// vault for a hub note with dozens of links, against every page's
+    /// name set re-derived and re-folded from scratch on every link.
+    fn build_name_index(pages: &[PageSummary]) -> HashMap<String, Vec<usize>> {
+        let mut index: HashMap<String, Vec<usize>> = HashMap::new();
+        for (i, page) in pages.iter().enumerate() {
+            for name in miku_domain::page_names(&page.path, &page.title, &page.aliases) {
+                let folded = fold_name(&name);
+                if folded.is_empty() {
+                    continue;
+                }
+                let entries = index.entry(folded).or_default();
+                if !entries.contains(&i) {
+                    entries.push(i);
+                }
+            }
+        }
+        index
+    }
+
+    /// Match a wikilink target against a prebuilt name index, folding
+    /// whitespace/hyphen/underscore so that "elden ring" and "elden-ring"
+    /// resolve to the same page. Ambiguous matches fall back to the
+    /// shortest, then lexicographically first, path.
+    fn resolve_from_index<'a>(
+        target: &str,
+        pages: &'a [PageSummary],
+        index: &HashMap<String, Vec<usize>>,
+    ) -> Option<&'a PageSummary> {
         let target_folded = fold_name(target);
         if target_folded.is_empty() {
             return None;
         }
-        let matches: Vec<_> = pages
-            .iter()
-            .filter(|page| {
-                miku_domain::page_names(&page.path, &page.title, &page.aliases)
-                    .into_iter()
-                    .any(|name| fold_name(&name) == target_folded)
-            })
-            .collect();
-
-        if matches.len() == 1 {
-            Some(matches[0].path.clone())
-        } else if !matches.is_empty() {
-            // Sort by path depth/length as fallback
-            let mut sorted = matches;
-            sorted.sort_by(|a, b| {
+        let matches = index.get(&target_folded)?;
+        match matches.as_slice() {
+            [] => None,
+            [only] => Some(&pages[*only]),
+            many => many.iter().map(|&i| &pages[i]).min_by(|a, b| {
                 a.path
                     .len()
                     .cmp(&b.path.len())
                     .then_with(|| a.path.cmp(&b.path))
-            });
-            Some(sorted[0].path.clone())
-        } else {
-            None
+            }),
         }
+    }
+
+    /// Match a wikilink target against each page's filename, title, and
+    /// frontmatter aliases. See `resolve_from_index` for matching
+    /// semantics; prefer that directly (with a shared `build_name_index`)
+    /// when resolving more than one target against the same page list.
+    fn resolve_named_path(target: &str, pages: &[PageSummary]) -> Option<String> {
+        let index = Self::build_name_index(pages);
+        Self::resolve_from_index(target, pages, &index).map(|page| page.path.clone())
     }
 
     fn folder_node(path: RelativePath, name: String, has_children: bool) -> FileNode {
@@ -384,21 +410,15 @@ impl VaultReader for FileMikuApplication {
 
         let mut outgoing = Vec::new();
         let mut seen = std::collections::HashSet::new();
+        let name_index = Self::build_name_index(&pages);
 
         for link in page_projection.links {
             if link.kind != miku_domain::LinkKind::Page {
                 continue;
             }
-            let resolved = Self::resolve_named_path(&link.target, &pages);
+            let resolved = Self::resolve_from_index(&link.target, &pages, &name_index);
             let (target_path, title, is_missing) = match resolved {
-                Some(path) => {
-                    let title = pages
-                        .iter()
-                        .find(|page| page.path == path)
-                        .map(|page| page.title.clone())
-                        .unwrap_or_else(|| path.clone());
-                    (path, title, false)
-                }
+                Some(page) => (page.path.clone(), page.title.clone(), false),
                 None => {
                     let raw_target = link.target.trim();
                     let path = if !folder_prefix.is_empty() && !raw_target.contains('/') {
@@ -878,5 +898,99 @@ mod tests {
         assert_eq!(context.outgoing[0].path, "target-note.md");
         assert_eq!(context.outgoing[1].target, "Target");
         assert_eq!(context.outgoing[1].path, "target-note.md");
+    }
+
+    #[tokio::test]
+    async fn test_note_context_resolves_many_links_without_rescanning_the_vault_per_link() {
+        // Regression guard: note_context used to call resolve_named_path
+        // (an O(pages) linear scan) once per outgoing link, so a hub note
+        // with many links paid O(links * pages) -- 2.5s+ on the real
+        // ~15,900-file vault for a note with just 47 links. Reproduces
+        // the same shape (many links, many unrelated pages) at a size
+        // that would make the old behavior obviously slow in CI (the old
+        // code took ~150ms+ here; the fix takes low single-digit ms) while
+        // staying fast enough to run on every `cargo test`.
+        let root = tempdir().expect("temporary vault");
+        let vault = Arc::new(Vault::new(root.path()));
+        const LINK_COUNT: usize = 60;
+        const UNRELATED_PAGE_COUNT: usize = 3_000;
+
+        let body: String = (0..LINK_COUNT)
+            .map(|i| format!("- [[target-{i}]]\n"))
+            .collect();
+        vault
+            .create("hub.md", "Hub", &body, Default::default())
+            .expect("create hub");
+
+        let workspace: Arc<dyn WorkspaceService> =
+            Arc::new(FileWorkspaceService::new(Arc::clone(&vault), false));
+        let memory = Arc::new(MemoryIndex::new());
+        let mut pages = vec![PageIndex {
+            summary: PageSummary {
+                path: "hub.md".to_string(),
+                title: "Hub".to_string(),
+                frontmatter: serde_json::json!({}),
+                mtime: 1,
+                aliases: Vec::new(),
+            },
+            body,
+            links: Vec::new(),
+            tags: Vec::new(),
+            aliases: Vec::new(),
+            has_mermaid: false,
+            signals: DocumentSignals::default(),
+        }];
+        for i in 0..LINK_COUNT {
+            pages.push(PageIndex {
+                summary: PageSummary {
+                    path: format!("target-{i}.md"),
+                    title: format!("Target {i}"),
+                    frontmatter: serde_json::json!({}),
+                    mtime: 1,
+                    aliases: Vec::new(),
+                },
+                body: String::new(),
+                links: Vec::new(),
+                tags: Vec::new(),
+                aliases: Vec::new(),
+                has_mermaid: false,
+                signals: DocumentSignals::default(),
+            });
+        }
+        for i in 0..UNRELATED_PAGE_COUNT {
+            pages.push(PageIndex {
+                summary: PageSummary {
+                    path: format!("unrelated-{i}.md"),
+                    title: format!("Unrelated Page {i} With A Longer Title"),
+                    frontmatter: serde_json::json!({}),
+                    mtime: 1,
+                    aliases: vec![format!("alias-{i}")],
+                },
+                body: String::new(),
+                links: Vec::new(),
+                tags: Vec::new(),
+                aliases: vec![format!("alias-{i}")],
+                has_mermaid: false,
+                signals: DocumentSignals::default(),
+            });
+        }
+        memory.replace_pages(pages).await.expect("seed snapshot");
+
+        let index = IndexApi::from_store(memory);
+        let application = FileMikuApplication::new(vault, workspace, index);
+        let started = std::time::Instant::now();
+        let context = application
+            .note_context(NoteRef::Path(crate::NotePath::new("hub.md").unwrap()))
+            .await
+            .expect("fetch note context");
+        let elapsed = started.elapsed();
+
+        assert_eq!(context.outgoing.len(), LINK_COUNT);
+        assert!(
+            elapsed < std::time::Duration::from_millis(150),
+            "note_context took {elapsed:?} for {LINK_COUNT} links against {} pages -- \
+             expected O(links + pages), not O(links * pages)",
+            UNRELATED_PAGE_COUNT + LINK_COUNT + 1
+        );
     }
 }

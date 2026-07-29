@@ -70,7 +70,21 @@ export function WorkspaceScreen() {
   const treeNotes = useMemo(() => visibleTree.map((node) => ({ ...node.note, icon: "file-text", updated: "indexed", body: "", backlinks: [], tags: [] })), [visibleTree]);
   const contextualNote = useMemo(() => context.data?.note, [context.data]);
   useEffect(() => {
-    if (contextualNote) setNoteCache((current) => ({ ...current, [contextualNote.id]: contextualNote }));
+    if (!contextualNote) return;
+    setNoteCache((current) => {
+      const existing = current[contextualNote.id];
+      // React Query hands back a freshly deserialized object on every
+      // fetch even when the underlying note hasn't changed (revisiting an
+      // already-cached note, a background refetch, etc.), so a reference
+      // check alone would always say "different" here. Comparing content
+      // identity instead lets a revisit bail out of the state update
+      // entirely (returning `current` unchanged), avoiding a cascade
+      // through the notes memo and every consumer's resolver rebuild.
+      if (existing && existing.path === contextualNote.path && existing.revision?.content_hash === contextualNote.revision?.content_hash) {
+        return current;
+      }
+      return { ...current, [contextualNote.id]: contextualNote };
+    });
   }, [contextualNote]);
   useEffect(() => {
     if (!contextualNote || !activeId || !isNoteRoute || context.isPlaceholderData) return;

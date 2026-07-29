@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate, useParams } from "react-router-dom";
 import { createWorkspaceClient, sortTreeNodes, type BacklinkModel, type NoteModel, type OutgoingLinkModel, type TreeNodeModel } from "./api";
@@ -126,13 +126,25 @@ export function Tabs({
   onClose: (id: string) => void;
 }) {
   const normActive = normalizeNotePath(activeId);
+  // Indexed once per notes change instead of a linear notes.find() inside
+  // the tabs.map() below -- O(tabs + notes) instead of O(tabs * notes) on
+  // every render.
+  const notesByKey = useMemo(() => {
+    const map = new Map<string, NoteModel>();
+    for (const item of notes) {
+      if (item.path) map.set(item.path, item);
+      if (item.id) map.set(item.id, item);
+      if (item.path) map.set(normalizeNotePath(item.path), item);
+    }
+    return map;
+  }, [notes]);
 
   return (
     <div className="tabs" role="tablist">
       {tabs.map((tabPath) => {
         const normTab = normalizeNotePath(tabPath);
         const isActive = normActive === normTab;
-        const matched = notes.find((item) => item.path === tabPath || item.id === tabPath || normalizeNotePath(item.path) === normTab);
+        const matched = notesByKey.get(tabPath) ?? notesByKey.get(normTab);
         const fallbackTitle = tabPath.split("/").pop()?.replace(/\.md$/, "") || tabPath;
         const note = isActive ? activeNote : (matched ?? { id: tabPath, title: fallbackTitle, path: tabPath, icon: "file-text" });
 
@@ -331,13 +343,21 @@ export function ContextPanel({
   onResizeStart: (event: React.PointerEvent<HTMLButtonElement>) => void;
   notes?: NoteModel[];
 }) {
+  // Hooks must run unconditionally before the collapsed-panel early
+  // return below (Rules of Hooks); memoizing here also means a plain
+  // re-render (sidebar resize, theme toggle, etc.) doesn't re-run the
+  // regex-based client-side extractOutgoingLinks fallback every time.
+  const outgoingLinks = useMemo(
+    () => (outgoing && outgoing.length > 0 ? outgoing : extractOutgoingLinks(note.body, notes, note.path)),
+    [outgoing, note.body, notes, note.path]
+  );
+
   if (!open)
     return (
       <button className="context-reopen" onClick={onToggle} aria-label="Open context panel" title="Open context panel">
         <ActionIcon name="chevron-left" />
       </button>
     );
-  const outgoingLinks = outgoing && outgoing.length > 0 ? outgoing : extractOutgoingLinks(note.body, notes, note.path);
 
 
 
