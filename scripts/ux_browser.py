@@ -49,7 +49,7 @@ def main() -> int:
         page.locator(".tree-row").filter(has_text="Sandbox").click()
         page.wait_for_url("**/p/Sandbox.md")
         page.locator(".note-scroll h1").filter(has_text="Sandbox").first.wait_for()
-        if page.locator(".note-scroll h1").first.inner_text() != "Sandbox":
+        if page.locator(".note-scroll h1").first.inner_text() != "Markdown Sandbox":
             raise AssertionError("clicking a note did not update the reader")
         if page.locator(".note-meta-tags .tag", has_text="#demo").count() != 1:
             raise AssertionError("sandbox inline tag is missing from note metadata")
@@ -75,7 +75,7 @@ def main() -> int:
             raise AssertionError("sandbox inline tag link is missing")
         page.locator(".note-meta-tags .tag", has_text="#demo").click()
         page.wait_for_url("**/tags/demo")
-        page.get_by_role("button", name="Sandbox", exact=True).first.wait_for()
+        page.get_by_role("button", name="Markdown Sandbox", exact=True).first.wait_for()
         page.goto(f"{BASE_URL}/p/Sandbox.md", wait_until="domcontentloaded")
         page.locator(".toc-item").first.click()
         if "#" not in page.url:
@@ -135,6 +135,11 @@ def main() -> int:
         page.get_by_role("button", name="Title").click()
         if page.get_by_role("button", name="Title").get_attribute("aria-pressed") != "true":
             raise AssertionError("title search scope was not selectable")
+        # Switching scope clears in-flight results (no placeholderData carry-over,
+        # unlike the note-context query), so the results list is briefly empty
+        # after the click; wait for a fresh result before driving the keyboard,
+        # same as a real user would.
+        page.locator("#quick-open-results [role='option']").first.wait_for()
         quick_search.press("ArrowDown")
         quick_search.press("Enter")
         page.wait_for_url("**/p/Features.md")

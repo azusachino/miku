@@ -168,6 +168,8 @@ export interface components {
       is_missing: boolean;
       /** @description Resolved target path. */
       path: string;
+      /** @description The wikilink target exactly as written in the source, e.g. `[[target]]`. */
+      target: string;
       /** @description Display title. */
       title: string;
     };

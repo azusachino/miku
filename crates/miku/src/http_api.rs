@@ -123,6 +123,8 @@ pub struct ContextResponse {
 /// An outgoing link resolved for the selected note.
 #[derive(Debug, Serialize, ToSchema)]
 pub struct OutgoingLinkResponse {
+    /// The wikilink target exactly as written in the source, e.g. `[[target]]`.
+    pub target: String,
     /// Display title.
     pub title: String,
     /// Resolved target path.
@@ -480,6 +482,7 @@ fn note_ref(id: &str) -> Result<NoteRef, ApplicationError> {
 
 fn outgoing_link_response(item: OutgoingLinkRecord) -> OutgoingLinkResponse {
     OutgoingLinkResponse {
+        target: item.target,
         title: item.title,
         path: item.path,
         is_missing: item.is_missing,

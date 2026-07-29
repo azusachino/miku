@@ -148,6 +148,8 @@ pub struct SaveNoteCommand {
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct OutgoingLinkRecord {
+    /// The wikilink target exactly as written in the source, e.g. `[[target]]`.
+    pub target: String,
     pub title: String,
     pub path: String,
     pub is_missing: bool,

@@ -10,7 +10,7 @@ import remarkMath from "remark-math";
 import mermaid from "mermaid";
 import { headingSlug, type Theme } from "../../shared/ui";
 import { rehypePrism } from "./prism";
-import { isAssetFile, createTargetResolver, type NoteCandidate, type TargetResolver } from "./noteLinks";
+import { isAssetFile, createTargetResolver, createResolverFromOutgoingLinks, combineResolvers, type NoteCandidate, type TargetResolver } from "./noteLinks";
 import "katex/dist/katex.min.css";
 import lightSyntaxTheme from "prismjs/themes/prism.css?url";
 import darkSyntaxTheme from "prismjs/themes/prism-tomorrow.css?url";
@@ -196,16 +196,29 @@ export function MarkdownReader({
   path = "",
   theme = "dark",
   notes,
+  outgoingLinks,
   resolveLink
 }: {
   value: string;
   path?: string;
   theme?: Theme;
   notes?: NoteCandidate[];
+  outgoingLinks?: { target: string; path: string }[];
   resolveLink?: TargetResolver;
 }) {
   const navigate = useNavigate();
-  const resolver = useMemo(() => resolveLink ?? (notes ? createTargetResolver(notes, path) : undefined), [resolveLink, notes, path]);
+  const resolver = useMemo(() => {
+    if (resolveLink) return resolveLink;
+    // Prefer the backend's already-resolved links (ADR-0022: resolved
+    // server-side against the full page index) over the client-side
+    // heuristic, which only sees whatever notes have been lazily loaded
+    // into the tree/cache so far and can guess wrong for title/alias
+    // wikilinks it hasn't seen yet.
+    const fromOutgoing = outgoingLinks?.length ? createResolverFromOutgoingLinks(outgoingLinks) : undefined;
+    const fromNotes = notes ? createTargetResolver(notes, path) : undefined;
+    if (!fromOutgoing) return fromNotes;
+    return combineResolvers(fromOutgoing, fromNotes);
+  }, [resolveLink, outgoingLinks, notes, path]);
 
   return (
     <article className={`markdown-reader prose prose-stone max-w-none ${theme === "dark" ? "prose-invert" : ""}`}>

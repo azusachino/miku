@@ -62,7 +62,7 @@ export type SearchItem = { id: string; path: string; title: string; icon: string
 export type SearchScope = "all" | "title" | "content";
 export type TagModel = { tag: string; count: number };
 export type BacklinkModel = { path: string; title: string };
-export type OutgoingLinkModel = { title: string; path: string; isMissing: boolean };
+export type OutgoingLinkModel = { target: string; title: string; path: string; isMissing: boolean };
 
 export type TagNoteModel = { path: string; title: string; mtime: number };
 export type SaveNoteInput = { body: string; title: string; expectedRevision: NonNullable<NoteModel["revision"]> };
@@ -226,7 +226,7 @@ export function createWorkspaceClient(onSource: (source: ApiSource) => void) {
           parents: response.parents.map((parent) => ({ id: parent.path, path: parent.path, title: parent.title, identityGenerated: parent.identity_generated, parents: [], aliases: parent.aliases, order: parent.order })),
           children: sortTreeNodes(response.children.map((node) => normalizeTreeNode(node as ApiTreeNode))),
           backlinks: response.backlinks.map((backlink) => ({ path: backlink.path, title: backlink.title })),
-          outgoing: (response.outgoing ?? []).map((link) => ({ title: link.title, path: link.path, isMissing: link.is_missing }))
+          outgoing: (response.outgoing ?? []).map((link) => ({ target: link.target, title: link.title, path: link.path, isMissing: link.is_missing }))
         } satisfies ContextModel;
 
       }),

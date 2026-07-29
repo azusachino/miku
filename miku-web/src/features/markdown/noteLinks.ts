@@ -16,7 +16,7 @@ export function isAssetFile(path: string): boolean {
 
 // Folds whitespace, hyphens, and underscores out of a name so that
 // "elden ring", "elden-ring", and "Elden_Ring" compare equal.
-function foldName(value: string): string {
+export function foldName(value: string): string {
   return value
     .trim()
     .toLowerCase()
@@ -103,6 +103,28 @@ export function createTargetResolver(notes: NoteCandidate[], currentPath?: strin
 
     return null;
   };
+}
+
+/**
+ * Builds a resolver from the backend's already-resolved outgoing links
+ * (ADR-0022: `resolve_named_path` run server-side against the full page
+ * index, not the frontend's lazily-loaded, possibly-incomplete notes
+ * list). Keyed by folded target text so it matches exactly what the
+ * backend used to resolve the same link in the first place.
+ */
+export function createResolverFromOutgoingLinks(links: { target: string; path: string }[]): TargetResolver {
+  const map = new Map<string, string>();
+  for (const link of links) {
+    const folded = foldName(link.target);
+    if (folded && !map.has(folded)) map.set(folded, link.path);
+  }
+  return (target: string) => map.get(foldName(target)) ?? null;
+}
+
+/** Tries `primary` first, falling back to `secondary` when it finds nothing. */
+export function combineResolvers(primary: TargetResolver, secondary?: TargetResolver): TargetResolver {
+  if (!secondary) return primary;
+  return (target: string) => primary(target) ?? secondary(target);
 }
 
 export type OutgoingLinkItem = { path: string; title: string; isMissing: boolean };

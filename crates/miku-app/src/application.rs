@@ -424,8 +424,14 @@ impl VaultReader for FileMikuApplication {
                     (path, title, true)
                 }
             };
-            if seen.insert(target_path.clone()) {
+            // Dedupe by folded target text, not resolved path: two
+            // differently-written links (e.g. a title and an alias) that
+            // resolve to the same file must each keep their own entry so
+            // the frontend can look up either raw form and render a
+            // correct href for it.
+            if seen.insert(fold_name(&link.target)) {
                 outgoing.push(OutgoingLinkRecord {
+                    target: link.target.clone(),
                     title,
                     path: target_path,
                     is_missing,
@@ -789,12 +795,88 @@ mod tests {
             .expect("fetch note context");
 
         assert_eq!(context.outgoing.len(), 2);
+        assert_eq!(context.outgoing[0].target, "reference-note");
         assert_eq!(context.outgoing[0].title, "Reference");
         assert_eq!(context.outgoing[0].path, "vault/maps/reference-note.md");
         assert!(!context.outgoing[0].is_missing);
 
+        assert_eq!(context.outgoing[1].target, "uncreated-note");
         assert_eq!(context.outgoing[1].title, "uncreated-note");
         assert_eq!(context.outgoing[1].path, "vault/maps/uncreated-note.md");
         assert!(context.outgoing[1].is_missing);
+    }
+
+    #[tokio::test]
+    async fn test_note_context_keeps_separate_outgoing_entries_for_each_distinct_link_spelling() {
+        // Two differently-written links to the same file (its filename and
+        // its title) must each get their own `outgoing` entry: the frontend
+        // looks up a raw wikilink target's resolved href by folded target
+        // text, so deduping by resolved path instead would silently drop
+        // the lookup entry for whichever spelling appeared second.
+        let root = tempdir().expect("temporary vault");
+        let vault = Arc::new(Vault::new(root.path()));
+        vault
+            .create(
+                "source.md",
+                "Source",
+                "- [[target-note]]\n- [[Target]]",
+                Default::default(),
+            )
+            .expect("create source");
+        vault
+            .create("target-note.md", "Target", "# Target", Default::default())
+            .expect("create target");
+
+        let workspace: Arc<dyn WorkspaceService> =
+            Arc::new(FileWorkspaceService::new(Arc::clone(&vault), false));
+        let memory = Arc::new(MemoryIndex::new());
+        memory
+            .replace_pages(vec![
+                PageIndex {
+                    summary: PageSummary {
+                        path: "source.md".to_string(),
+                        title: "Source".to_string(),
+                        frontmatter: serde_json::json!({}),
+                        mtime: 1,
+                        aliases: Vec::new(),
+                    },
+                    body: "- [[target-note]]\n- [[Target]]".to_string(),
+                    links: Vec::new(),
+                    tags: Vec::new(),
+                    aliases: Vec::new(),
+                    has_mermaid: false,
+                    signals: DocumentSignals::default(),
+                },
+                PageIndex {
+                    summary: PageSummary {
+                        path: "target-note.md".to_string(),
+                        title: "Target".to_string(),
+                        frontmatter: serde_json::json!({}),
+                        mtime: 1,
+                        aliases: Vec::new(),
+                    },
+                    body: "# Target".to_string(),
+                    links: Vec::new(),
+                    tags: Vec::new(),
+                    aliases: Vec::new(),
+                    has_mermaid: false,
+                    signals: DocumentSignals::default(),
+                },
+            ])
+            .await
+            .expect("seed snapshot");
+
+        let index = IndexApi::from_store(memory);
+        let application = FileMikuApplication::new(vault, workspace, index);
+        let context = application
+            .note_context(NoteRef::Path(crate::NotePath::new("source.md").unwrap()))
+            .await
+            .expect("fetch note context");
+
+        assert_eq!(context.outgoing.len(), 2);
+        assert_eq!(context.outgoing[0].target, "target-note");
+        assert_eq!(context.outgoing[0].path, "target-note.md");
+        assert_eq!(context.outgoing[1].target, "Target");
+        assert_eq!(context.outgoing[1].path, "target-note.md");
     }
 }

@@ -113,6 +113,7 @@ export function WorkspaceScreen() {
     isNoteRoute,
     isError: context.isError,
     hasNote: Boolean(context.data?.note),
+    canonicalId: contextualNote && !context.isPlaceholderData ? normalizeNotePath(contextualNote.path) : undefined,
     tabs: state.tabs,
     dispatch,
     navigate,
@@ -407,6 +408,7 @@ export function WorkspaceScreen() {
                   onSaveNote={handleSaveNote}
                   theme={theme}
                   notes={notes}
+                  outgoingLinks={context.isPlaceholderData ? undefined : context.data?.outgoing}
                 />
                 {state.split && (
                   <NotePane
