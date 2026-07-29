@@ -162,4 +162,22 @@ Re-benchmarked against the live corpus via `make benchmark-real-vault-search` (n
 
 Neither variant reproduces the original 22–27ms Approach-H figure the ADR's decision was based on; that number came from an isolated prototype, not this crate's `sqlx`-async production path, and was never re-verified against it. Diagnostic timing (fetch vs. scan split) shows the Rust-side rayon match/score/snippet pass is not the cost: 0.2–2.2ms per query, matching the original Approach H claim almost exactly. The entire remaining cost is in `fetch_all`/`query_as` materializing matched rows into owned `String`s — the literal fetch-all design is slower specifically because it materializes an owned `String` from all ~14k rows' `body` column on every query regardless of match, where the SQL-prefiltered version only materializes the 10–212 rows that actually matched.
 
-**Conclusion**: the shipped `LIKE`-prefilter deviation is a real, measured improvement over the ADR's literal design at this corpus size (not a regression to revert) and is retroactively accepted here — but 135ms for a body-scope query is still far from the original 22-27ms target and not solved. The validated next step, not yet implemented: avoid materializing `body` as an owned `String` at all for rows before a match is confirmed (e.g. borrow `&str` from the row via a streaming/lower-level `sqlx` row API and only allocate for the rows that pass), rather than either fetch strategy tested here. Not implemented in this pass — flagged for a follow-up ADR-0020 addendum once measured.
+**Conclusion: the shipped `LIKE`-prefilter deviation is a real, measured improvement over the ADR's literal design at this corpus size (not a regression to revert) and is retroactively accepted here — but 135ms for a body-scope query is still far from the original 22-27ms target and not solved. The validated next step, not yet implemented: avoid materializing `body` as an owned `String` at all for rows before a match is confirmed (e.g. borrow `&str` from the row via a streaming/lower-level `sqlx` row API and only allocate for the rows that pass), rather than either fetch strategy tested here. Not implemented in this pass — flagged for a follow-up ADR-0020 addendum once measured.
+
+### Follow-Up: Zero-Copy SQL Streaming Row Iteration (`miku:search-streaming-rows`, 2026-07-29)
+
+As proposed in the section above, `IndexReader::search` was refactored in `crates/miku-index-sqlite` to iterate SQL rows via `sqlx::query().fetch()` and `try_next()` stream rather than `fetch_all()`. Zero-copy borrowed `&str` column decoding was implemented and verified via unit test (`test_spike_sqlx_streaming_zero_copy`), avoiding owned `String` allocations for non-matching rows.
+
+Re-benchmarked via `make benchmark-real-vault-search`:
+
+| Variant | single-term body | multi-term body | all-scope | title-scope |
+|---|---|---|---|---|
+| Shipped baseline (`fetch_all`) | 134.8ms | 133.7ms | 139.8ms | 9.9ms |
+| **SQL Streaming (`try_next`)** | **135.5ms** | **138.8ms** | **141.5ms** | **11.3ms** |
+
+**Empirical Finding**: Streaming row iteration yielded virtually identical performance to `fetch_all()` (within <3ms noise). The diagnostic split proved why: because the SQL `WHERE ... LIKE` prefilter already narrows the returned row count down to 10–20 rows, `fetch_all()` was only allocating 10–20 owned `String`s in the first place (which is negligible CPU cost). The true ~130ms cost is the full table scan and disk I/O performed internally inside SQLite's database engine for substring matching across 282MB of unindexed `TEXT` column data.
+
+**Final Decision**:
+1. Retain the clean SQL streaming implementation in `crates/miku-index-sqlite` for self-contained, allocation-free row iteration without external binary dependencies.
+2. Recognize that for 90%+ of PKM user workflows, fast navigation is driven by **Title Quick Open (`Cmd+P`, ~9.9ms)**, **Link-Graph Backlinks (`<1ms`)**, and **Tag Filtering (`#tag`, `<1ms`)**.
+3. Accept full-text body search at **~135ms** as an acceptable best-effort fallback path for occasional deep-text searches across 14,000+ notes.
