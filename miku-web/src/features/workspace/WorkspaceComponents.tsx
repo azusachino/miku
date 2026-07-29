@@ -10,6 +10,31 @@ import { extractOutgoingLinks } from "../markdown/noteLinks";
 
 const MarkdownEditor = lazy(() => import("../markdown/MarkdownEditor"));
 const MarkdownReader = lazy(() => import("../markdown/MarkdownReader").then((module) => ({ default: module.MarkdownReader })));
+const FRONTMATTER_ORDER = ["type", "status", "id", "slug", "aliases", "parents", "updated"] as const;
+const FRONTMATTER_HIDDEN = new Set(["title", "tags", "icon"]);
+
+export function curatedFrontmatter(frontmatter: Record<string, unknown>): [string, unknown][] {
+  const rank = new Map<string, number>(FRONTMATTER_ORDER.map((key, index) => [key, index]));
+  return Object.entries(frontmatter)
+    .filter(([key, value]) => !FRONTMATTER_HIDDEN.has(key) && value !== null && value !== "" && !(Array.isArray(value) && value.length === 0))
+    .sort(([left], [right]) => (rank.get(left) ?? FRONTMATTER_ORDER.length) - (rank.get(right) ?? FRONTMATTER_ORDER.length) || left.localeCompare(right));
+}
+
+function FrontmatterValue({ value }: { value: unknown }) {
+  if (Array.isArray(value)) {
+    return (
+      <span className="frontmatter-values">
+        {value.map((item, index) => (
+          <span className="frontmatter-value" key={`${String(item)}-${index}`}>
+            {String(item)}
+          </span>
+        ))}
+      </span>
+    );
+  }
+  if (typeof value === "object" && value !== null) return <code>{JSON.stringify(value)}</code>;
+  return <span className="frontmatter-value">{String(value)}</span>;
+}
 
 function noteHeadings(markdown: string): { id: string; text: string; level: number }[] {
   const headings: { id: string; text: string; level: number }[] = [];
@@ -232,6 +257,10 @@ export function NotePane({
   const [draft, setDraft] = useState(note.body);
   const [saveState, setSaveState] = useState("saved");
   const [sourceMode, setSourceMode] = useState(false);
+  const properties = curatedFrontmatter(note.frontmatter).filter(([key]) => key !== "id" || !note.identityGenerated);
+  const frontmatterTags = Array.isArray(note.frontmatter.tags)
+    ? note.frontmatter.tags.filter((tag): tag is string => typeof tag === "string").map((tag) => tag.replace(/^#/, ""))
+    : [];
   useEffect(() => {
     setDraft(note.body);
     setSaveState("saved");
@@ -302,33 +331,38 @@ export function NotePane({
           </span>
           <div className="note-heading-copy">
             <h1>{note.title}</h1>
-            <ul className="note-meta-list">
-              <li>
-                <span className="meta-label">type</span> Markdown note
-              </li>
-              <li>
-                <span className="meta-label">status</span>{" "}
-                <span className="saved-state">
-                  <span className="saved-dot" /> {sourceMode ? saveState : "reading"}
-                </span>
-              </li>
-              <li>
-                <span className="meta-label">updated</span> {note.updated}
-              </li>
-              {note.tags.length > 0 && (
-                <li className="note-meta-tags">
-                  <span className="tag-row">
-                    {note.tags.map((tag) => (
-                      <button className="tag" key={tag} onClick={() => onTagSearch(tag)}>
-                        #{tag}
-                      </button>
-                    ))}
-                  </span>
-                </li>
-              )}
-            </ul>
+            <div className="note-file-state">
+              <span className="saved-state">
+                <span className="saved-dot" /> {sourceMode ? saveState : "reading"}
+              </span>
+              {!Object.hasOwn(note.frontmatter, "updated") && <span>Modified {note.updated}</span>}
+            </div>
           </div>
         </div>
+        {(properties.length > 0 || frontmatterTags.length > 0) && (
+          <dl className="frontmatter-panel" aria-label="Frontmatter properties">
+            {properties.map(([key, value]) => (
+              <div className="frontmatter-row" key={key}>
+                <dt>{key}</dt>
+                <dd>
+                  <FrontmatterValue value={value} />
+                </dd>
+              </div>
+            ))}
+            {frontmatterTags.length > 0 && (
+              <div className="frontmatter-row">
+                <dt>tags</dt>
+                <dd className="tag-row">
+                  {frontmatterTags.map((tag) => (
+                    <button className="tag" key={tag} onClick={() => onTagSearch(tag)}>
+                      #{tag}
+                    </button>
+                  ))}
+                </dd>
+              </div>
+            )}
+          </dl>
+        )}
         {sourceMode ? (
           <Suspense fallback={<div className="markdown-editor-loading">Loading editor…</div>}>
             <MarkdownEditor

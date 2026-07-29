@@ -75,7 +75,10 @@ export function WorkspaceScreen() {
   });
   const isWorkspaceRoot = location.pathname === "/";
   const visibleTree = useMemo(() => [...(tree.data ?? []), ...(context.data?.children ?? [])], [context.data?.children, tree.data]);
-  const treeNotes = useMemo(() => visibleTree.map((node) => ({ ...node.note, icon: "file-text", updated: "indexed", body: "", backlinks: [], tags: [] })), [visibleTree]);
+  const treeNotes = useMemo(
+    () => visibleTree.map((node) => ({ ...node.note, icon: "file-text", frontmatter: {}, updated: "indexed", body: "", backlinks: [], tags: [] })),
+    [visibleTree]
+  );
   const contextualNote = useMemo(() => context.data?.note, [context.data]);
   useEffect(() => {
     if (!contextualNote) return;
@@ -124,6 +127,7 @@ export function WorkspaceScreen() {
       icon: "file-text",
       parents: [],
       aliases: [],
+      frontmatter: {},
       updated: "",
       body: "",
       backlinks: [],

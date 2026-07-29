@@ -64,7 +64,7 @@ export function WorkspaceTree({
   }, [client, expanded, loaded, roots]);
 
   const branch = (node: TreeNodeModel, depth: number) => {
-    const note = noteMap.get(node.noteId) ?? { ...node.note, icon: "file-text", updated: "unknown", body: "", backlinks: [], tags: [] };
+    const note = noteMap.get(node.noteId) ?? { ...node.note, icon: "file-text", frontmatter: {}, updated: "unknown", body: "", backlinks: [], tags: [] };
     const children = sortTreeNodes(loaded[node.path] ?? []);
     const isFolder = node.kind === "folder";
     const isExpanded = expanded.has(node.path);

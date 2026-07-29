@@ -10,6 +10,7 @@ export type NoteModel = {
   icon: string;
   parents: string[];
   aliases: string[];
+  frontmatter: Record<string, unknown>;
   updated: string;
   body: string;
   backlinks: string[];
@@ -124,6 +125,7 @@ function normalizeNote(note: Schemas["NoteResponse"]): NoteModel {
     icon: typeof frontmatter.icon === "string" ? frontmatter.icon : "file-text",
     parents: Array.isArray(frontmatter.parents) ? frontmatter.parents.filter((parent): parent is string => typeof parent === "string") : [],
     aliases: Array.isArray(frontmatter.aliases) ? frontmatter.aliases.filter((alias): alias is string => typeof alias === "string") : [],
+    frontmatter,
     updated: formatUpdatedAt(note.revision.mtime),
     body: note.body,
     backlinks: [],

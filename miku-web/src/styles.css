@@ -710,36 +710,55 @@ input:focus-visible {
   letter-spacing: -0.04em;
   line-height: 1.1;
 }
-.note-meta-list {
-  margin: 0;
-  padding-left: 18px;
-  list-style: disc;
-  color: var(--muted);
-  font-size: 0.72rem;
-  line-height: 1.8;
-}
-.note-meta-list li::marker {
-  color: var(--accent);
-}
-.note-meta-list .note-meta-tags {
-  margin-left: -18px;
-  list-style: none;
-}
-.note-meta-list code {
+.note-file-state {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  margin-top: 8px;
   color: var(--faint);
-  font: inherit;
-  overflow-wrap: anywhere;
+  font-size: 0.68rem;
 }
-.meta-label {
-  display: inline-block;
-  min-width: 54px;
-  margin-right: 5px;
+.note-file-state .saved-state {
+  display: inline-flex;
+}
+.frontmatter-panel {
+  display: grid;
+  grid-template-columns: minmax(88px, max-content) minmax(0, 1fr);
+  margin: -8px 0 30px 56px;
+  padding: 10px 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  font-size: 0.72rem;
+}
+.frontmatter-row {
+  display: contents;
+}
+.frontmatter-row dt,
+.frontmatter-row dd {
+  min-width: 0;
+  margin: 0;
+  padding: 5px 10px;
+}
+.frontmatter-row dt {
   color: var(--faint);
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 0.66rem;
 }
-.note-meta-list .saved-state {
-  display: inline-flex;
+.frontmatter-row dd {
+  color: var(--reader-muted);
+  overflow-wrap: anywhere;
+}
+.frontmatter-row code {
+  color: inherit;
+  font: inherit;
+}
+.frontmatter-values,
+.frontmatter-row .tag-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.frontmatter-value {
+  color: var(--reader-text);
 }
 .tag-row {
   display: flex;
@@ -1628,6 +1647,9 @@ input:focus-visible {
   }
   .note-scroll {
     padding: 32px 20px 48px;
+  }
+  .frontmatter-panel {
+    margin-left: 0;
   }
   .note-toolbar {
     padding-inline: 16px;
