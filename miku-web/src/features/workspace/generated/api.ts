@@ -157,8 +157,19 @@ export interface components {
       children: components["schemas"]["TreeNode"][];
       /** @description Selected note. */
       note: components["schemas"]["NoteResponse"];
+      /** @description Outgoing links extracted and resolved for the selected note. */
+      outgoing: components["schemas"]["OutgoingLinkResponse"][];
       /** @description Parent notes declared by the selected note. */
       parents: components["schemas"]["NoteSummary"][];
+    };
+    /** @description An outgoing link resolved for the selected note. */
+    OutgoingLinkResponse: {
+      /** @description Whether the target note is uncreated/missing. */
+      is_missing: boolean;
+      /** @description Resolved target path. */
+      path: string;
+      /** @description Display title. */
+      title: string;
     };
     /** @description Full note payload returned to the editor/context panel. */
     NoteResponse: {

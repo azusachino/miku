@@ -9,6 +9,7 @@ description = "Backend-neutral application index API for Miku"
 [dependencies]
 async-trait.workspace = true
 miku-domain = { version = "0.0.4", path = "../miku-domain" }
+miku-indexer = { version = "0.0.4", path = "../miku-indexer" }
 miku-vault = { version = "0.0.4", path = "../miku-vault" }
 miku-index-memory = { version = "0.0.4", path = "../miku-index-memory", optional = true }
 miku-index-postgres = { version = "0.0.4", path = "../miku-index-postgres", optional = true }

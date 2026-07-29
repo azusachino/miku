@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate, useParams } from "react-router-dom";
-import { createWorkspaceClient, sortTreeNodes, type BacklinkModel, type NoteModel, type TreeNodeModel } from "./api";
+import { createWorkspaceClient, sortTreeNodes, type BacklinkModel, type NoteModel, type OutgoingLinkModel, type TreeNodeModel } from "./api";
 import { normalizeNotePath } from "./noteRoute";
 import { ActionIcon, NoteIcon } from "../../components/workspace/icons";
 import { WorkspaceTree } from "../../components/workspace/WorkspaceTree";
@@ -311,6 +311,7 @@ export function NotePane({
 export function ContextPanel({
   note,
   backlinks,
+  outgoing,
   indexPhase,
   open,
   onToggle,
@@ -320,6 +321,7 @@ export function ContextPanel({
 }: {
   note: NoteModel;
   backlinks: BacklinkModel[];
+  outgoing?: OutgoingLinkModel[];
   indexPhase?: string;
   open: boolean;
   onToggle: () => void;
@@ -333,7 +335,8 @@ export function ContextPanel({
         <ActionIcon name="chevron-left" />
       </button>
     );
-  const outgoingLinks = extractOutgoingLinks(note.body, notes, note.path);
+  const outgoingLinks = outgoing && outgoing.length > 0 ? outgoing : extractOutgoingLinks(note.body, notes, note.path);
+
 
 
   return (

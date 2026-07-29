@@ -209,3 +209,17 @@ Obsidian-style wikilinks, Markdown links, aliases, embeds, tags, and unlinked me
 convenient. Backlinks are derived index edges and never require scanning candidate files during a page request.
 
 Every first-party note uses YAML frontmatter for stable metadata. The minimum convention is title, type, status, tags, and updated; ADRs also carry an immutable id.
+
+## Note Context and Outgoing Link Resolution (ADR-0022)
+
+`GET /api/v1/note-context/{id}` assembles a single <15ms response containing `note`, `parents`, `children`, `backlinks`, and `outgoing` link items.
+
+The backend index (`MemoryIndex` / `SqliteIndex`) resolves target paths for every outgoing link:
+- Existing target notes resolve to their exact canonical vault path (`is_missing: false`).
+- Uncreated target notes resolve to their relative folder directory (`is_missing: true`).
+
+The frontend performs zero global page prefetching or client-side link resolution; `MemoryIndex` remains synchronized via:
+1. OS Filesystem Events (`notify` watcher) for local disk file edits.
+2. Synchronous `save_note()` writes (`ComposedIndexWriter`) for Web UI edits.
+3. Startup file mtime reconcile sweeps (`reconcile_store()`) on server restarts.
+

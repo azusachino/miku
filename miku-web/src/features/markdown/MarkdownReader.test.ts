@@ -43,8 +43,8 @@ describe("Markdown reader navigation", () => {
   });
 
   it("prepends current note subfolder path to relative wikilinks", () => {
-    expect(noteHref("klara-and-the-sun", undefined, "apricot/maps/books-map.md")).toBe("/p/apricot/maps/klara-and-the-sun.md");
-    expect(expandWikiLinks("[[klara-and-the-sun]]", undefined, "apricot/maps/books-map.md")).toContain("/p/apricot/maps/klara-and-the-sun.md");
+    expect(noteHref("uncreated-note", undefined, "vault/maps/topic-map.md")).toBe("/p/vault/maps/uncreated-note.md");
+    expect(expandWikiLinks("[[uncreated-note]]", undefined, "vault/maps/topic-map.md")).toContain("/p/vault/maps/uncreated-note.md");
   });
 });
 

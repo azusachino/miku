@@ -1134,6 +1134,7 @@ dependencies = [
  "miku-index-memory",
  "miku-index-postgres",
  "miku-index-sqlite",
+ "miku-indexer",
  "miku-vault",
  "serde",
  "serde_json",

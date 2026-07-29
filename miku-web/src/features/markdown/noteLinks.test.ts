@@ -43,11 +43,11 @@ describe("extractOutgoingLinks", () => {
   });
 
   it("resolves outgoing links in subfolders to their real canonical path", () => {
-    const notes = [{ path: "apricot/maps/philosophy-map.md", title: "Philosophy" }];
-    const links = extractOutgoingLinks("- [[philosophy-map]]\n- [[uncreated-note]]", notes, "apricot/maps/books-map.md");
+    const notes = [{ path: "vault/maps/reference-note.md", title: "Reference" }];
+    const links = extractOutgoingLinks("- [[reference-note]]\n- [[uncreated-note]]", notes, "vault/maps/topic-map.md");
     expect(links).toEqual([
-      { path: "apricot/maps/philosophy-map.md", title: "Philosophy", isMissing: false },
-      { path: "apricot/maps/uncreated-note.md", title: "uncreated-note", isMissing: true }
+      { path: "vault/maps/reference-note.md", title: "Reference", isMissing: false },
+      { path: "vault/maps/uncreated-note.md", title: "uncreated-note", isMissing: true }
     ]);
   });
 });

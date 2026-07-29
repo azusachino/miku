@@ -2,8 +2,8 @@
 
 use crate::{
     ApplicationError, FileNode, FileNodeKind, FileTree, FileTreeRequest, IndexApi, IndexPhase,
-    NoteContext, NoteRef, RelativePath, SaveNoteCommand, SearchReader, TagReader, VaultInfo,
-    VaultReader, VaultWriter, WorkspaceService, WorkspaceServiceError,
+    NoteContext, NoteRef, OutgoingLinkRecord, RelativePath, SaveNoteCommand, SearchReader,
+    TagReader, VaultInfo, VaultReader, VaultWriter, WorkspaceService, WorkspaceServiceError,
 };
 use async_trait::async_trait;
 use miku_domain::{fold_name, workspace::NoteId, PageSummary, SearchHit, SearchRequest};
@@ -370,11 +370,75 @@ impl VaultReader for FileMikuApplication {
             .map(Self::summary_file_node)
             .collect();
         let backlinks = self.index.backlinks(&document.note.source_path).await?;
+        let page_projection = miku_indexer::build_page_index(
+            &document.note.source_path,
+            document.body.as_bytes(),
+            document.revision.mtime,
+        );
+        let current_dir = document.note.source_path.split('/').collect::<Vec<_>>();
+        let folder_prefix = if current_dir.len() > 1 {
+            current_dir[..current_dir.len() - 1].join("/")
+        } else {
+            String::new()
+        };
+
+        let mut outgoing = Vec::new();
+        let mut seen = std::collections::HashSet::new();
+
+        for link in page_projection.links {
+            if link.kind != miku_domain::LinkKind::Page {
+                continue;
+            }
+            let resolved = Self::resolve_named_path(&link.target, &pages);
+            let (target_path, title, is_missing) = match resolved {
+                Some(path) => {
+                    let title = pages
+                        .iter()
+                        .find(|page| page.path == path)
+                        .map(|page| page.title.clone())
+                        .unwrap_or_else(|| path.clone());
+                    (path, title, false)
+                }
+                None => {
+                    let raw_target = link.target.trim();
+                    let path = if !folder_prefix.is_empty() && !raw_target.contains('/') {
+                        let sub = if raw_target.ends_with(".md") {
+                            raw_target.to_string()
+                        } else {
+                            format!("{raw_target}.md")
+                        };
+                        format!("{folder_prefix}/{sub}")
+                    } else if raw_target.ends_with(".md") {
+                        raw_target.to_string()
+                    } else {
+                        format!("{raw_target}.md")
+                    };
+                    let title = link.alias.clone().unwrap_or_else(|| {
+                        raw_target
+                            .split('/')
+                            .next_back()
+                            .unwrap_or(raw_target)
+                            .trim_end_matches(".md")
+                            .to_string()
+                    });
+                    (path, title, true)
+                }
+            };
+            if seen.insert(target_path.clone()) {
+                outgoing.push(OutgoingLinkRecord {
+                    title,
+                    path: target_path,
+                    is_missing,
+                });
+            }
+        }
+
         Ok(NoteContext {
             note: document,
             parents,
             children,
             backlinks,
+            outgoing,
         })
     }
 }
@@ -653,5 +717,84 @@ mod tests {
             .await
             .expect("resolve by folded alias");
         assert_eq!(by_alias.note.source_path, "Games/Boss-Log.md");
+    }
+
+    #[tokio::test]
+    async fn test_note_context_returns_resolved_outgoing_links() {
+        let root = tempdir().expect("temporary vault");
+        let vault = Arc::new(Vault::new(root.path()));
+        vault
+            .create(
+                "vault/maps/topic-map.md",
+                "Topics",
+                "- [[reference-note]]\n- [[uncreated-note]]",
+                Default::default(),
+            )
+            .expect("create topic-map");
+        vault
+            .create(
+                "vault/maps/reference-note.md",
+                "Reference",
+                "# Reference",
+                Default::default(),
+            )
+            .expect("create reference-note");
+
+        let workspace: Arc<dyn WorkspaceService> =
+            Arc::new(FileWorkspaceService::new(Arc::clone(&vault), false));
+        let memory = Arc::new(MemoryIndex::new());
+        memory
+            .replace_pages(vec![
+                PageIndex {
+                    summary: PageSummary {
+                        path: "vault/maps/topic-map.md".to_string(),
+                        title: "Topics".to_string(),
+                        frontmatter: serde_json::json!({}),
+                        mtime: 1,
+                        aliases: Vec::new(),
+                    },
+                    body: "- [[reference-note]]\n- [[uncreated-note]]".to_string(),
+                    links: Vec::new(),
+                    tags: Vec::new(),
+                    aliases: Vec::new(),
+                    has_mermaid: false,
+                    signals: DocumentSignals::default(),
+                },
+                PageIndex {
+                    summary: PageSummary {
+                        path: "vault/maps/reference-note.md".to_string(),
+                        title: "Reference".to_string(),
+                        frontmatter: serde_json::json!({}),
+                        mtime: 1,
+                        aliases: Vec::new(),
+                    },
+                    body: "# Reference".to_string(),
+                    links: Vec::new(),
+                    tags: Vec::new(),
+                    aliases: Vec::new(),
+                    has_mermaid: false,
+                    signals: DocumentSignals::default(),
+                },
+            ])
+            .await
+            .expect("seed snapshot");
+
+        let index = IndexApi::from_store(memory);
+        let application = FileMikuApplication::new(vault, workspace, index);
+        let context = application
+            .note_context(NoteRef::Path(
+                crate::NotePath::new("vault/maps/topic-map.md").unwrap(),
+            ))
+            .await
+            .expect("fetch note context");
+
+        assert_eq!(context.outgoing.len(), 2);
+        assert_eq!(context.outgoing[0].title, "Reference");
+        assert_eq!(context.outgoing[0].path, "vault/maps/reference-note.md");
+        assert!(!context.outgoing[0].is_missing);
+
+        assert_eq!(context.outgoing[1].title, "uncreated-note");
+        assert_eq!(context.outgoing[1].path, "vault/maps/uncreated-note.md");
+        assert!(context.outgoing[1].is_missing);
     }
 }

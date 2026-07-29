@@ -25,8 +25,8 @@ pub use composition::compose_projections;
 pub mod ports;
 pub use ports::{
     ApplicationError, DocumentSource, FileNode, FileNodeKind, FileTree, FileTreeRequest,
-    IndexPhase, MikuApplication, NoteContext, NotePath, NoteRef, RelativePath, SaveNoteCommand,
-    SearchReader, TagReader, VaultInfo, VaultReader, VaultWriter,
+    IndexPhase, MikuApplication, NoteContext, NotePath, NoteRef, OutgoingLinkRecord, RelativePath,
+    SaveNoteCommand, SearchReader, TagReader, VaultInfo, VaultReader, VaultWriter,
 };
 
 /// Explicitly selected deployment tier and primary index.

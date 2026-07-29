@@ -147,11 +147,19 @@ pub struct SaveNoteCommand {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+pub struct OutgoingLinkRecord {
+    pub title: String,
+    pub path: String,
+    pub is_missing: bool,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct NoteContext {
     pub note: VaultDocument,
     pub parents: Vec<FileNode>,
     pub children: Vec<FileNode>,
     pub backlinks: Vec<Backlink>,
+    pub outgoing: Vec<OutgoingLinkRecord>,
 }
 
 #[non_exhaustive]

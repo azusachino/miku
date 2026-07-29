@@ -69,5 +69,7 @@ this folder.
 | [0018](0018-composed-projections.md)           | Composed durable and hot projections             | Superseded | 2026-07-16 |
 | [0019](0019-document-graph-index.md)           | In-memory document-graph index                   | Accepted   | 2026-07-28 |
 | [0020](0020-sqlite-only-search.md)             | SQLite plain-content search, no FTS5, no Tantivy | Accepted   | 2026-07-28 |
+| [0021](0021-canonical-tag-normalization.md)    | Canonical Tag Normalization (#tag)               | Accepted   | 2026-07-29 |
+| [0022](0022-backend-note-context-outgoing-links.md) | Backend-Driven Note Context & Outgoing Links | Accepted   | 2026-07-29 |
 
 There is no separate staging file. New decisions should be added as a numbered ADR once the boundary is clear enough to implement.

@@ -76,7 +76,6 @@ def main() -> int:
         raise AssertionError("workspace contains no Markdown notes")
 
     json_get("/api/v1/tree")
-    json_get("/api/v1/pages")
     json_get("/api/openapi.json")
 
     content_root = Path(os.environ.get("MIKU_CONTENT_ROOT", "miku_docs"))
@@ -95,13 +94,26 @@ def main() -> int:
     start_time = time.monotonic()
     context = json_get(f"/api/v1/note-context/{encoded_id}")
     context_latency_ms = (time.monotonic() - start_time) * 1000
-    if "backlinks" not in context:
+    if "backlinks" not in context or "outgoing" not in context:
         raise AssertionError(f"note context missing graph fields: {context}")
     if context_latency_ms > 200:
         raise AssertionError(f"note-context latency degraded: {context_latency_ms:.2f}ms > 200ms")
     print(f"ok: note-context latency={context_latency_ms:.2f}ms (<200ms)")
 
     json_get(f"/api/v1/note-children/{encoded_id}")
+
+    # Vendored geektime-docs note read and context verification
+    geektime_candidates = [p for p in candidates if "geektime-docs" in p.parts]
+    if geektime_candidates:
+        geektime_note_id = geektime_candidates[0].relative_to(content_root).as_posix()
+        encoded_geektime_id = urllib.parse.quote(geektime_note_id, safe="")
+        geektime_note = json_get(f"/api/v1/notes/{encoded_geektime_id}")
+        if not geektime_note.get("title"):
+            raise AssertionError(f"geektime note missing title: {geektime_note}")
+        geektime_context = json_get(f"/api/v1/note-context/{encoded_geektime_id}")
+        if "backlinks" not in geektime_context:
+            raise AssertionError("geektime note context missing backlinks")
+        print(f"ok: vendored geektime-docs note read and context verified ({geektime_note_id})")
 
     # Evil / Edge cases: 404 for missing note
     missing_status, _, _ = get("/api/v1/notes/non_existent_note_99999.md")

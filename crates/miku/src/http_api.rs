@@ -5,10 +5,11 @@ use axum::{
     Json,
 };
 use miku_app::{
-    ApplicationError, FileNode, FileNodeKind, FileTreeRequest, NotePath, NoteRef, RelativePath,
-    SaveNoteCommand,
+    ApplicationError, FileNode, FileNodeKind, FileTreeRequest, NotePath, NoteRef,
+    OutgoingLinkRecord, RelativePath, SaveNoteCommand,
 };
-use miku_domain::{workspace::NoteId, Backlink, PageSummary, SearchRequest, SearchScope};
+
+use miku_domain::{workspace::NoteId, Backlink, SearchRequest, SearchScope};
 
 use miku_vault::VaultDocument;
 use serde::{Deserialize, Serialize};
@@ -115,6 +116,19 @@ pub struct ContextResponse {
     pub children: Vec<TreeNode>,
     /// Indexed backlinks.
     pub backlinks: Vec<BacklinkResponse>,
+    /// Outgoing links extracted and resolved for the selected note.
+    pub outgoing: Vec<OutgoingLinkResponse>,
+}
+
+/// An outgoing link resolved for the selected note.
+#[derive(Debug, Serialize, ToSchema)]
+pub struct OutgoingLinkResponse {
+    /// Display title.
+    pub title: String,
+    /// Resolved target path.
+    pub path: String,
+    /// Whether the target note is uncreated/missing.
+    pub is_missing: bool,
 }
 
 /// A source note that links to the selected note.
@@ -219,17 +233,6 @@ pub async fn tree(
     }))
 }
 
-/// Returns compact summaries for all indexed notes in the vault.
-#[utoipa::path(get, path = "/api/v1/pages", responses((status = 200, body = [NoteSummary])))]
-pub async fn pages(State(state): State<AppState>) -> Result<Json<Vec<NoteSummary>>, AppError> {
-    let pages = state
-        .application
-        .list_pages()
-        .await
-        .map_err(application_error)?;
-    Ok(Json(pages.into_iter().map(page_summary_node).collect()))
-}
-
 /// Returns one note by stable identity.
 #[utoipa::path(get, path = "/api/v1/notes/{id}", params(("id" = String, Path)), responses((status = 200, body = NoteResponse), (status = 404)))]
 pub async fn note(
@@ -297,6 +300,11 @@ pub async fn note_context(
             .backlinks
             .into_iter()
             .map(backlink_response)
+            .collect(),
+        outgoing: context
+            .outgoing
+            .into_iter()
+            .map(outgoing_link_response)
             .collect(),
     }))
 }
@@ -449,18 +457,6 @@ fn node_id(node: &FileNode) -> String {
         .unwrap_or_else(|| node.path.as_str().to_string())
 }
 
-fn page_summary_node(page: PageSummary) -> NoteSummary {
-    let identity_generated = page.frontmatter.get("id").is_none();
-    NoteSummary {
-        note_id: page.path.clone(),
-        path: page.path,
-        title: page.title,
-        order: None,
-        identity_generated,
-        aliases: page.aliases,
-    }
-}
-
 fn note_summary_node(node: FileNode) -> NoteSummary {
     NoteSummary {
         note_id: node_id(&node),
@@ -479,6 +475,14 @@ fn note_ref(id: &str) -> Result<NoteRef, ApplicationError> {
         Ok(NoteRef::Id(
             NoteId::new(id.to_string()).map_err(ApplicationError::Workspace)?,
         ))
+    }
+}
+
+fn outgoing_link_response(item: OutgoingLinkRecord) -> OutgoingLinkResponse {
+    OutgoingLinkResponse {
+        title: item.title,
+        path: item.path,
+        is_missing: item.is_missing,
     }
 }
 
