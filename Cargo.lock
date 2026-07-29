@@ -1169,6 +1169,7 @@ dependencies = [
  "async-trait",
  "miku-domain",
  "miku-indexer",
+ "miku-markdown",
  "serde_json",
  "tokio",
 ]

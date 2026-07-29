@@ -359,7 +359,8 @@ pub async fn tag_notes(
     Path(tag): Path<String>,
     State(state): State<AppState>,
 ) -> Result<Json<Vec<TagNoteResponse>>, AppError> {
-    let tag = tag.trim_start_matches('#').to_string();
+    let tag = miku_indexer::normalize_tag(&tag);
+
     let notes = state
         .application
         .notes_with_tag(tag)

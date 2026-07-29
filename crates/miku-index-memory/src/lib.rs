@@ -147,10 +147,12 @@ impl IndexReader for MemoryIndex {
     }
 
     async fn pages_with_tag(&self, tag: &str) -> StoreResult<Vec<PageSummary>> {
+        let normalized = miku_markdown::normalize_tag(tag);
+
         Ok(self
             .read_pages()?
             .values()
-            .filter(|page| page.tags.iter().any(|candidate| candidate == tag))
+            .filter(|page| page.tags.iter().any(|candidate| candidate == &normalized))
             .map(|page| page.summary.clone())
             .collect())
     }

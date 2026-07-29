@@ -5,7 +5,9 @@
 //! [`miku_domain::IndexStore`] owns persistence and transaction semantics.
 
 use miku_domain::{DocumentSignals, HeadingSummary, LinkKind, LinkRecord, PageIndex, PageSummary};
+pub use miku_markdown::normalize_tag;
 use miku_markdown::{extract_title, is_asset_path, normalize_target, TAG_REGEX};
+
 use regex::Regex;
 use serde_json::Value;
 use std::path::Path;
@@ -57,8 +59,9 @@ pub fn build_page_index(path: &str, raw: &[u8], mtime: i64) -> PageIndex {
     tags.extend(
         TAG_REGEX
             .captures_iter(body)
-            .filter_map(|capture| capture.get(1).map(|value| value.as_str().to_string())),
+            .filter_map(|capture| capture.get(1).map(|value| normalize_tag(value.as_str()))),
     );
+    tags.retain(|t| !t.is_empty());
     tags.sort();
     tags.dedup();
 
@@ -89,11 +92,12 @@ pub fn build_page_index(path: &str, raw: &[u8], mtime: i64) -> PageIndex {
 
 fn frontmatter_tags(frontmatter: &Value) -> Vec<String> {
     match frontmatter.get("tags") {
-        Some(Value::String(tag)) => vec![tag.trim_start_matches('#').to_string()],
+        Some(Value::String(tag)) => vec![normalize_tag(tag)],
         Some(Value::Array(tags)) => tags
             .iter()
             .filter_map(Value::as_str)
-            .map(|tag| tag.trim_start_matches('#').to_string())
+            .map(normalize_tag)
+            .filter(|t| !t.is_empty())
             .collect(),
         _ => Vec::new(),
     }

@@ -24,6 +24,15 @@ function foldName(value: string): string {
     .replace(/[\s_-]+/g, "");
 }
 
+function cleanPath(p: string): string {
+  try {
+    p = decodeURIComponent(p);
+  } catch {
+    // keep raw if decode fails
+  }
+  return p.trim().replace(/^\/+/, "").toLowerCase().replace(/\.md$/, "");
+}
+
 export function createTargetResolver(notes: NoteCandidate[], currentPath?: string): TargetResolver {
   const pathMap = new Map<string, string>();
   const nameMap = new Map<string, string[]>();
@@ -39,8 +48,11 @@ export function createTargetResolver(notes: NoteCandidate[], currentPath?: strin
 
   for (const note of notes) {
     if (!note.path) continue;
-    const normPath = note.path.toLowerCase().replace(/\.md$/, "");
+    const normPath = cleanPath(note.path);
     pathMap.set(normPath, note.path);
+    if (note.id) {
+      pathMap.set(cleanPath(note.id), note.path);
+    }
 
     // Every name a wikilink might use to reach this note: its filename,
     // its title, and its frontmatter aliases.
@@ -65,7 +77,7 @@ export function createTargetResolver(notes: NoteCandidate[], currentPath?: strin
   return (target: string) => {
     const trimmed = target.trim();
     if (!trimmed) return null;
-    const lower = trimmed.toLowerCase().replace(/\.md$/, "");
+    const lower = cleanPath(trimmed);
 
     // 1. Exact path match
     if (pathMap.has(lower)) {
@@ -97,27 +109,47 @@ export type OutgoingLinkItem = { path: string; title: string; isMissing: boolean
 
 export function extractOutgoingLinks(body: string, notes?: NoteCandidate[]): OutgoingLinkItem[] {
   if (!body) return [];
-  const matches = body.matchAll(/(?<!!)\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g);
   const resolver = notes ? createTargetResolver(notes) : null;
   const seen = new Set<string>();
   const results: OutgoingLinkItem[] = [];
 
-  for (const match of matches) {
-    const target = match[1].trim();
-    if (isAssetFile(target)) continue;
-    const label = match[2]?.trim();
-    const resolvedPath = resolver ? resolver(target) : null;
-    const isMissing = !resolvedPath;
-    const finalPath = resolvedPath || (target.endsWith(".md") ? target : `${target}.md`);
+  const addLink = (target: string, label?: string) => {
+    let cleanTarget = target.trim();
+    if (!cleanTarget || isAssetFile(cleanTarget) || cleanTarget.startsWith("#") || /^[a-z][a-z\d+.-]*:/i.test(cleanTarget)) {
+      return;
+    }
+    if (cleanTarget.startsWith("/p/")) {
+      cleanTarget = cleanTarget.slice(3).split("#")[0];
+    } else {
+      cleanTarget = cleanTarget.split("#")[0];
+    }
+    if (!cleanTarget) return;
 
-    if (seen.has(finalPath)) continue;
+    const resolvedPath = resolver ? resolver(cleanTarget) : null;
+    const isMissing = !resolvedPath;
+    const rawPath = resolvedPath || (cleanTarget.endsWith(".md") ? cleanTarget : `${cleanTarget}.md`);
+    const finalPath = rawPath.replace(/^\/+/, "");
+
+    if (seen.has(finalPath)) return;
     seen.add(finalPath);
 
-    const matchedNote = notes?.find((n) => n.path === finalPath);
-    const title = label || matchedNote?.title || target.split("/").pop()?.replace(/\.md$/, "") || target;
+    const matchedNote = notes?.find((n) => n.path === finalPath || cleanPath(n.path) === cleanPath(finalPath));
+    const displayLabel = label?.trim();
+    const title = displayLabel || matchedNote?.title || finalPath.split("/").pop()?.replace(/\.md$/, "") || finalPath;
 
     results.push({ path: finalPath, title, isMissing });
+  };
+
+  // 1. [[wikilink|label]]
+  for (const match of body.matchAll(/(?<!!)\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g)) {
+    addLink(match[1], match[2]);
+  }
+
+  // 2. [label](/p/target) or [label](target.md)
+  for (const match of body.matchAll(/(?<!!)\[([^\]]+)\]\(([^)]+)\)/g)) {
+    addLink(match[2], match[1]);
   }
 
   return results;
 }
+

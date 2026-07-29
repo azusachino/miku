@@ -27,8 +27,19 @@ export const initialWorkspaceState: WorkspaceState = {
 
 function normalize(id: string): string {
   if (!id) return "";
-  return id.endsWith(".md") ? id : `${id}.md`;
+  let clean = id.trim();
+  try {
+    clean = decodeURIComponent(clean);
+  } catch {
+    // keep raw if decode fails
+  }
+  clean = clean.replace(/^\/+/, "");
+  if (clean.startsWith("p/")) {
+    clean = clean.slice(2);
+  }
+  return clean.endsWith(".md") ? clean : `${clean}.md`;
 }
+
 
 export function workspaceReducer(state: WorkspaceState, action: WorkspaceAction): WorkspaceState {
   switch (action.type) {
