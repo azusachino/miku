@@ -7,8 +7,6 @@ use sqlx::{Row, SqlitePool};
 use std::str::FromStr;
 use std::time::Duration;
 
-
-
 use miku_domain::{
     Backlink, DurableProjection, IndexCapabilities, IndexEvent, IndexReader, IndexWriter,
     MentionRecord, PageIndex, PageSummary, SearchHit, SearchRequest, SearchScope, StoreError,
@@ -272,7 +270,6 @@ impl IndexReader for SqliteIndex {
                 },
             ));
         }
-
 
         hits.sort_by(|(score_a, hit_a), (score_b, hit_b)| {
             score_b
@@ -1041,22 +1038,30 @@ mod tests {
         use futures_util::TryStreamExt;
         use sqlx::Row;
 
-
         let temp_file = NamedTempFile::new().expect("failed to create temp file");
         let temp_path = temp_file.path().to_str().expect("temp path");
         let store = SqliteIndex::open(temp_path).await.expect("open store");
 
         store
-            .replace_page(test_page("Doc1.md", "hello world body content", vec![], vec![]))
+            .replace_page(test_page(
+                "Doc1.md",
+                "hello world body content",
+                vec![],
+                vec![],
+            ))
             .await
             .expect("insert doc1");
         store
-            .replace_page(test_page("Doc2.md", "something else entirely", vec![], vec![]))
+            .replace_page(test_page(
+                "Doc2.md",
+                "something else entirely",
+                vec![],
+                vec![],
+            ))
             .await
             .expect("insert doc2");
 
-        let mut stream = sqlx::query("SELECT path, title, body FROM tb_pages")
-            .fetch(store.pool());
+        let mut stream = sqlx::query("SELECT path, title, body FROM tb_pages").fetch(store.pool());
 
         let mut matched_paths = Vec::new();
         while let Some(row) = stream.try_next().await.expect("stream next") {
@@ -1073,6 +1078,3 @@ mod tests {
         assert_eq!(matched_paths[0].0, "Doc1.md");
     }
 }
-
-
-
