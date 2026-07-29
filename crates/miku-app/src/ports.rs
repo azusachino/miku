@@ -123,6 +123,8 @@ pub struct FileNode {
     pub name: String,
     pub title: Option<String>,
     pub has_children: bool,
+    /// Frontmatter aliases used during wikilink resolution and navigation.
+    pub aliases: Vec<String>,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]

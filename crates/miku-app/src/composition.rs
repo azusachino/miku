@@ -237,6 +237,7 @@ mod tests {
                 title: "Index".to_string(),
                 frontmatter: serde_json::json!({}),
                 mtime: 1,
+                aliases: Vec::new(),
             },
             body: "# Index".to_string(),
             links: Vec::new(),

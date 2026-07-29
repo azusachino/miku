@@ -10,9 +10,13 @@ import remarkMath from "remark-math";
 import mermaid from "mermaid";
 import { headingSlug, type Theme } from "../../shared/ui";
 import { rehypePrism } from "./prism";
+import { isAssetFile, createTargetResolver, type NoteCandidate, type TargetResolver } from "./noteLinks";
 import "katex/dist/katex.min.css";
 import lightSyntaxTheme from "prismjs/themes/prism.css?url";
 import darkSyntaxTheme from "prismjs/themes/prism-tomorrow.css?url";
+
+export { isAssetFile, createTargetResolver, extractOutgoingLinks } from "./noteLinks";
+export type { NoteCandidate, TargetResolver, OutgoingLinkItem } from "./noteLinks";
 
 const markdownSanitizeSchema = {
   ...defaultSchema,
@@ -23,19 +27,6 @@ const markdownSanitizeSchema = {
     img: [...(defaultSchema.attributes?.img ?? []), "className", "src", "alt"]
   }
 };
-
-export function isAssetFile(path: string): boolean {
-  const lower = path.trim().toLowerCase();
-  return (
-    lower.endsWith(".png") ||
-    lower.endsWith(".jpg") ||
-    lower.endsWith(".jpeg") ||
-    lower.endsWith(".gif") ||
-    lower.endsWith(".svg") ||
-    lower.endsWith(".webp") ||
-    lower.endsWith(".pdf")
-  );
-}
 
 export function resolveAssetSrc(src: string, currentPath: string): string {
   const trimmed = src.trim();
@@ -58,104 +49,6 @@ export function resolveAssetSrc(src: string, currentPath: string): string {
     else normalized.push(segment);
   }
   return "/api/v1/assets/" + normalized.map(encodeURIComponent).join("/");
-}
-
-export type NoteCandidate = { id?: string; path: string; title?: string };
-export type TargetResolver = (target: string) => string | null;
-
-export function createTargetResolver(notes: NoteCandidate[], currentPath?: string): TargetResolver {
-  const pathMap = new Map<string, string>();
-  const slugMap = new Map<string, string[]>();
-
-  for (const note of notes) {
-    if (!note.path) continue;
-    const normPath = note.path.toLowerCase().replace(/\.md$/, "");
-    pathMap.set(normPath, note.path);
-
-    const filename = note.path.split("/").pop() ?? note.path;
-    const slug = filename.toLowerCase().replace(/\.md$/, "");
-    const candidates = slugMap.get(slug) ?? [];
-    candidates.push(note.path);
-    slugMap.set(slug, candidates);
-  }
-
-  return (target: string) => {
-    const trimmed = target.trim();
-    if (!trimmed) return null;
-    const lower = trimmed.toLowerCase().replace(/\.md$/, "");
-
-    // 1. Exact path match
-    if (pathMap.has(lower)) {
-      return pathMap.get(lower)!;
-    }
-
-    // 2. Exact slug match
-    const matches = slugMap.get(lower);
-    if (matches && matches.length > 0) {
-      if (matches.length === 1) return matches[0];
-      // Same-directory locality priority if ambiguous
-      if (currentPath) {
-        const folderDir = currentPath.split("/").slice(0, -1).join("/").toLowerCase();
-        const localMatch = matches.find((m) => m.toLowerCase().startsWith(folderDir + "/"));
-        if (localMatch) return localMatch;
-      }
-      // Top-level / Shortest path fallback
-      const sorted = [...matches].sort((a, b) => a.length - b.length || a.localeCompare(b));
-      return sorted[0];
-    }
-
-    // 3. Singular / Plural variation (e.g. kb-convention -> kb-conventions)
-    const altSlug = lower.endsWith("s") ? lower.slice(0, -1) : `${lower}s`;
-    const altMatches = slugMap.get(altSlug);
-    if (altMatches && altMatches.length > 0) {
-      if (altMatches.length === 1) return altMatches[0];
-      if (currentPath) {
-        const folderDir = currentPath.split("/").slice(0, -1).join("/").toLowerCase();
-        const localMatch = altMatches.find((m) => m.toLowerCase().startsWith(folderDir + "/"));
-        if (localMatch) return localMatch;
-      }
-      const sorted = [...altMatches].sort((a, b) => a.length - b.length || a.localeCompare(b));
-      return sorted[0];
-    }
-
-    // 4. Substring end-of-path match
-    for (const [normPath, fullPath] of pathMap.entries()) {
-      if (normPath.endsWith(`/${lower}`) || normPath.endsWith(`/${altSlug}`)) {
-        return fullPath;
-      }
-    }
-
-    return null;
-  };
-}
-
-export type OutgoingLinkItem = { path: string; title: string; isMissing: boolean };
-
-export function extractOutgoingLinks(body: string, notes?: NoteCandidate[]): OutgoingLinkItem[] {
-  if (!body) return [];
-  const matches = body.matchAll(/(?<!!)\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g);
-  const resolver = notes ? createTargetResolver(notes) : null;
-  const seen = new Set<string>();
-  const results: OutgoingLinkItem[] = [];
-
-  for (const match of matches) {
-    const target = match[1].trim();
-    if (isAssetFile(target)) continue;
-    const label = match[2]?.trim();
-    const resolvedPath = resolver ? resolver(target) : null;
-    const isMissing = !resolvedPath;
-    const finalPath = resolvedPath || (target.endsWith(".md") ? target : `${target}.md`);
-
-    if (seen.has(finalPath)) continue;
-    seen.add(finalPath);
-
-    const matchedNote = notes?.find((n) => n.path === finalPath);
-    const title = label || matchedNote?.title || target.split("/").pop()?.replace(/\.md$/, "") || target;
-
-    results.push({ path: finalPath, title, isMissing });
-  }
-
-  return results;
 }
 
 export function noteHref(target: string, resolveLink?: TargetResolver): string {

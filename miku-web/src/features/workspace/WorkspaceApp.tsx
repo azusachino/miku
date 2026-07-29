@@ -73,14 +73,14 @@ export function WorkspaceScreen() {
     if (contextualNote) setNoteCache((current) => ({ ...current, [contextualNote.id]: contextualNote }));
   }, [contextualNote]);
   useEffect(() => {
-    if (!contextualNote || !activeId || !isNoteRoute) return;
+    if (!contextualNote || !activeId || !isNoteRoute || context.isPlaceholderData) return;
     const normActive = normalizeNotePath(activeId);
     const normCanonical = normalizeNotePath(contextualNote.path);
     if (normActive !== normCanonical) {
       dispatch({ type: "replace-tab", oldId: normActive, newId: normCanonical });
       navigate(`/p/${normCanonical.split("/").map(encodeURIComponent).join("/")}`, { replace: true });
     }
-  }, [activeId, contextualNote, isNoteRoute, navigate]);
+  }, [activeId, contextualNote, context.isPlaceholderData, isNoteRoute, navigate]);
   const notes = useMemo(() => {
     const combined = [...treeNotes, ...Object.values(noteCache)];
     const map = new Map<string, NoteModel>();
@@ -99,6 +99,7 @@ export function WorkspaceScreen() {
       title: context.isPending || context.isFetching ? "Loading note…" : activeId.split("/").pop()?.replace(/\.md$/, "") || "Note unavailable",
       icon: "file-text",
       parents: [],
+      aliases: [],
       updated: "",
       body: "",
       backlinks: [],
@@ -206,7 +207,7 @@ export function WorkspaceScreen() {
     const targetId = normalizeNotePath(id);
     void queryClient.prefetchQuery({ queryKey: ["context", targetId], queryFn: () => client.context(targetId) });
     dispatch({ type: "open", id: targetId });
-    navigate(`/p/${targetId}`);
+    navigate(`/p/${targetId.split("/").map(encodeURIComponent).join("/")}`);
     setSearchOpen(false);
     const recent = JSON.parse(localStorage.getItem("miku-recent") ?? "[]") as string[];
     localStorage.setItem("miku-recent", JSON.stringify([targetId, ...recent.filter((path) => path !== targetId)].slice(0, 20)));
@@ -217,7 +218,7 @@ export function WorkspaceScreen() {
     if (!remaining.length) {
       navigate("/");
     } else if (state.activeId === id) {
-      navigate(`/p/${remaining.at(-1)}`);
+      navigate(`/p/${remaining.at(-1)!.split("/").map(encodeURIComponent).join("/")}`);
     }
   };
   const openBreadcrumbPath = (path: string) => {

@@ -179,6 +179,8 @@ export interface components {
     };
     /** @description Compact note identity used in tree, parent, and child responses. */
     NoteSummary: {
+      /** @description Frontmatter aliases used during wikilink resolution and navigation. */
+      aliases: string[];
       /** @description Whether this note still uses a path-derived generated identity. */
       identity_generated: boolean;
       /** @description Stable note identity. */

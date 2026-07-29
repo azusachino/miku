@@ -130,28 +130,28 @@ impl FileMikuApplication {
         if let Ok(doc) = self.read_document_path(&direct_path).await {
             return Ok(doc);
         }
-        if let Ok(doc) = self.read_document_path(&requested_str).await {
-            return Ok(doc);
+        if direct_path != requested_str {
+            if let Ok(doc) = self.read_document_path(&requested_str).await {
+                return Ok(doc);
+            }
         }
 
         let target_slug = requested_str
             .split('/')
-            .last()
+            .next_back()
             .unwrap_or(&requested_str)
             .trim_end_matches(".md");
 
         let pages = self.index.list_pages().await?;
-        if let Some(matched_path) = self.resolve_slug_path(target_slug, &pages) {
+        if let Some(matched_path) = Self::resolve_named_path(target_slug, &pages) {
             if let Ok(doc) = self.read_document_path(&matched_path).await {
                 return Ok(doc);
             }
         }
 
-        let target_lower = target_slug.to_lowercase();
         let matched_page = pages.into_iter().find(|page| {
             page.path == requested_str
                 || page.path == direct_path
-                || page.path.split('/').last().unwrap_or(&page.path).trim_end_matches(".md").to_lowercase() == target_lower
                 || page
                     .frontmatter
                     .get("id")
@@ -166,20 +166,17 @@ impl FileMikuApplication {
         Err(ApplicationError::NotFound(requested_str))
     }
 
-    fn resolve_slug_path(&self, target_slug: &str, pages: &[PageSummary]) -> Option<String> {
-        let target_lower = target_slug.to_lowercase();
+    /// Match a wikilink target against each page's filename, title, and
+    /// frontmatter aliases, folding whitespace/hyphen/underscore so that
+    /// "elden ring" and "elden-ring" resolve to the same page.
+    fn resolve_named_path(target: &str, pages: &[PageSummary]) -> Option<String> {
+        let target_folded = fold_name(target);
+        if target_folded.is_empty() {
+            return None;
+        }
         let matches: Vec<_> = pages
             .iter()
-            .filter(|page| {
-                let slug = page
-                    .path
-                    .split('/')
-                    .last()
-                    .unwrap_or(&page.path)
-                    .trim_end_matches(".md")
-                    .to_lowercase();
-                slug == target_lower
-            })
+            .filter(|page| page_names(page).any(|name| fold_name(&name) == target_folded))
             .collect();
 
         if matches.len() == 1 {
@@ -187,7 +184,12 @@ impl FileMikuApplication {
         } else if !matches.is_empty() {
             // Sort by path depth/length as fallback
             let mut sorted = matches;
-            sorted.sort_by(|a, b| a.path.len().cmp(&b.path.len()).then_with(|| a.path.cmp(&b.path)));
+            sorted.sort_by(|a, b| {
+                a.path
+                    .len()
+                    .cmp(&b.path.len())
+                    .then_with(|| a.path.cmp(&b.path))
+            });
             Some(sorted[0].path.clone())
         } else {
             None
@@ -203,6 +205,7 @@ impl FileMikuApplication {
             name,
             title: None,
             has_children,
+            aliases: Vec::new(),
         }
     }
 
@@ -227,6 +230,7 @@ impl FileMikuApplication {
             name,
             title: Some(page.title.clone()),
             has_children: false,
+            aliases: page.aliases.clone(),
         }
     }
 
@@ -267,6 +271,33 @@ impl FileMikuApplication {
 
         folders.into_values().chain(files.into_values()).collect()
     }
+}
+
+/// Fold whitespace, hyphens, and underscores out of a name so that
+/// "elden ring", "elden-ring", and "Elden_Ring" compare equal.
+fn fold_name(value: &str) -> String {
+    value
+        .trim()
+        .to_lowercase()
+        .trim_end_matches(".md")
+        .chars()
+        .filter(|ch| !ch.is_whitespace() && *ch != '-' && *ch != '_')
+        .collect()
+}
+
+/// Every name a wikilink might use to reach this page: its filename stem,
+/// its title, and its frontmatter aliases.
+fn page_names(page: &PageSummary) -> impl Iterator<Item = String> + '_ {
+    let stem = page
+        .path
+        .split('/')
+        .next_back()
+        .unwrap_or(&page.path)
+        .trim_end_matches(".md")
+        .to_string();
+    std::iter::once(stem)
+        .chain(std::iter::once(page.title.clone()))
+        .chain(page.aliases.iter().cloned())
 }
 
 #[async_trait]
@@ -444,6 +475,7 @@ mod tests {
                         title: "Alpha".to_string(),
                         frontmatter: serde_json::json!({}),
                         mtime: 1,
+                        aliases: Vec::new(),
                     },
                     body: "# Alpha".to_string(),
                     links: Vec::new(),
@@ -458,6 +490,7 @@ mod tests {
                         title: "Inbox".to_string(),
                         frontmatter: serde_json::json!({}),
                         mtime: 1,
+                        aliases: Vec::new(),
                     },
                     body: "capture".to_string(),
                     links: Vec::new(),
@@ -552,5 +585,89 @@ mod tests {
             .await
             .entries
             .contains_key("Note-1.md"));
+    }
+
+    #[tokio::test]
+    async fn resolve_document_matches_folded_filename_title_and_alias() {
+        let root = tempdir().expect("temporary vault");
+        let vault = Arc::new(Vault::new(root.path()));
+        vault
+            .create(
+                "elden-ring.md",
+                "Elden Ring",
+                "# Elden Ring",
+                Default::default(),
+            )
+            .expect("create note");
+        vault
+            .create(
+                "Games/Boss-Log.md",
+                "Boss Log",
+                "# Boss Log",
+                Default::default(),
+            )
+            .expect("create aliased note");
+        let workspace: Arc<dyn WorkspaceService> =
+            Arc::new(FileWorkspaceService::new(Arc::clone(&vault), false));
+        let memory = Arc::new(MemoryIndex::new());
+        memory
+            .replace_pages(vec![
+                PageIndex {
+                    summary: PageSummary {
+                        path: "elden-ring.md".to_string(),
+                        title: "Elden Ring".to_string(),
+                        frontmatter: serde_json::json!({}),
+                        mtime: 1,
+                        aliases: Vec::new(),
+                    },
+                    body: "# Elden Ring".to_string(),
+                    links: Vec::new(),
+                    tags: Vec::new(),
+                    aliases: Vec::new(),
+                    has_mermaid: false,
+                    signals: DocumentSignals::default(),
+                },
+                PageIndex {
+                    summary: PageSummary {
+                        path: "Games/Boss-Log.md".to_string(),
+                        title: "Elden Ring Boss Log".to_string(),
+                        frontmatter: serde_json::json!({ "aliases": ["ER Boss Log"] }),
+                        mtime: 1,
+                        aliases: vec!["ER Boss Log".to_string()],
+                    },
+                    body: "# Boss Log".to_string(),
+                    links: Vec::new(),
+                    tags: Vec::new(),
+                    aliases: vec!["ER Boss Log".to_string()],
+                    has_mermaid: false,
+                    signals: DocumentSignals::default(),
+                },
+            ])
+            .await
+            .expect("seed snapshot");
+        let index = IndexApi::from_store(memory);
+        let application = FileMikuApplication::new(vault, workspace, index);
+
+        // Filename slug, folded: a space-separated target still finds a
+        // hyphenated filename.
+        let by_filename = application
+            .read_note(NoteRef::Id(NoteId::new("Elden Ring").unwrap()))
+            .await
+            .expect("resolve by folded filename");
+        assert_eq!(by_filename.note.source_path, "elden-ring.md");
+
+        // Title match: the target has no relation to the filename at all.
+        let by_title = application
+            .read_note(NoteRef::Id(NoteId::new("elden-ring boss_log").unwrap()))
+            .await
+            .expect("resolve by folded title");
+        assert_eq!(by_title.note.source_path, "Games/Boss-Log.md");
+
+        // Alias match: a frontmatter alias distinct from filename and title.
+        let by_alias = application
+            .read_note(NoteRef::Id(NoteId::new("er-boss-log").unwrap()))
+            .await
+            .expect("resolve by folded alias");
+        assert_eq!(by_alias.note.source_path, "Games/Boss-Log.md");
     }
 }

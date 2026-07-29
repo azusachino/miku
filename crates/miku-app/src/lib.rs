@@ -469,6 +469,7 @@ mod tests {
                 title: "Today".to_string(),
                 frontmatter: serde_json::json!({}),
                 mtime: 1,
+                aliases: Vec::new(),
             },
             body: "A note".to_string(),
             links: Vec::new(),

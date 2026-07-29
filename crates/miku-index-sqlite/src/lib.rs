@@ -101,6 +101,21 @@ fn snippet(body: &str, terms: &[&str]) -> String {
     body.chars().skip(start_chars).take(160).collect()
 }
 
+/// Read the frontmatter `aliases` array so it survives alongside the raw
+/// frontmatter blob, matching `miku_indexer`'s extraction at write time.
+fn frontmatter_aliases(frontmatter: &serde_json::Value) -> Vec<String> {
+    frontmatter
+        .get("aliases")
+        .and_then(serde_json::Value::as_array)
+        .map(|values| {
+            values
+                .iter()
+                .filter_map(|value| value.as_str().map(str::to_string))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 #[async_trait]
 impl IndexReader for SqliteIndex {
     async fn capabilities(&self) -> StoreResult<IndexCapabilities> {
@@ -123,13 +138,15 @@ impl IndexReader for SqliteIndex {
 
         let mut summaries = Vec::with_capacity(rows.len());
         for (path, title, frontmatter_str, mtime) in rows {
-            let frontmatter = serde_json::from_str(&frontmatter_str)
+            let frontmatter: serde_json::Value = serde_json::from_str(&frontmatter_str)
                 .map_err(|e| StoreError::Operation(format!("invalid frontmatter JSON: {e}")))?;
+            let aliases = frontmatter_aliases(&frontmatter);
             summaries.push(PageSummary {
                 path,
                 title,
                 frontmatter,
                 mtime,
+                aliases,
             });
         }
         Ok(summaries)
@@ -145,13 +162,15 @@ impl IndexReader for SqliteIndex {
         .map_err(database_error)?;
 
         if let Some((path, title, frontmatter_str, mtime)) = row {
-            let frontmatter = serde_json::from_str(&frontmatter_str)
+            let frontmatter: serde_json::Value = serde_json::from_str(&frontmatter_str)
                 .map_err(|e| StoreError::Operation(format!("invalid frontmatter JSON: {e}")))?;
+            let aliases = frontmatter_aliases(&frontmatter);
             Ok(Some(PageSummary {
                 path,
                 title,
                 frontmatter,
                 mtime,
+                aliases,
             }))
         } else {
             Ok(None)
@@ -169,8 +188,9 @@ impl IndexReader for SqliteIndex {
             return Ok(Vec::new());
         }
 
-        let mut builder =
-            sqlx::QueryBuilder::<sqlx::Sqlite>::new("SELECT path, title, body FROM tb_pages WHERE ");
+        let mut builder = sqlx::QueryBuilder::<sqlx::Sqlite>::new(
+            "SELECT path, title, body FROM tb_pages WHERE ",
+        );
 
         for (i, term) in terms.iter().enumerate() {
             if i > 0 {
@@ -559,17 +579,19 @@ mod tests {
         tags: Vec<&str>,
         links: Vec<miku_domain::LinkRecord>,
     ) -> PageIndex {
+        let aliases = vec![format!("alias-{}", path.trim_end_matches(".md"))];
         PageIndex {
             summary: PageSummary {
                 path: path.to_string(),
                 title: path.trim_end_matches(".md").to_string(),
-                frontmatter: serde_json::json!({"status": "draft"}),
+                frontmatter: serde_json::json!({"status": "draft", "aliases": aliases}),
                 mtime: 12345,
+                aliases: aliases.clone(),
             },
             body: body.to_string(),
             links,
             tags: tags.into_iter().map(String::from).collect(),
-            aliases: vec![format!("alias-{}", path.trim_end_matches(".md"))],
+            aliases,
             has_mermaid: true,
             signals: Default::default(),
         }

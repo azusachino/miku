@@ -45,6 +45,8 @@ pub struct NoteSummary {
     pub order: Option<i64>,
     /// Whether this note still uses a path-derived generated identity.
     pub identity_generated: bool,
+    /// Frontmatter aliases used during wikilink resolution and navigation.
+    pub aliases: Vec<String>,
 }
 
 /// One visible placement in the tree.
@@ -421,6 +423,7 @@ fn tree_node(node: FileNode) -> TreeNode {
             title,
             order: None,
             identity_generated: node.identity_generated,
+            aliases: node.aliases,
         },
         has_children: node.has_children,
     }
@@ -440,6 +443,7 @@ fn note_summary_node(node: FileNode) -> NoteSummary {
         title: node.title.unwrap_or(node.name),
         order: None,
         identity_generated: node.identity_generated,
+        aliases: node.aliases,
     }
 }
 

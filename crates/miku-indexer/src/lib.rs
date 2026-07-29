@@ -72,6 +72,7 @@ pub fn build_page_index(path: &str, raw: &[u8], mtime: i64) -> PageIndex {
             title,
             frontmatter,
             mtime,
+            aliases: aliases.clone(),
         },
         body: body.to_string(),
         links,

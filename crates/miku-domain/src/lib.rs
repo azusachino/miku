@@ -39,6 +39,9 @@ pub struct PageSummary {
     pub frontmatter: serde_json::Value,
     /// Source file modification time as Unix seconds.
     pub mtime: i64,
+    /// Frontmatter aliases used during wikilink resolution and navigation.
+    #[serde(default)]
+    pub aliases: Vec<String>,
 }
 
 /// The complete index projection produced for one Markdown page.
@@ -380,6 +383,7 @@ mod tests {
                 title: "Today".to_string(),
                 frontmatter: serde_json::json!({"status": "draft"}),
                 mtime: 42,
+                aliases: Vec::new(),
             },
             body: "# Today".to_string(),
             links: vec![LinkRecord {

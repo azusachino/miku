@@ -6,11 +6,10 @@ import { normalizeNotePath } from "./noteRoute";
 import { ActionIcon, NoteIcon } from "../../components/workspace/icons";
 import { WorkspaceTree } from "../../components/workspace/WorkspaceTree";
 import { headingSlug, shellRegions, type Theme } from "../../shared/ui";
+import { extractOutgoingLinks } from "../markdown/noteLinks";
 
 const MarkdownEditor = lazy(() => import("../markdown/MarkdownEditor"));
-const MarkdownReaderModule = import("../markdown/MarkdownReader");
-const MarkdownReader = lazy(() => MarkdownReaderModule.then((module) => ({ default: module.MarkdownReader })));
-import { extractOutgoingLinks } from "../markdown/MarkdownReader";
+const MarkdownReader = lazy(() => import("../markdown/MarkdownReader").then((module) => ({ default: module.MarkdownReader })));
 
 function noteHeadings(markdown: string): { id: string; text: string; level: number }[] {
   const headings: { id: string; text: string; level: number }[] = [];

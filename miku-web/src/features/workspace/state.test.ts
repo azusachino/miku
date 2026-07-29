@@ -5,8 +5,8 @@ describe("workspace reducer", () => {
   it("opens notes once and makes them active", () => {
     const opened = workspaceReducer(initialWorkspaceState, { type: "open", id: "workspace" });
     const reopened = workspaceReducer(opened, { type: "open", id: "workspace" });
-    expect(opened.activeId).toBe("workspace");
-    expect(reopened.tabs.filter((id) => id === "workspace")).toHaveLength(1);
+    expect(opened.activeId).toBe("workspace.md");
+    expect(reopened.tabs.filter((id) => id === "workspace.md")).toHaveLength(1);
   });
 
   it("allows the tab strip to become empty when the last live note closes", () => {
