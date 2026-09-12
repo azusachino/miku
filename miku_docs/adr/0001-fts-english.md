@@ -16,18 +16,18 @@ impacts: [migrations/0001_init_index.sql, src/indexer]
 tags: [search, postgres, index]
 ---
 
-# ADR-0001 — Full-text search (Postgres english FTS)
+## ADR-0001 — Full-text search (Postgres english FTS)
 
-## Decision
+### Decision
 
 Use Postgres' built-in **`english`** FTS config: `to_tsvector('english', title ‖ body)` with **title weighted A, body B**, ranked by `ts_rank`, snippets via `ts_headline('english', …)`.
 
-## Why
+### Why
 
 No extension, no Rust tokenizer, no spike. Postgres stays **vanilla**, so the index is disposable/portable and identical across compose and k8s. Content and titles are English in practice; the app
 name (ミク) is branding, not a content-language requirement. This was the only ADR that needed a spike — it is eliminated.
 
-## Trade-offs / Rejected
+### Trade-offs / Rejected
 
 Deferred, not rejected: if meaningful CJK content ever shows up, revisit with app-side
 `lindera` tokenization or `pgroonga`. Switching is just a reindex — cheap, because the

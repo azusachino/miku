@@ -17,9 +17,9 @@ config-keys: []
 tags: [rust, cargo, tokio, architecture]
 ---
 
-# ADR-0010 — Cargo workspace and crate boundaries
+## ADR-0010 — Cargo workspace and crate boundaries
 
-## Decision
+### Decision
 
 Miku becomes a Cargo workspace with focused packages:
 
@@ -36,12 +36,12 @@ The dependency direction is toward `miku-domain`. Backend crates never depend on
 
 Long-lived indexer tasks use explicit cancellation and shutdown ownership. Public library errors use `thiserror`; application orchestration may use `anyhow`.
 
-## Why
+### Why
 
 Separate packages keep optional database drivers out of unrelated builds and make backend contract tests executable across implementations. The workspace also provides a natural boundary for learning
 idiomatic Tokio ownership, tracing, bounded channels, and graceful shutdown.
 
-## Trade-offs / Rejected
+### Trade-offs / Rejected
 
 - Rejected one crate per module: it adds navigation cost without an API boundary.
 - Rejected a separate HTTP API crate for now: route DTOs are application-owned, while the reusable contract is the `IndexStore` API.

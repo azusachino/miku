@@ -17,9 +17,9 @@ config-keys: [MIKU_TIER, MIKU_PRIMARY, VALKEY_URL, DATABASE_URL]
 tags: [backend, postgres, valkey, scale]
 ---
 
-# ADR-0012 — Scale deployment tier with Postgres and Valkey
+## ADR-0012 — Scale deployment tier with Postgres and Valkey
 
-## Decision
+### Decision
 
 The high-end deployment profile is `scale`:
 
@@ -32,12 +32,12 @@ is never authoritative.
 
 A Valkey outage degrades to the in-process cache and Postgres. There is no silent fallback from Postgres to SQLite or memory.
 
-## Why
+### Why
 
 This keeps the high-end profile operationally strong without forcing Valkey and Postgres onto local users. The same application contract and fixture suite can prove semantic parity while allowing
 Postgres-specific ranking quality.
 
-## Trade-offs / Rejected
+### Trade-offs / Rejected
 
 - Rejected Valkey-primary indexing: cache loss must be safe.
 - Rejected distributed pub/sub as a local requirement: one process needs only an in-process event bus.

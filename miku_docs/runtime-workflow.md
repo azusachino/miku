@@ -6,12 +6,12 @@ tags: [miku, runtime, watcher, index]
 updated: 2026-07-16
 ---
 
-# Runtime workflow
+## Runtime workflow
 
 This document describes the real local runtime when a browser is using Miku while the filesystem indexer is working. It is the contract for route behavior, background tasks, backend composition, and
 black-box verification.
 
-## Invariants
+### Invariants
 
 - `miku_docs/**/*.md` is the source of truth.
 - The database and in-process index are rebuildable projections.
@@ -20,7 +20,7 @@ black-box verification.
 - `index_ready=false` means “the initial reconciliation has not completed”; it is an operator/smoke-test signal, not a page-route gate.
 - The SQLite backend handles durable SQLite operations, while the HTTP read model remains available.
 
-## Startup sequence
+### Startup sequence
 
 ```text
 process
@@ -47,7 +47,7 @@ The process uses Tokio's multi-thread runtime. Reconciliation owns one long-live
 serving continues while reconciliation runs. Container shutdown uses `tini` as PID 1 to forward signals and reap children, while Miku handles SIGTERM/Ctrl-C with Axum graceful shutdown before stopping
 the indexer tasks.
 
-## Browser page request while indexing
+### Browser page request while indexing
 
 For `GET /p/Index`:
 
@@ -63,7 +63,7 @@ For `GET /p/Index`:
 The important distinction is that the page source is filesystem-owned, while search, backlinks, tags, and navigation metadata are projection-backed. A partially rebuilt projection can be temporarily
 stale; it must not make the source page inaccessible.
 
-## Thread/task ownership
+### Thread/task ownership
 
 | Actor                 | Owns                                                   | Blocking boundary                                     |
 | --------------------- | ------------------------------------------------------ | ----------------------------------------------------- |
@@ -76,7 +76,7 @@ stale; it must not make the source page inaccessible.
 
 No route owns or spawns a second indexer. `IndexerQueue::shutdown` aborts and awaits its owned tasks during process shutdown.
 
-## Verification workflow
+### Verification workflow
 
 The Rust tests cover backend contracts and driver-level concurrency. The uv suite covers the actual running application:
 

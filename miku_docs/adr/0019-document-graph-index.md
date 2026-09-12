@@ -16,14 +16,14 @@ impacts: [crates/miku-domain, crates/miku-index-memory, crates/miku-index-sqlite
 tags: [index, links, performance, architecture]
 ---
 
-# ADR-0019 — In-memory document-graph index
+## ADR-0019 — In-memory document-graph index
 
-## Current status
+### Current status
 
 The in-memory graph decision remains active. ADR-0020 supersedes this record's historical FTS5/Tantivy search details and completed the memory-cap follow-up by moving body search to SQLite's plain
 `TEXT` column and stripping bodies from MemoryIndex.
 
-## Decision
+### Decision
 
 Link, slug, alias, tag, and backlink resolution for `[[wikilink]]` graphs is owned entirely by the in-process `MemoryIndex` (`crates/miku-index-memory`) as plain Rust data structures, not by SQL:
 
@@ -41,7 +41,7 @@ This retires the remaining part of ADR-0016's design that survived ADR-0017: ADR
 1. A bounded page-body cache in front of `SqliteIndex`, evicting via a recency/frequency policy (e.g. MySQL InnoDB buffer-pool-style LRU with midpoint insertion, so a one-time full-corpus scan can't evict the real working set) instead of `MemoryIndex` holding every page's full body in `pages: BTreeMap<String, PageIndex>` forever.
 2. Moving Tantivy from `Index::create_in_ram` to an on-disk directory, so its postings/term dictionary/positions are memory-mapped and paged in on demand instead of fully resident.
 
-## Why
+### Why
 
 The current `SqliteIndex` still resolves wikilinks relationally: `tb_links.target_norm` is matched against `tb_pages.path`/`slug` with batched `UPDATE tb_links ... JOIN tb_pages` sweeps (`crates/miku-index-sqlite/src/lib.rs`), and `MemoryIndex::rebuild_backlinks` recomputes backlinks for every page on every single-page write (`crates/miku-index-memory/src/lib.rs`). Because wikilink resolution requires fuzzy stem, slug, and alias matching across the ~14,000-file vault, these sweeps compared on the order of 700 million rows per batch during startup reconcile, taking 23.8 seconds to 4 minutes and triggering SQLx slow-statement warnings.
 
@@ -49,14 +49,14 @@ Moving resolution into pure in-memory maps removes the relational join entirely:
 
 That estimate describes the graph structures only. It does **not** cover, and was never meant to justify, the memory used by `MemoryIndex` overall. Measured against the live 15,910-file / 280 MB `miku_docs` corpus, `MemoryIndex` grows process RSS by **~2.27 GB — about 8x the raw corpus size** — because it holds every page's full body plus a complete in-memory Tantivy index. That was not a reviewed, approved trade-off: it is the pre-existing ADR-0017/0018 "hot projection" design, which assumed full residency was harmless but was never bounded or measured against a real vault until this ADR's own benchmark surfaced it. 8x amplification at only 16k files does not scale to the 100k-note case this ADR already extrapolates to, so this ADR now also caps total hot-projection memory (see Decision).
 
-## Trade-offs / Rejected
+### Trade-offs / Rejected
 
 - Rejected keeping relational resolution in SQLite for durability's sake: the join-based sweep does not scale with vault size and re-triggers on every reconcile, which is disproportionate to the value SQL joins add over a point lookup.
 - Rejected making SQLite fully disposable (index-only cache with no independent recovery value): `tb_pages(path, json_doc)` and `tb_pages_fts` remain durable so a process can recover page content and search without replaying the full Markdown corpus.
 - Accepted that the page graph becomes fully process-local and rebuilds from scratch on cold start; this is consistent with ADR-0018's existing hot-projection rebuild behavior for Tantivy and does not introduce a new consistency risk.
 - Deferred alias- and tag-index restructuring beyond what is needed for slug/backlink resolution; `tb_tags`/`tb_page_aliases` removal from the relational schema follows once the memory-side structures cover the same queries.
 
-## Historical implementation status before ADR-0020
+### Historical implementation status before ADR-0020
 
 **Partially implemented.** The link-graph resolution work is done: `crates/miku-index-memory` resolves links via `LinkGraph`'s `slug_index`/`path_index` with incremental `upsert_page`/`remove_page` (no full-corpus rebuild on single-page writes), and `crates/miku-index-sqlite` no longer performs relational link/tag/alias resolution; `tb_links`, `tb_tags`, and `tb_page_aliases` are removed from the schema. This part was tracked as `miku:document-graph-index` in asobi (tasks 1-5, all DONE).
 

@@ -8,17 +8,17 @@ tags: [miku, guide, setup]
 updated: 2026-07-16
 ---
 
-# Running Miku Note
+## Running Miku Note
 
 This page covers local setup, the content directory, and the commands used to run Miku Note. #guide
 
-## Prerequisites
+### Prerequisites
 
 - Nix with flakes, which provides the pinned Rust and development tools;
 - Postgres only when using the explicit Postgres profile or the container stack;
 - Podman or Docker only when using the optional compose stack.
 
-## Quick start
+### Quick start
 
 For the default local profile:
 
@@ -36,7 +36,7 @@ make compose-experiments
 
 The compose service uses Postgres and exposes Miku Note on port `3000`.
 
-## Content directory
+### Content directory
 
 Pages live under `miku_docs/` and are plain Markdown files. For example:
 
@@ -49,7 +49,7 @@ They are available at `/p/features.md` and `/p/guides/Getting%20Started.md`. Wik
 
 Miku does not create a Trash directory. Assets belong in `miku_docs/assets/`; path changes and file removal remain ordinary filesystem operations outside the v0.0.2 UI.
 
-## Writing Markdown
+### Writing Markdown
 
 Miku Note uses Comrak with GFM-style tables, task lists, strikethrough, autolinks, alerts, wikilinks, and raw HTML for trusted local files. The reader also supports:
 
@@ -59,13 +59,13 @@ Miku Note uses Comrak with GFM-style tables, task lists, strikethrough, autolink
 
 See [[sandbox|Sandbox]] for examples and [[features|Features]] for the complete current list.
 
-## Editing and external changes
+### Editing and external changes
 
 Open a page at `/p/...` and choose **Edit** for the inline CodeMirror editor. Saves are atomic and guarded by a content hash so an edit made elsewhere is not silently overwritten.
 
 The filesystem watcher notices changes made by git, an editor, or scripts and updates the index in the background. The browser workspace refreshes affected queries when filesystem events arrive.
 
-## Rebuilding the index
+### Rebuilding the index
 
 The index can always be rebuilt from the files:
 
@@ -76,7 +76,7 @@ make dev
 
 For a Postgres deployment, drop or recreate the disposable database and start the server with `MIKU_INDEX_BACKEND=postgres`; migrations run on startup.
 
-## Checks and browser acceptance
+### Checks and browser acceptance
 
 ```bash
 make check

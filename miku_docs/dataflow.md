@@ -6,11 +6,11 @@ tags: [miku, architecture, dataflow, mermaid]
 updated: 2026-07-29
 ---
 
-# Dataflow & Workflows
+## Dataflow & Workflows
 
 All diagrams are Mermaid. See `miku_docs/architecture.md` for the prose design and schema. Watcher scaling (folder-scoped watching and fallbacks) is covered in §8.
 
-## 1. System overview
+### 1. System overview
 
 Files are the source of truth. SQLite is the default durable metadata and search projection, while MemoryIndex supplies the disposable in-process graph. Postgres remains an explicit profile. HTTP
 handlers only **read** projections; the background indexer is the **only** writer.
@@ -38,7 +38,7 @@ flowchart LR
   Indexer -->|"reindex tx"| PG
 ```
 
-## 2. Rendering model — reader vs source mode
+### 2. Rendering model — reader vs source mode
 
 The React reader is the **primary** mode; CodeMirror source editing is opt-in and loaded lazily.
 
@@ -56,7 +56,7 @@ flowchart TD
   RD --> V
 ```
 
-## 3. Save → index contract (single-writer, no race)
+### 3. Save → index contract (single-writer, no race)
 
 The save handler writes the file and returns. It **never** touches the index. The `notify` watcher is the sole index trigger, so there is no double-index and no save↔index race.
 
@@ -81,7 +81,7 @@ sequenceDiagram
   Note over W,I: notify is the SOLE trigger -> no race
 ```
 
-## 4. Reindex-one-page transaction
+### 4. Reindex-one-page transaction
 
 One page reindex is one backend transaction. SQLite is the default; Postgres uses the same writer contract in its optional profile.
 
@@ -97,7 +97,7 @@ flowchart TD
   DAN --> COMMIT["COMMIT"]
 ```
 
-## 5. Startup reconcile
+### 5. Startup reconcile
 
 `notify` can miss events while the process is down, so startup does a full mtime-based reconcile before the live watcher takes over.
 
@@ -113,7 +113,7 @@ flowchart TD
   F --> G
 ```
 
-## 6. Link lifecycle (dangling ↔ resolved)
+### 6. Link lifecycle (dangling ↔ resolved)
 
 A `[[link]]` may point at a page that does not exist yet. Backlinks appear the moment the target is created; they go dangling again if it is deleted.
 
@@ -126,7 +126,7 @@ stateDiagram-v2
   Dangling --> [*]: "source link removed"
 ```
 
-## 7. Read-path queries (no filesystem touch)
+### 7. Read-path queries (no filesystem touch)
 
 Backlinks, tags, and search read **only** the selected index projection—SQLite by default—never the filesystem.
 
@@ -142,7 +142,7 @@ flowchart LR
   SR -->|"body_tsv @@ query (GIN)"| PG
 ```
 
-## 8. Watcher scale — folder-scoped watching
+### 8. Watcher scale — folder-scoped watching
 
 `notify` subscribes at **directory** granularity, so the watch budget scales with directory count, not file count. On Linux an inotify watch is added **per directory** and reports events for every
 file directly inside it; `RecursiveMode::Recursive` adds one watch per subdirectory (auto-adding one when a new subdir appears). macOS FSEvents watches paths, with no per-file limit.

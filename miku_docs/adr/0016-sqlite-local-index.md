@@ -18,20 +18,20 @@ config-keys: [MIKU_INDEX_BACKEND, MIKU_INDEX_PATH]
 tags: [index, sqlite, sqlx, fts5, dependencies]
 ---
 
-# ADR-0016 — SQLite (sqlx) local index
+## ADR-0016 — SQLite (sqlx) local index
 
-## Status
+### Status
 
 Superseded by ADR-0017. SQLite via `sqlx` remains the crate and dependency choice, but ADR-0017 rejects SQLite as the domain/note-identity model, and ADR-0019 retires this record's relational
 `tb_links`/`tb_tags`/`tb_page_aliases` schema and resolve-pass design in favor of in-memory graph resolution. This record is retained for the crate-selection and FTS5 rationale.
 
-## Decision
+### Decision
 
 The local durable index is **SQLite via `sqlx`**, sharing the SQL stack with the existing Postgres backend. Full-text search uses SQLite's built-in **FTS5**. `memory` + `sqlite` are the default
 features; `postgres`/`valkey` remain opt-in. The disposable-index invariant is unchanged: the index is rebuilt from `miku_docs/**/*.md`, so there is no data migration. Any old local index file is
 disposable and may be removed before the next startup.
 
-## Why
+### Why
 
 The previous local backend pulled a disproportionate dependency closure, including a second full-text implementation and unrelated synchronization/encryption support. Repository-owned checks could not
 gate that weight without maintaining a fork.
@@ -46,9 +46,9 @@ The resolved dependency closure was measured at the migration boundary. The root
 packages (36.9%). The lockfile fell from 482 package records to 312, a reduction of 170 records (35.3%). These counts include the complete normal workspace resolution, including transitive
 dependencies.
 
-## Design
+### Design
 
-### New crate `crates/miku-index-sqlite`
+#### New crate `crates/miku-index-sqlite`
 
 Mirrors `crates/miku-index-postgres`. Implements `IndexReader`/`IndexWriter` from `miku-domain` over an `sqlx::SqlitePool`.
 
@@ -66,6 +66,7 @@ sqlx = { version = "0.8.6", default-features = false, features = ["sqlite", "run
   `query`/`query_as` calls, keeping compile-time database access out of the application
   path.
 - `pub async fn open(path: &str) -> StoreResult<Self>`:
+
   ```rust
   let opts = SqliteConnectOptions::from_str(&format!("sqlite://{path}"))?
       .create_if_missing(true)
@@ -76,19 +77,20 @@ sqlx = { version = "0.8.6", default-features = false, features = ["sqlite", "run
   sqlx::migrate!("./migrations").run(&pool).await?;
   ```
 
-### Schema `crates/miku-index-sqlite/migrations/0001_init_index.sql`
+#### Schema `crates/miku-index-sqlite/migrations/0001_init_index.sql`
 
 Same tables as Postgres (`tb_pages`, `tb_links`, `tb_tags`, `tb_page_aliases`, `tb_unlinked_mentions`, `tb_index_meta`), SQLite dialect:
 
 - `id INTEGER PRIMARY KEY AUTOINCREMENT`; `frontmatter TEXT` (JSON as text); `has_mermaid INTEGER`; `mtime INTEGER`. Drop `body_tsv`, `pg_trgm`, and the trigram indexes.
 - FTS5 replaces the tsvector:
+
   ```sql
   CREATE VIRTUAL TABLE tb_pages_fts USING fts5(
     path UNINDEXED, title, body, tokenize = 'porter unicode61'
   );
   ```
 
-### SQL translation (Postgres → SQLite)
+#### SQL translation (Postgres → SQLite)
 
 | Concern            | Postgres                                           | SQLite                                                                                                    |
 | ------------------ | -------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
@@ -109,14 +111,14 @@ Same tables as Postgres (`tb_pages`, `tb_links`, `tb_tags`, `tb_page_aliases`, `
 - `rebuild_search_index`: no-op (FTS rows written per page) — keep the trait default.
 - Consider overriding `replace_pages` to wrap the batch in one transaction.
 
-### Wiring (`crates/miku-app/src/lib.rs`)
+#### Wiring (`crates/miku-app/src/lib.rs`)
 
 - `RuntimeConfig::Sqlite { path }`; extend `runtime_name`/`runtime_feature`/ `runtime_enabled`.
 - `resolve_runtime`: `"sqlite"` arm reading `MIKU_INDEX_PATH` (default `miku_docs/.miku-index.sqlite`); make `sqlite` the default backend.
 - `compose_index`: `#[cfg(feature="sqlite")]` → `IndexApi::from_store(Arc::new(SqliteIndex::open(&path).await?))`.
 - `Cargo.toml`: optional `miku-index-sqlite` dep + `sqlite = ["dep:miku-index-sqlite"]`; `default = ["memory", "sqlite"]`.
 
-### Defaults across the tree
+#### Defaults across the tree
 
 - Root `Cargo.toml`: `default = ["memory", "sqlite"]`; add a `sqlite` feature forwarding `miku-app/sqlite`.
 - The workspace contains only the supported SQLite, Postgres, memory, and Valkey backend crates.
@@ -124,11 +126,11 @@ Same tables as Postgres (`tb_pages`, `tb_links`, `tb_tags`, `tb_page_aliases`, `
 - `.gitignore`: ignore `*.sqlite*` (WAL/SHM sidecars) under `miku_docs/`.
 - Docs: README config table, `miku_docs/setup.md`, `miku_docs/architecture.md`.
 
-### Capabilities
+#### Capabilities
 
 `durable: true`, `full_text_search: true` (FTS5), `transactions: true`, `fuzzy_page_search: false` (no `pg_trgm`; quickswitch fuzzy already runs in Rust in `main.rs`), `remote_sync: false`.
 
-## Trade-offs / Rejected
+### Trade-offs / Rejected
 
 - **rusqlite (sync, bundled+fts5)** — leanest (~15–25 crates) but synchronous; would need `spawn_blocking` wrappers and a second SQL idiom alongside sqlx. Rejected for consistency: `sqlx` already
   lives in the tree for Postgres, so unifying on it costs a few more crates but one async SQL layer.
@@ -137,7 +139,7 @@ Same tables as Postgres (`tb_pages`, `tb_links`, `tb_tags`, `tb_page_aliases`, `
 - **Retain the previous backend as an opt-in feature** — rejected: `cargo test --workspace` and `make check` build every member crate. Keeping a retired backend in the workspace would preserve its
   dependency closure and make the default release surface ambiguous.
 
-## Gotchas (verify early)
+### Gotchas (verify early)
 
 1. **FTS5 must be compiled into sqlx's SQLite build.** Verify first: run `CREATE VIRTUAL TABLE t USING fts5(x)` at startup. If it errors, enable FTS5 via `libsqlite3-sys` (bundled build flag). This is
    the #1 risk — check before writing the full impl.
@@ -146,7 +148,7 @@ Same tables as Postgres (`tb_pages`, `tb_links`, `tb_tags`, `tb_page_aliases`, `
 3. **`SQLITE_BUSY`** under concurrent reconcile + reads — WAL + `busy_timeout` handle it; keep the single-writer invariant (indexer is the only writer).
 4. **`bool` binding** maps to INTEGER 0/1 in sqlx-sqlite — read `has_mermaid` back consistently.
 
-## Verification checklist
+### Verification checklist
 
 - `cargo test -p miku-index-sqlite` against a `tempfile` DB: page round-trip, backlinks, tags, FTS body search, mentions.
 - `MIKU_INDEX_BACKEND=sqlite make dev`: a page indexes, API search returns FTS hits, restart persists (durable).

@@ -16,21 +16,21 @@ impacts: [crates/miku-domain, crates/miku-app, crates/miku-index-memory, crates/
 tags: [index, search, performance, architecture, sqlite, tantivy, rocksdb]
 ---
 
-# ADR-0020 — SQLite plain-content search, no FTS5, no Tantivy
+## ADR-0020 — SQLite plain-content search, no FTS5, no Tantivy
 
-## Decision
+### Decision
 
 `MemoryIndex` no longer performs full-text search and no longer holds page bodies. `crates/miku-index-sqlite` stores each page's raw body in a single plain `TEXT` column (no FTS5 virtual table, and — after measurement, see Why — no separate precomputed lower-case column either), refreshed incrementally during reconcile like every other `tb_pages` column. `IndexReader::search` fetches all rows in one query and matches substrings in Rust using an allocation-free ASCII case-fold comparison, parallelized across cores (`rayon`). `Tantivy` and `crates/miku-index-memory/src/search.rs` are removed entirely; search is routed to the durable `SqliteIndex` unconditionally, regardless of `ready` state. Snippets are generated server-side from the matched row's own `body` (already in hand from the scan), in the original casing — not empty-and-deferred-to-the-frontend as `SqliteIndex` does today.
 
 `MemoryIndex`'s remaining responsibility narrows to what ADR-0019 already pointed it toward: `LinkGraph` (slug/path/backlink resolution) and lightweight page metadata (`PageSummary` plus `links`/`tags`/`aliases`, no `body`) for O(1) list/page lookups without a SQL round trip.
 
-## Why
+### Why
 
-### The 2.27 GB problem, and what it actually was
+#### The 2.27 GB problem, and what it actually was
 
 Running Tantivy in RAM (ADR-0018) meant Miku maintained two full copies of every page's full-text content — once in `tb_pages_fts` (disk) and once in Tantivy's in-RAM segments — plus a third copy held in `MemoryIndex.pages` solely so Tantivy could be rebuilt from scratch on every reconcile (traced in full in `architecture.md`'s reconcile-workflow section). Measured against the live 15,911-file `miku_docs` corpus, this cost ~2.27 GB RSS, about 8x the 280 MB raw corpus size — never a reviewed, approved trade-off.
 
-### Four independent real apps converge on the same answer
+#### Four independent real apps converge on the same answer
 
 Rather than reason abstractly, this ADR is backed by reading the actual source of four vendored reference applications (`vendor/trilium`, `vendor/silverbullet`, `vendor/tolaria`, `vendor/foam`) already used as UX/architecture models by prior ADRs (0016, 0017):
 
@@ -41,7 +41,7 @@ Rather than reason abstractly, this ADR is backed by reading the actual source o
 
 The pattern is unanimous across all four, independently: **never hold full page body content resident in the graph/metadata layer.** Content is either fetched on demand from a durable store (Trilium), scanned live from disk (Tolaria, Foam-via-ripgrep), or the whole full-text concern is delegated to an external specialized tool (SilverBullet, Foam).
 
-### Measured experiments, real corpus (15,911 files, 280 MB), all approaches built and run
+#### Measured experiments, real corpus (15,911 files, 280 MB), all approaches built and run
 
 | Approach | Write/reconcile cost | Query latency | Disk |
 |---|---|---|---|
@@ -60,11 +60,11 @@ Approach H measures that alternative directly: skip the second column, compare r
 
 Approach B (my first, wrong instinct — "Trilium uses FTS5, use FTS5") turned out to be actively dangerous: the naive way to populate it is 67x slower than not having it at all, purely from a per-page delete+insert write pattern across 32 separate reconcile-batch transactions accumulating FTS5 segments with no merge. Fixed properly, it's viable (9.2s) but still the slowest write path of any surviving approach, for no query-latency benefit at Miku's scale — 22ms is already imperceptible.
 
-### RocksDB was a real, tested alternative — rejected on measured evidence, not by default
+#### RocksDB was a real, tested alternative — rejected on measured evidence, not by default
 
 RocksDB was built from source (`librocksdb-sys`, ~59s cold compile) and benchmarked identically. It writes faster (0.48s) and stores smaller (164MB) than SQLite's single-column form (282MB), but every metric that matters for a long-running, frequently-restarted personal app points the other way: queries are slower (285ms sequential vs. Approach H's 22-27ms parallel), reopening after restart is 5x slower (1.4-1.6ms vs. 0.3ms), and — the specific question that prompted this test — **repeated restart-and-update cycles grow the RocksDB directory linearly (+3.3MB over 10 cycles) because its LSM-tree writes new segment files rather than updating in place**, an operational concern (eventual compaction scheduling) that a plain SQLite table simply does not have: the same 10-cycle test left the SQLite file byte-for-byte flat at 282.1MB. SQLite is also already a dependency with FTS5 available as a proven fallback if a future need genuinely requires an inverted index; RocksDB would be a new, heavy, C++ dependency for a workload that doesn't need its actual strength (high-throughput concurrent writes — Miku's writes are batched and occasional, not OLTP).
 
-## Trade-offs / Rejected
+### Trade-offs / Rejected
 
 - Rejected Tantivy entirely (not just switching to `MmapDirectory`): SQLite plain-column search matches or beats it on every measured axis at Miku's scale, with zero second engine to keep consistent.
 - Rejected SQLite FTS5 (not just Tantivy): no measured benefit over Approach E at this corpus size once the write path is bulk-optimized, and it carries the largest disk footprint and, if populated incrementally as originally coded, a severe write-path regression risk.
@@ -75,17 +75,17 @@ RocksDB was built from source (`librocksdb-sys`, ~59s cold compile) and benchmar
 - Accepted ASCII-only case folding (not full Unicode case folding) for the search match: correct for Latin-script text including Miku's own corpus; a query for `İstanbul`-style Unicode-special-cased text may not match all casings. Same practical limitation as Tolaria's and Trilium's naive `.to_lowercase()` calls have for scripts without a simple 1:1 ASCII case mapping — not a regression against either.
 - Accepted that `MemoryIndex` becomes purely a graph-resolution structure, not the fuller "index projection" ADR-0018 originally described. ADR-0018's `SearchProjection` trait boundary (`MemoryIndex`'s page graph and Tantivy search index) is narrowed by this ADR to describe graph resolution only; `SqliteIndex` is now the one search projection regardless of `ready` state.
 
-## Implementation plan
+### Implementation plan
 
 Mechanical, file-by-file. No step here is optional or left to interpretation during implementation.
 
-### Schema — `crates/miku-index-sqlite/migrations/0001_init_index.sql`
+#### Schema — `crates/miku-index-sqlite/migrations/0001_init_index.sql`
 
 - Add `body TEXT NOT NULL DEFAULT ''` to `tb_pages`.
 - Delete the `CREATE VIRTUAL TABLE tb_pages_fts USING fts5(...)` block entirely.
 - Edited in place (no new migration file — no release has shipped yet, per prior direction on this branch).
 
-### `crates/miku-index-sqlite/src/lib.rs`
+#### `crates/miku-index-sqlite/src/lib.rs`
 
 - Remove `SqliteIndex.search_enabled: bool` and `open_without_search()`; `open()` becomes the only constructor.
 - `open_with_search()` (to be renamed/merged into `open()`): delete the `CREATE VIRTUAL TABLE IF NOT EXISTS fts5_smoke_test ...` check.
@@ -93,6 +93,7 @@ Mechanical, file-by-file. No step here is optional or left to interpretation dur
 - Delete `sanitize_fts5_query` entirely — a plain substring scan needs no query escaping.
 - Add `rayon` as a normal (non-dev) dependency.
 - Add two private helpers:
+
   ```rust
   fn contains_ascii_ci(haystack: &str, needle: &str) -> bool {
       let h = haystack.as_bytes();
@@ -108,9 +109,10 @@ Mechanical, file-by-file. No step here is optional or left to interpretation dur
       h.windows(n.len()).filter(|w| w.eq_ignore_ascii_case(n)).count()
   }
   ```
+
 - Rewrite `IndexReader::search`: split query on whitespace into terms; empty query or `limit == 0` → `Ok(vec![])`. `SearchScope::Title` matches when **all** terms appear in `title`; `SearchScope::Body` when **all** terms appear in `body`; `SearchScope::All` when either condition holds. One query — `SELECT path, title, body FROM tb_pages` — then `par_iter()` (rayon) to filter/score/snippet. Score: `title_match → +10.0`, plus `min(body_term_occurrences, 20) * 0.5` (ported from Tolaria's `MatchScoreRequest`). Sort descending by score, tie-break `(title, path)`, `truncate(limit)`. Snippet built from the matched row's own `body` (correct casing) via a ported version of `miku-index-memory/src/search.rs`'s `snippet()` (find first term's position, ~160 chars of context) — no longer an empty string deferred to the frontend.
 
-### `crates/miku-index-memory`
+#### `crates/miku-index-memory`
 
 - Delete `src/search.rs`.
 - Remove `tantivy` from `Cargo.toml`.
@@ -120,36 +122,37 @@ Mechanical, file-by-file. No step here is optional or left to interpretation dur
 - `replace_page`/`replace_pages`/`hydrate_hot_pages`: clear `body` before storing — `page.body.clear(); page.body.shrink_to_fit();` — before inserting into `pages`. Safe now that nothing rebuilds a search index from `pages` (the Tantivy-rebuild-needs-every-body constraint this ADR removes).
 - `rebuild_search_index()` → body becomes just `self.rebuild_graph()`.
 
-### `crates/miku-app`
+#### `crates/miku-app`
 
 - `composition.rs`, `ComposedReader::search`: `self.active().search(request).await` → `self.durable.search(request).await`, unconditional (mirrors the existing bespoke hot/durable branch already used for `mentions_for_target`).
 - `lib.rs` line ~240 (`RuntimeConfig::Sqlite` arm): `SqliteIndex::open_without_search(&path)` → `SqliteIndex::open(&path)`.
 
-### Tests
+#### Tests
 
 - `miku-index-sqlite`: update `test_sqlite_index_trait_behavior`'s search assertions to expect non-empty snippets. `test_search_edges_and_escaping`'s punctuation case stays as a "doesn't crash" regression check; its rationale changes (no more FTS5 syntax to escape).
 - `miku-index-memory`: `supports_search_backlinks_mentions_and_tags` must assert `search()` returns empty. Delete `rebuild_removes_deleted_documents_from_tantivy` outright.
 
-### Explicitly unchanged (verify, don't re-derive)
+#### Explicitly unchanged (verify, don't re-derive)
 
 Local-file-first (`miku_docs/**/*.md` stays the only source of truth); backlinks (`LinkGraph`, ADR-0019 task-1); tags (`MemoryIndex.pages[].tags`, `body` is the only field stripped); mentions (`tb_unlinked_mentions`, ADR-0015); the reconcile batching/call-sequence documented in `architecture.md`.
 
-### Dependency changes
+#### Dependency changes
 
 - Remove: `tantivy` and its transitive family — `census`, `levenshtein_automata`, `rust-stemmers`, `sketches-ddsketch`, `tantivy-bitpacker`, `tantivy-columnar`, `tantivy-common`, `ownedbytes`, `tantivy-sstable`, `tantivy-fst`, `tantivy-stacker`, `tantivy-query-grammar`, `tantivy-tokenizer-api` (14 crates, confirmed via `cargo tree`).
 - Add: `rayon` to `miku-index-sqlite` as a normal dependency (net-new transitive cost ~3 crates — `rayon`, `rayon-core`, `crossbeam-deque` — since `crossbeam-utils`/`either` are already in the tree via other paths).
 - Considered and rejected: `memchr`/`aho-corasick` (not needed — 22-27ms is already imperceptible; revisit only if corpus size grows an order of magnitude), `grep-searcher`/`ignore` (built for scanning files on disk, which is exactly the cost this design avoids by keeping `body` in SQLite), `lru`/`moka` (nothing left to cache once `body` is fetched fresh in one bulk query per search), `rocksdb` (built and measured; rejected above).
 
-## Implementation status
+### Implementation status
 
 Implemented and verified (`miku:sqlite-plain-search` epic, tasks 1–8). `crates/miku-index-sqlite` stores raw page bodies in `tb_pages.body`. `crates/miku-index-memory` no longer depends on `tantivy` or holds page bodies in memory (`body.clear()` and `shrink_to_fit()` on store).
 
 Re-measured against the live `miku_docs` corpus (14,339 files at time of re-measurement; corpus grows over time) via `make benchmark-real-vault`:
+
 - Reconcile time: **3.04s** (15,911 files, 280MB raw text, at original measurement)
 - Total RSS: **378MB** (down from ~2.27GB baseline with Tantivy + full body + frontmatter AST memory duplicates, an **83% RAM reduction**)
 - SQLite database size: **282.2MB** (single table copy, flat byte-for-byte footprint)
 
-### Deviation: `search()` prefilters via SQL `LIKE`, not a literal fetch-all
+#### Deviation: `search()` prefilters via SQL `LIKE`, not a literal fetch-all
 
 A later, undocumented change (`accbef1`, 2026-07-29) pushed term filtering into a SQL `WHERE ... LIKE '%term%' ESCAPE '\'` clause ahead of the Rust-side scan, rather than the literal design above ("One query — `SELECT path, title, body FROM tb_pages` — then `par_iter()`... to filter/score/snippet"). This was caught by a parity audit against this ADR, not a deliberate accepted revision, and the ADR's own decision record was never updated to match — corrected here.
 
@@ -164,7 +167,7 @@ Neither variant reproduces the original 22–27ms Approach-H figure the ADR's de
 
 **Conclusion: the shipped `LIKE`-prefilter deviation is a real, measured improvement over the ADR's literal design at this corpus size (not a regression to revert) and is retroactively accepted here — but 135ms for a body-scope query is still far from the original 22-27ms target and not solved. The validated next step, not yet implemented: avoid materializing `body` as an owned `String` at all for rows before a match is confirmed (e.g. borrow `&str` from the row via a streaming/lower-level `sqlx` row API and only allocate for the rows that pass), rather than either fetch strategy tested here. Not implemented in this pass — flagged for a follow-up ADR-0020 addendum once measured.
 
-### Follow-Up: Zero-Copy SQL Streaming Row Iteration (`miku:search-streaming-rows`, 2026-07-29)
+#### Follow-Up: Zero-Copy SQL Streaming Row Iteration (`miku:search-streaming-rows`, 2026-07-29)
 
 As proposed in the section above, `IndexReader::search` was refactored in `crates/miku-index-sqlite` to iterate SQL rows via `sqlx::query().fetch()` and `try_next()` stream rather than `fetch_all()`. Zero-copy borrowed `&str` column decoding was implemented and verified via unit test (`test_spike_sqlx_streaming_zero_copy`), avoiding owned `String` allocations for non-matching rows.
 
@@ -178,6 +181,7 @@ Re-benchmarked via `make benchmark-real-vault-search`:
 **Empirical Finding**: Streaming row iteration yielded virtually identical performance to `fetch_all()` (within <3ms noise). The diagnostic split proved why: because the SQL `WHERE ... LIKE` prefilter already narrows the returned row count down to 10–20 rows, `fetch_all()` was only allocating 10–20 owned `String`s in the first place (which is negligible CPU cost). The true ~130ms cost is the full table scan and disk I/O performed internally inside SQLite's database engine for substring matching across 282MB of unindexed `TEXT` column data.
 
 **Final Decision**:
+
 1. Retain the clean SQL streaming implementation in `crates/miku-index-sqlite` for self-contained, allocation-free row iteration without external binary dependencies.
 2. Recognize that for 90%+ of PKM user workflows, fast navigation is driven by **Title Quick Open (`Cmd+P`, ~9.9ms)**, **Link-Graph Backlinks (`<1ms`)**, and **Tag Filtering (`#tag`, `<1ms`)**.
 3. Accept full-text body search at **~135ms** as an acceptable best-effort fallback path for occasional deep-text searches across 14,000+ notes.

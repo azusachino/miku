@@ -6,11 +6,11 @@ tags: [miku, performance, benchmark]
 updated: 2026-07-29
 ---
 
-# Indexing performance baseline
+## Indexing performance baseline
 
 This document records the current 0.0.5 SQLite/SQLx profile. Historical backend measurements remain archival context.
 
-## Corpus
+### Corpus
 
 | Corpus          | Markdown files | Raw size |
 | --------------- | -------------: | -------: |
@@ -18,7 +18,7 @@ This document records the current 0.0.5 SQLite/SQLx profile. Historical backend 
 | `geektime-docs` |         10,520 |   187 MB |
 | Combined        |         14,577 |   334 MB |
 
-## Verified current properties
+### Verified current properties
 
 - The local durable index is SQLite via SQLx with WAL mode, foreign keys, a five-second busy timeout, and a plain `TEXT` body column searched in parallel Rust code.
 - The index is disposable and rebuilt from `miku_docs/**/*.md`.
@@ -26,7 +26,7 @@ This document records the current 0.0.5 SQLite/SQLx profile. Historical backend 
 - HTTP reads use the backend-neutral `IndexReader` contract; the filesystem remains the source of truth.
 - The default backend is `MIKU_INDEX_BACKEND=sqlite`. MemoryIndex supplies the rebuildable graph projection; SQLite serves search regardless of graph readiness.
 
-## Historical dependency closure (0.0.2)
+### Historical dependency closure (0.0.2)
 
 The migration reduced the root package's normal dependency tree from 403 unique packages to 254, a reduction of 149 packages (36.9%). The complete lockfile resolution fell from 482 package records to
 312, a reduction of 170 records (35.3%). Both figures count the complete resolved dependency set, including transitive packages.
@@ -38,7 +38,7 @@ cargo tree -p miku --edges normal --prefix none | sort -u | wc -l
 rg '^name = ' Cargo.lock | wc -l
 ```
 
-## Runtime benchmark plan
+### Runtime benchmark plan
 
 Use a fresh SQLite path for each run:
 
@@ -69,7 +69,7 @@ repeatable read-path comparisons. Record at minimum:
 
 No SQLite throughput or latency target is claimed until this benchmark is run against the current profile.
 
-## Current batching behavior
+### Current batching behavior
 
 - Reconciliation batches default to 512 and are configurable with `MIKU_RECONCILE_BATCH_SIZE`.
 - SQLite batch writes commit through one backend transaction.

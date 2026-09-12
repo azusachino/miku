@@ -6,13 +6,13 @@ tags: [miku, product, local-first]
 updated: 2026-07-29
 ---
 
-# Miku — Product & Positioning
+## Miku — Product & Positioning
 
 > Design rework written _before_ implementation. Personas drive scope; scope drives the build. See `architecture.md` for the technical contract.
 
-## Personas — five lives, one wiki
+### Personas — five lives, one wiki
 
-### 1. Priya — Staff Engineer (200-person startup)
+#### 1. Priya — Staff Engineer (200-person startup)
 
 Knowledge scattered across Confluence, Notion, Slack DMs, and a `~/notes` folder. Nothing links. During an incident she follows `[[postgres-failover]]` backlinks to the runbook, the postmortem, and
 the capacity note, fixes the doc, and commits all of `miku_docs/` to a private git repo — versioned, diffable notes.
@@ -20,7 +20,7 @@ the capacity note, fixes the doc, and commits all of `miku_docs/` to a private g
 - **Leans on:** backlinks, FTS, plain `.md` on disk (git/rg/sed still work), no lock-in.
 - **Before:** real knowledge, unsearchable across five silos; lost on every tool migration.
 
-### 2. Tanaka-san — Records & Compliance Officer (municipal office)
+#### 2. Tanaka-san — Records & Compliance Officer (municipal office)
 
 Cloud SaaS is a data-sovereignty and procurement problem. Records must live on managed, auditable storage and outlive any vendor. Runs Miku on-prem; the files are the record, Postgres is explicitly
 disposable. Audit is `git log` over the notes directory.
@@ -28,7 +28,7 @@ disposable. Audit is `git log` over the notes directory.
 - **Leans on:** filesystem-as-truth, self-hosted, no proprietary format, rebuildable index.
 - **Before:** forbidden cloud tools, or brittle Word docs in shared drives — no linking, no search.
 
-### 3. Mei — second-year university student
+#### 3. Mei — second-year university student
 
 Notes across five courses; the connections exams test get lost. Tags `#thermodynamics`, links `[[entropy]]`. Two weeks before finals she revises by _following the graph_ through backlinks instead of
 re-reading everything.
@@ -36,7 +36,7 @@ re-reading everything.
 - **Leans on:** tags, backlinks-as-revision-tool, and explicit Markdown source editing.
 - **Before:** linear Google Docs; no way to see how concepts connected.
 
-### 4. Lucas — freelance investigative journalist
+#### 4. Lucas — freelance investigative journalist
 
 Sensitive source notes; cloud sync is a liability. Works offline. Builds a web of `[[person]]` / `[[shell-company]]` pages; backlinks reveal who connects to whom. FTS finds the half-remembered quote.
 Nothing leaves the machine.
@@ -44,7 +44,7 @@ Nothing leaves the machine.
 - **Leans on:** local-only, offline, zero cloud dependency, FTS over a large corpus.
 - **Before:** wouldn't trust Notion with sources; or an un-cross-referenceable folder.
 
-### 5. Aiko — novelist / worldbuilder
+#### 5. Aiko — novelist / worldbuilder
 
 A series with hundreds of characters and timelines that must stay consistent. Every character is a page; changing `[[Kaelen]]`'s backstory surfaces every scene that references him via backlinks.
 Manuscript and wiki are the same plain files.
@@ -52,7 +52,7 @@ Manuscript and wiki are the same plain files.
 - **Leans on:** dense linking, backlinks-as-consistency-check, tags, large-graph performance.
 - **Before:** spreadsheets + a wiki SaaS she'd pay forever just to keep reading her own world.
 
-## What the personas change about the design (the rework)
+### What the personas change about the design (the rework)
 
 | Tension from the stories                                                      | Design response                                                                                               |
 | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
@@ -65,7 +65,7 @@ Manuscript and wiki are the same plain files.
 **Deliberately deferred** (named to keep scope honest): no mobile app (browser is the surface), no real-time collab (single-writer, single-user), no built-in encryption (filesystem/disk's job), no
 cloud sync (git's job). Every persona is satisfied _without_ these — signal the v0 scope is right.
 
-## The commercial — "Notes you'll still own in 2040"
+### The commercial — "Notes you'll still own in 2040"
 
 **Problem:** Knowledge tools are rented, siloed, and trapped in formats you can't read without the vendor. When the subscription lapses, your second brain is held hostage — and your real tools (git,
 grep, your editor, your backup) can't touch the data.
@@ -81,7 +81,7 @@ grep, your editor, your backup) can't touch the data.
 
 **One line:** _Obsidian's linking and a real search engine — but the files are unarguably yours, and the index is something you can throw away._
 
-## Product name — Miku
+### Product name — Miku
 
 The project is named **Miku** (初音ミク) — Hatsune Miku, the iconic Vocaloid voice
 bank and cultural figure in music/tech. Like the Vocaloid engine itself, Miku lets you
@@ -89,9 +89,9 @@ compose and shape knowledge without vendor lock-in: the _content_ (Markdown file
 the source of truth, and Miku is the tool layer that renders, links, and searches —
 ephemeral and replaceable.
 
-## What we learn from Notion and Obsidian
+### What we learn from Notion and Obsidian
 
-### From Notion (the polish & onboarding playbook)
+#### From Notion (the polish & onboarding playbook)
 
 - **The empty state is the product.** Notion never shows a blank page — it shows templates and a "/" menu that teaches the tool. Miku's first run should seed a welcome page that _demonstrates_
   `[[links]]` and `#tags`, not an empty textarea.
@@ -102,7 +102,7 @@ ephemeral and replaceable.
 - **Bidirectional context is shown, not summoned.** Notion surfaces related content inline. Miku's backlink panel should always be visible, not a click away.
 - **What NOT to copy:** the proprietary block model and DB-as-truth. That's exactly the lock-in Miku exists to refuse. Notion's data is the cage; ours is files.
 
-### From Obsidian (the local-first, file-owned playbook — our closest sibling)
+#### From Obsidian (the local-first, file-owned playbook — our closest sibling)
 
 - **Files-on-disk is a feature users evangelize**, not a technical detail. Obsidian's whole trust story is "it's just Markdown in a folder." Miku shares this DNA — lean into it as the headline, like
   they do.
@@ -115,14 +115,14 @@ ephemeral and replaceable.
   browser as a thin client. _Don't_ chase plugins in v0 — the server-owned index is our differentiator.
 - **What NOT to copy:** Electron weight and the sync paywall. Miku is self-hosted and uses git for sync — no vault-sync subscription.
 
-### The synthesis
+#### The synthesis
 
 Notion teaches **discoverability** (command palette, never-blank states, inline context). Obsidian teaches **ownership** (files as truth, frictionless `[[linking]]`, backlinks as the daily payoff).
 Miku's wedge is taking Obsidian's ownership story and moving the _indexing_ server-side
 — so linking, backlinks, tags, and search are computed for you in the background instead
 of by a pile of client plugins, while the files stay plainly, provably yours.
 
-## Feature stance vs Obsidian (decided)
+### Feature stance vs Obsidian (decided)
 
 **Adopted as native server features (no plugin system):**
 
@@ -134,7 +134,7 @@ of by a pile of client plugins, while the files stay plainly, provably yours.
 (display name). Everything else is indexed as opaque `key → value` properties (`frontmatter JSONB` on `pages`) — searchable and the groundwork for a future Dataview-lite query, with no hardcoded
 schema.
 
-### Rendering: a thin React reader with established Markdown libraries
+#### Rendering: a thin React reader with established Markdown libraries
 
 > **Current decision: ADR-0017** (`miku_docs/adr/0017-web-markdown-workspace.md`) —
 > the browser workspace is the shipped v0.0.3 surface.

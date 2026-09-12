@@ -9,13 +9,13 @@ mirror: asobi:miku:decision:derived-unlinked-mention-index
 tags: [index, links, mentions]
 ---
 
-# ADR-0015 — Derived unlinked-mention index
+## ADR-0015 — Derived unlinked-mention index
 
 - **Status:** Accepted
 - **Date:** 2026-07-14
 - **Mirror:** asobi `miku:decision:derived-unlinked-mention-index`
 
-## Decision
+### Decision
 
 Treat unlinked mentions as an optional, eventually consistent derived relation rather than a page-render query.
 
@@ -28,7 +28,7 @@ remain authoritative and immediately available through the normal index projecti
 SQLite plain-content search remains the general-purpose search engine. It may accelerate a rebuild or provide a fallback candidate set, but it is not the source of truth for mention semantics or
 promotion safety. ADR-0020 replaced the earlier FTS5 implementation.
 
-## Why
+### Why
 
 The previous page path searched body FTS and then reread candidate files during every render. On the 14k-page corpus this added about 1.6 seconds to page views and competed with the local index
 connection. This violated the runtime invariant that a readable page must not wait for secondary discovery features.
@@ -36,7 +36,7 @@ connection. This violated the runtime invariant that a readable page must not wa
 The indexer already parses changed Markdown into complete `PageIndex` values. Computing mention relations in that background pipeline amortizes the work, makes the request path bounded, and lets the
 relation be rebuilt after deleting the database.
 
-## Trade-offs / Rejected
+### Trade-offs / Rejected
 
 - A Bloom filter alone is insufficient: it can reject some impossible matches, but cannot return the source pages or snippets needed by the UI.
 - A page-token inverted index is more general than needed and can consume substantial space for a large corpus.

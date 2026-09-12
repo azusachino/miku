@@ -6,11 +6,11 @@ tags: [miku, architecture, rust, markdown]
 updated: 2026-07-29
 ---
 
-# Miku Architecture
+## Miku Architecture
 
 Miku is a filesystem-owned Markdown workspace. The files under miku_docs/ are the product data; Rust services and indexes make those files navigable without creating a second source of truth.
 
-## Repository shape
+### Repository shape
 
 ```text
 repo/
@@ -29,7 +29,7 @@ repo/
 └── miku_docs/                   # authoritative Markdown vault
 ```
 
-## Source and projection boundary
+### Source and projection boundary
 
 miku_docs/\*_/_.md and user assets are authoritative. miku-vault owns safe path normalization, atomic file operations, Markdown frontmatter, revisions, and scans. It does not own search or backlinks.
 
@@ -39,7 +39,7 @@ contains no filesystem or database implementation.
 The index is disposable. The default runtime uses local SQLite for durable metadata and full-text search, with MemoryIndex as a rebuildable in-process graph projection. Postgres and Valkey are
 optional scale components. Tantivy was removed by ADR-0020. Rebuilding any projection from miku_docs/ must recover the same searchable relationships.
 
-## Runtime flow
+### Runtime flow
 
 1. miku-vault reads the requested Markdown source.
 2. miku-app composes vault access, workspace policy, and index readers.
@@ -50,12 +50,12 @@ optional scale components. Tantivy was removed by ADR-0020. Rebuilding any proje
 HTTP handlers read projections and source documents. They do not synchronously rebuild indexes. A save writes atomically; the watcher schedules reconciliation. Startup reconciliation catches changes
 missed while the process was stopped.
 
-## Historical reconcile and Tantivy rebuild (pre-ADR-0020)
+### Historical reconcile and Tantivy rebuild (pre-ADR-0020)
 
 This section preserves the measured pre-ADR-0020 workflow that motivated removal of Tantivy. It is historical evidence, not current runtime documentation. The current implementation stores bodies
 once in SQLite, searches its plain body column in parallel Rust code, and keeps body-free graph metadata in MemoryIndex. See ADR-0020 and “What is actually stored where” below.
 
-### User story: editing one note while Miku is running
+#### User story: editing one note while Miku is running
 
 Haru is running Miku against the live 15,910-file `miku_docs` vault. The process has been up for a while, so its hot projection is already `ready`. She opens `Notes/Foo.md` in her editor, changes one
 paragraph, and saves.
@@ -75,7 +75,7 @@ paragraph, and saves.
 The surprising part of this story is step 5-6: editing **one** file re-touches the in-memory copy of **every** file, which is why the whole corpus's bodies stay resident for the life of the process
 rather than only the recently-edited ones.
 
-### Workflow
+#### Workflow
 
 ```mermaid
 flowchart TD
@@ -121,13 +121,14 @@ a watcher event fires, inside an unbounded `while let Some(event) = receiver.rec
 
 **3. Inside one `reconcile_store` call** (`indexer.rs:108-` onward): it walks `content_root` for every `.md` file (`walk_store_tree`), diffs each file's mtime against `reader.list_pages()` to split files
 into `changed_files` and `unchanged_files`, then:
-   - Parses `changed_files` in batches and calls `flush_reconcile_batch` (`indexer.rs:420-437`), which calls `writer.replace_pages(pages)` — the **bulk** write path, for every reconcile, not just
-     cold start.
-   - If the hot projection was not yet `ready` (true cold start only), also parses `unchanged_files` and calls `writer.hydrate_hot_pages(pages)` to warm the hot projection without re-touching the
-     durable store.
-   - Deletes pages no longer present on disk via `writer.delete_page`.
-   - If `indexed_pages > 0 || deleted_pages > 0 || (!is_already_ready && hot_hydrated)` (`indexer.rs:217-220`) — true for **any** single changed or deleted file, on every reconcile — it calls
-     `writer.rebuild_search_index()`.
+
+- Parses `changed_files` in batches and calls `flush_reconcile_batch` (`indexer.rs:420-437`), which calls `writer.replace_pages(pages)` — the **bulk** write path, for every reconcile, not just
+  cold start.
+- If the hot projection was not yet `ready` (true cold start only), also parses `unchanged_files` and calls `writer.hydrate_hot_pages(pages)` to warm the hot projection without re-touching the
+  durable store.
+- Deletes pages no longer present on disk via `writer.delete_page`.
+- If `indexed_pages > 0 || deleted_pages > 0 || (!is_already_ready && hot_hydrated)` (`indexer.rs:217-220`) — true for **any** single changed or deleted file, on every reconcile — it calls
+  `writer.rebuild_search_index()`.
 
 **4. `replace_pages` never touches Tantivy.** `MemoryIndex::replace_pages` (`crates/miku-index-memory/src/lib.rs:208-227`) only inserts into `pages: BTreeMap<String, PageIndex>` (the field that holds
 each page's full parsed body). Tantivy indexing for the bulk path is deferred entirely to the next step. This batching is intentional: Tantivy's writer/commit cost is high per call, so committing once
@@ -147,7 +148,7 @@ to delete, but a real constraint of how the rebuild is wired today.
 note content is read straight from disk through `miku-vault` (`crates/miku-app/src/application.rs:103`, `crates/miku-app/src/workspace.rs:64,71`). Search result snippets come from Tantivy's own
 `STORED` copy of `body` (`miku-index-memory/src/search.rs:26,124-127`), not from `MemoryIndex.pages`. The only reader of `PageIndex.body` in `MemoryIndex.pages` is step 5's full rebuild.
 
-### What is actually stored where
+#### What is actually stored where
 
 Four separate stores exist, not one "index." None of them holds the same shape of data:
 
@@ -158,7 +159,7 @@ Four separate stores exist, not one "index." None of them holds the same shape o
 | `tb_pages` (SQLite, `crates/miku-index-sqlite`) | Per-page `path, title, body, frontmatter, has_mermaid, mtime` (`tb_pages`). No `tb_pages_fts` virtual table per ADR-0020. Searches raw body via `rayon` parallel scanning. | Every page in the vault — disk-backed (`282.2MB`), flat single-copy footprint. | Disk (`miku_docs/.miku-index.sqlite`), OS-cached |
 | `MemoryIndex` (`crates/miku-index-memory`) | `pages: BTreeMap<String, PageIndex>` — page summary, links, tags, aliases, signals (`body` and `frontmatter` stripped per ADR-0020). `graph: LinkGraph` — `slug_index`/`path_index`/`backlinks`. Tantivy removed entirely per ADR-0020. | Fast in-memory graph resolution without holding raw page text or frontmatter ASTs resident in RAM. Reconcile peak RSS **378MB** (down from ~2.27GB baseline, **83% reduction**). | Process RAM |
 
-### Read path: opening pages
+#### Read path: opening pages
 
 Opening a note is read-only. It never writes to SQLite or `MemoryIndex`, and never triggers a reconcile. `GET /api/v1/notes/{id}` (`crates/miku/src/http_api.rs:220-231`) calls
 `application.read_note` → `resolve_document` (`crates/miku-app/src/application.rs:111-145`), which:
@@ -190,7 +191,7 @@ flowchart TD
     K -.-> F
 ```
 
-## Frontend boundary
+### Frontend boundary
 
 The browser frontend is a separate Vite project. Its structure follows features rather than delivery history:
 
@@ -203,22 +204,24 @@ The browser frontend is a separate Vite project. Its structure follows features 
 Tailwind provides shell utilities and tokens; Tailwind Typography owns generic Markdown typography; React Markdown plus Prism, Mermaid, and KaTeX provide the rendering pipeline. Miku-specific CSS is
 limited to interaction behavior, alerts, links, diagrams, and shell details.
 
-## Link and metadata model
+### Link and metadata model
 
 Obsidian-style wikilinks, Markdown links, aliases, embeds, tags, and unlinked mentions are parsed from source Markdown. Explicit /p/<path>.md links remove ambiguity; unique basename wikilinks remain
 convenient. Backlinks are derived index edges and never require scanning candidate files during a page request.
 
 Every first-party note uses YAML frontmatter for stable metadata. The minimum convention is title, type, status, tags, and updated; ADRs also carry an immutable id.
 
-## Note Context and Outgoing Link Resolution (ADR-0022)
+### Note Context and Outgoing Link Resolution (ADR-0022)
 
 `GET /api/v1/note-context/{id}` assembles a single <15ms response containing `note`, `parents`, `children`, `backlinks`, and `outgoing` link items.
 
 The backend index (`MemoryIndex` / `SqliteIndex`) resolves target paths for every outgoing link:
+
 - Existing target notes resolve to their exact canonical vault path (`is_missing: false`).
 - Uncreated target notes resolve to their relative folder directory (`is_missing: true`).
 
 The frontend performs zero global page prefetching or client-side link resolution; `MemoryIndex` remains synchronized via:
+
 1. OS Filesystem Events (`notify` watcher) for local disk file edits.
 2. Synchronous `save_note()` writes (`ComposedIndexWriter`) for Web UI edits.
 3. Startup file mtime reconcile sweeps (`reconcile_store()`) on server restarts.

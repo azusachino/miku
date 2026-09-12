@@ -17,9 +17,9 @@ config-keys: [MIKU_TIER, MIKU_PRIMARY, MIKU_CACHE, MIKU_EVENTS]
 tags: [backend, index, cache, architecture]
 ---
 
-# ADR-0009 — Index store and cache composition
+## ADR-0009 — Index store and cache composition
 
-## Decision
+### Decision
 
 Markdown files under `miku_docs/` remain the only source of truth. The database is a rebuildable index projection.
 
@@ -32,12 +32,12 @@ Miku composes one durable `IndexStore` with zero or more read/cache layers:
 
 The standalone memory implementation exists for tests and disposable runs. It is not a silent production fallback.
 
-## Why
+### Why
 
 This preserves the files-owned invariant while allowing a small local profile and a larger multi-process profile. Naming the durable boundary `IndexStore` avoids conflating primary storage, cache, and
 event transport under “backend”.
 
-## Trade-offs / Rejected
+### Trade-offs / Rejected
 
 - Rejected Valkey as authoritative storage: cache loss must not affect correctness or Markdown durability.
 - Rejected automatic fallback between durable primaries: a misconfigured or unavailable primary must be visible rather than silently changing semantics.

@@ -10,11 +10,11 @@ tags:
   - documentation
 ---
 
-# KB conventions
+## KB conventions
 
 Miku's tracked first-party notes are the source of truth. These conventions apply to Markdown files directly under `miku_docs/` and `miku_docs/adr/`. Imported course corpora are preserved as source material and are not renamed or semantically normalized.
 
-## Frontmatter
+### Frontmatter
 
 Every note should have these fields:
 
@@ -59,7 +59,7 @@ Frontmatter uses the canonical order shown above, followed by optional descripti
 
 Frontmatter migration is intentionally reviewable rather than automatic. Run `make kb-check` to validate maintained filenames and local-link casing.
 
-### Filenames and aliases
+#### Filenames and aliases
 
 - Markdown filenames use lowercase kebab-case, for example `cognitive-load-theory.md`. Daily notes use the ISO date form `YYYY-MM-DD.md`; weekly and monthly notes retain their existing ISO-derived forms such as `2026-w31.md` and `2026-07.md`.
 - A filename is a stable identifier, not a display title. Keep capitalization, punctuation, non-English names, and other human-readable forms in `title` or `aliases`.
@@ -67,7 +67,7 @@ Frontmatter migration is intentionally reviewable rather than automatic. Run `ma
 - Aliases represent names a reader might genuinely search for: former filenames, abbreviations, translations, or established alternate names. Do not add spelling mistakes, duplicate the title, or repeat an alias with different capitalization.
 - Imported non-canonical filenames are legacy inventory. Do not rename them as part of first-party maintenance.
 
-### Sources
+#### Sources
 
 - Use `source` when a note summarizes, quotes, imports, or closely derives from an external work. Original journals, plans, and independently developed concept notes do not need a source merely to satisfy metadata.
 - Prefer the most direct durable URL available. If no URL exists, use a precise bibliographic reference or a wikilink to a source note.
@@ -75,7 +75,7 @@ Frontmatter migration is intentionally reviewable rather than automatic. Run `ma
 - Mark quotations in the body and include a page, chapter, timestamp, or section when available. A `source` field identifies the work but does not replace local quotation context.
 - Never leave `source` as `todo`, `tbd`, `unknown`, or an empty field. Omit it until the provenance is known.
 
-### Tags
+#### Tags
 
 Tags describe the note's subject or collection. They are not a copy of every keyword in the body.
 
@@ -91,7 +91,7 @@ Tags describe the note's subject or collection. They are not a copy of every key
 
 Tag migration should remain reviewable. Canonical spelling is mechanical, but choosing, merging, or removing tag concepts requires inspecting the affected notes; do not make semantic taxonomy decisions as part of a filename-only change.
 
-## Titles and links
+### Titles and links
 
 - Journal titles include their date, for example `日志 2026.07.21`.
 - Weekly titles use `YYYY-wNN`.
@@ -99,7 +99,7 @@ Tag migration should remain reviewable. Canonical spelling is mechanical, but ch
 - Prefer wikilinks for local notes and assets. Run `make kb-check` after renaming or deleting maintained notes.
 - Do not create a wikilink for an idea that does not yet have a note; use ordinary list text until the note exists.
 
-## Formatting and callouts
+### Formatting and callouts
 
 Use native Obsidian callouts for notes, quotes, summaries, and warnings:
 
@@ -116,6 +116,6 @@ Callout content is a Markdown blockquote. Every physical line must begin with `>
 
 Use the repository's normal formatter for source code. Markdown body formatting remains manual so long prose and examples are not rewritten unexpectedly.
 
-## Maintenance
+### Maintenance
 
 Run `make kb-check` after changing maintained note filenames or links. The gate checks lowercase kebab-case names, unresolved Markdown links within the maintained set, and wikilinks that use non-canonical casing. `make check` includes this gate.

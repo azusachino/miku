@@ -6,14 +6,14 @@ tags: [miku, setup, development]
 updated: 2026-07-29
 ---
 
-# Setup
+## Setup
 
-## Prerequisites
+### Prerequisites
 
 - Nix (with flakes) — the devShell provides rust, prettier, uv, and postgresql
 - Postgres — optional, for the explicit native/scale profile
 
-## Native dev stack (no containers — Linux & macOS)
+### Native dev stack (no containers — Linux & macOS)
 
 The default path uses SQLite for durable metadata and full-text search, plus MemoryIndex for the rebuildable in-process graph:
 
@@ -25,7 +25,7 @@ Postgres and Valkey remain optional service-backed profiles. Tantivy is not part
 
 Override the backend with MIKU_INDEX_BACKEND, DATABASE_URL, or VALKEY_URL.
 
-## Remote access (LAN / Tailscale)
+### Remote access (LAN / Tailscale)
 
 The server binds `0.0.0.0:3000` by default, so it is reachable from other devices on your tailnet at `http://<tailscale-ip>:3000` (or the MagicDNS name, e.g. `http://mac-mini:3000`) — not only from
 localhost. No reverse proxy needed for tailnet access.
@@ -34,7 +34,7 @@ localhost. No reverse proxy needed for tailnet access.
 - macOS: if the application firewall prompts, allow incoming connections for the miku binary; Tailscale traffic arrives over the `utun` interface.
 - Optional TLS/sharing: `tailscale serve 3000` (tailnet) or `tailscale funnel 3000` (public) put it behind Tailscale's TLS.
 
-## Manual configure (external Postgres)
+### Manual configure (external Postgres)
 
 If you already run Postgres elsewhere, just point the app at it (kept out of git):
 
@@ -43,7 +43,7 @@ export DATABASE_URL=postgres://localhost/miku
 export MIKU_INDEX_BACKEND=postgres
 ```
 
-## Build, run, test
+### Build, run, test
 
 ```bash
 nix develop       # enter the devShell (provisions all tools)
@@ -70,7 +70,7 @@ Project automation/scripts are Python run via `uv run python scripts/<x>.py` (ro
 The browser acceptance harness uses Playwright against a real local process. Install its browser once with `uv run playwright install chromium`, then run `make check-ux-browser`. Screenshots are
 written to `.artifacts/ux/` (ignored).
 
-## Containers (Postgres/Valkey scale profile only)
+### Containers (Postgres/Valkey scale profile only)
 
 Containers are only for the service-backed scale profile. The default local runtime is a native Rust binary and Vite frontend. Podman and Podman Compose are intentionally host-provided tools, not Nix
 prerequisites.
@@ -88,7 +88,7 @@ podman-compose down
 
 The native stack above is preferred for day-to-day local development. Docker Compose can still be used when its compatibility with `compose.yml` is verified separately.
 
-## Database
+### Database
 
 The SQLite index is stored at `miku_docs/.miku-index.sqlite` when `MIKU_INDEX_BACKEND=sqlite` is selected. Postgres migrations live under `crates/miku-index-postgres/migrations/` and are used
 only for the explicit Postgres profile. Both indexes are fully rebuildable from `miku_docs/**/*.md`; dropping and recreating either loses no user data.

@@ -17,11 +17,11 @@ config-keys: [MIKU_INDEX_BACKEND, MIKU_INDEX_PATH]
 tags: [backend, sqlite, local, rust]
 ---
 
-# ADR-0014 — Native local backend
+## ADR-0014 — Native local backend
 
 This decision is superseded by ADR-0016. It is retained as the numbered decision record; the current implementation and configuration are defined by ADR-0016.
 
-## Current boundary
+### Current boundary
 
 The local runtime selects SQLite with `MIKU_INDEX_BACKEND=sqlite` and stores the database at `miku_docs/.miku-index.sqlite` by default. The backend implements the domain contract through SQLx and
 a plain `TEXT` body column searched in parallel Rust code; ADR-0020 removed FTS5 and Tantivy.

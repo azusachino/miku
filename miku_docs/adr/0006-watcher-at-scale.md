@@ -18,9 +18,9 @@ config-keys: [fs.inotify.max_user_watches]
 tags: [watcher, notify, inotify, scale]
 ---
 
-# ADR-0006 — Filesystem watcher at scale
+## ADR-0006 — Filesystem watcher at scale
 
-## Decision
+### Decision
 
 Keep v1's `notify` watcher as the **sole index trigger**; scale it by watching **directories, not files**. The watch budget equals **directory count, not file count**. Three levers, in order:
 
@@ -30,7 +30,7 @@ Keep v1's `notify` watcher as the **sole index trigger**; scale it by watching *
 
 The startup mtime+hash reconcile sweeps anything missed across the new-subdir registration race or process downtime.
 
-## Why
+### Why
 
 The 100k-file watch limit was **misdiagnosed**. inotify watches are **per-directory**, and `notify`'s recursive mode adds one watch per subdirectory, so a wiki with shallow foldering never approaches
 the limit (100k files across ~200 folders ≈ 200 watches; default cap 65k–524k; macOS
@@ -38,7 +38,7 @@ FSEvents has no per-file limit at all). The watcher's only irreplaceable job is 
 pickup of external edits**
 (git pull, another editor) — exactly the files-are-truth payoff.
 
-## Trade-offs / Rejected
+### Trade-offs / Rejected
 
 **RocksDB** as a durable work-queue or primary store (the former `dataflow_v2.md`) is rejected: it solves a problem Miku doesn't have, adds a second store, and risks the core invariant
 (files-are-truth). The event-driven, single-writer v1 model is retained unchanged. See `miku_docs/dataflow.md` §8 (folder-scoped watching).

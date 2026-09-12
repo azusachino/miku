@@ -14,15 +14,15 @@ impacts: [crates/miku-domain, crates/miku-app, crates/miku-index-memory, crates/
 tags: [architecture, projections, tantivy, sqlite, valkey, postgres]
 ---
 
-# ADR-0018 — Composed durable and hot projections
+## ADR-0018 — Composed durable and hot projections
 
-## Status
+### Status
 
 Superseded by ADR-0020 for the search/Tantivy framing specifically: this record's "hot projection: MemoryIndex (page graph + Tantivy)" and its measured "hot Tantivy rebuild" restart cost
 (Implementation status below) no longer describe the system—Tantivy and FTS5 are removed. The durable+hot composition boundary and
 `ready`-gated reader switch this record establishes remain in effect for page-graph reads; current search uses SQLite's plain body column regardless of graph readiness.
 
-## Decision
+### Decision
 
 `miku_docs/` is Miku's authoritative Markdown filesystem. `miku_vault::Vault` is only the filesystem adapter; it is not the source-of-truth concept.
 
@@ -48,7 +48,7 @@ miku_docs + SQLite durable projection + MemoryIndex/Tantivy hot projection
 PostgreSQL and Valkey are optional deployment layers. Valkey does not replace Tantivy; it may cache serialized results or coordinate a shared hot path when multiple processes justify its network and
 operational cost.
 
-## Required trait boundaries
+### Required trait boundaries
 
 The runtime composition layer must separate:
 
@@ -62,7 +62,7 @@ The runtime composition layer must separate:
 The existing `IndexReader`/`IndexWriter` contracts are the starting projection contract, but the current `compose_index` implementation still selects one complete store. It must be refactored before
 SQLite + MemoryIndex and Valkey composition can be considered implemented.
 
-## Consistency contract
+### Consistency contract
 
 For a filesystem change:
 
@@ -75,14 +75,14 @@ miku_docs write
 
 The indexer remains the sole projection writer. A durable commit precedes publication to the hot projection. A failed optional cache operation degrades cache freshness, not document correctness.
 
-## Consequences
+### Consequences
 
 - The default path gets local low-latency graph and full-text reads without requiring Valkey.
 - SQLite/PostgreSQL durability can change without changing the web/API traits.
 - Valkey is justified only for shared cache/process scaling, not as a faster replacement for local memory or Tantivy.
 - Restart behavior must be measured separately for source scan, durable projection recovery, and hot Tantivy rebuild.
 
-## Implementation status
+### Implementation status
 
 The ADR is accepted and the default composition is implemented. `miku_docs` is reconciled into SQLite first, then the indexer hydrates the process-local MemoryIndex/Tantivy projection from the
 unchanged Markdown files without rewriting SQLite. Search is published only after that hot projection rebuild; derived mentions may finish afterward and fall back to durable data while they are being

@@ -17,9 +17,9 @@ config-keys: []
 tags: [rust, cargo, release]
 ---
 
-# ADR-0013 — crates.io release surface
+## ADR-0013 — crates.io release surface
 
-## Decision
+### Decision
 
 The workspace is not published wholesale. Application and deployment crates are private by default (`publish = false`). The first public crates, if there is a real consumer, are the stable reusable
 layers:
@@ -33,11 +33,11 @@ contract is intentional.
 
 Every published crate uses SemVer, complete metadata, README/rustdoc, license, repository links, package inspection, and `cargo publish --dry-run` before an explicit dependency-ordered publish.
 
-## Why
+### Why
 
 crates.io is a permanent public API commitment. Publishing internal adapters before their boundaries stabilize would turn implementation details into support obligations.
 
-## Trade-offs / Rejected
+### Trade-offs / Rejected
 
 - Rejected publishing every workspace member automatically.
 - Rejected treating `cargo install` as the only release channel.

@@ -6,11 +6,11 @@ tags: [miku, api, rust]
 updated: 2026-07-29
 ---
 
-# Miku HTTP API
+## Miku HTTP API
 
 The Rust binary serves the browser frontend and a small versioned JSON API. The API is read-oriented: Markdown files remain the source of truth, while indexes are rebuildable projections.
 
-## Operational routes
+### Operational routes
 
 | Method | Route             | Purpose                        |
 | ------ | ----------------- | ------------------------------ |
@@ -21,7 +21,7 @@ The Rust binary serves the browser frontend and a small versioned JSON API. The 
 | GET    | /events           | Filesystem update event stream |
 | GET    | /api/openapi.json | Generated OpenAPI document     |
 
-## Workspace routes
+### Workspace routes
 
 All application JSON routes use the /api/v1 prefix.
 
@@ -41,14 +41,14 @@ The {id} value is a URL-encoded Markdown-relative path, normally ending in .md. 
 
 `GET /api/v1/tags` returns 50 tags by default, accepts `offset`, and caps `limit` at 200. The browser requests subsequent pages only as the tag list scrolls.
 
-## Save contract
+### Save contract
 
 PUT /api/v1/notes/{id} accepts the Markdown body, title, and the revision token returned by the previous read. A stale token returns 409 Conflict. The vault writes the source atomically; the watcher
 then schedules projection updates.
 
 Path creation, rename, move, and deletion are filesystem operations for now. They are intentionally not disguised as JSON mutations.
 
-## Error contract
+### Error contract
 
 | Status | Meaning                              |
 | ------ | ------------------------------------ |

@@ -18,9 +18,9 @@ config-keys: [MIKU_VAULT_ROOT, MIKU_READONLY]
 tags: [architecture, frontend, markdown, workspace, tree, index, rust]
 ---
 
-# ADR-0017 — Web Markdown workspace and file-based note graph
+## ADR-0017 — Web Markdown workspace and file-based note graph
 
-## Decision
+### Decision
 
 Miku 0.0.3 will be designed as a **Trilium-like web workspace over a Markdown-owned vault**. The frontend becomes a separate React/TypeScript project. Rust remains responsible for the vault, HTTP API,
 Markdown parsing, filesystem watcher, indexing, search, relationship resolution, and safe file mutations.
@@ -36,7 +36,7 @@ The durable contract is:
 5. Note content and tree placement are separate concepts. One Markdown note may have multiple placements in the virtual tree without duplicating its body.
 6. Frontend code communicates through domain-oriented HTTP APIs, never through SQL-shaped payloads or knowledge of the index implementation.
 
-## Domain model
+### Domain model
 
 The core domain replaces the page-summary model with these concepts:
 
@@ -73,7 +73,7 @@ database is part of the domain contract. The first local implementation uses an 
 Adding a parent creates a placement; removing a parent removes only that placement. Deleting a note is a separate operation that removes the canonical Markdown file and all derived placements. Existing
 files without IDs remain path-addressable until migration assigns one.
 
-## Frontend boundary
+### Frontend boundary
 
 The new `miku-web` project owns only presentation and ephemeral workspace state:
 
@@ -96,7 +96,7 @@ status bar
 
 The first release reproduces the interaction model of Trilium's tree-centered workspace without copying its source, assets, or proprietary data format.
 
-### Framework and project boundary
+#### Framework and project boundary
 
 `miku-web` is a separate React/TypeScript project built with Vite. It uses:
 
@@ -122,7 +122,7 @@ URL             current note, placement, focus, heading/scroll location
 The initial editor is CodeMirror 6 with a React Markdown reader and optional split view. A block/WYSIWYG editor is deferred until round-trip tests prove that frontmatter and Markdown semantics are
 preserved.
 
-### Runtime and ingress boundary
+#### Runtime and ingress boundary
 
 Development may run the Rust service directly on its local port. The deployed web surface uses Caddy as the single public ingress:
 
@@ -137,7 +137,7 @@ assets served by Miku after the separate `miku-web` build is produced; a later s
 
 The local development profile remains direct and lightweight. A production profile may add Caddy without changing the Rust API, vault layout, or frontend contract.
 
-## Backend boundary
+### Backend boundary
 
 Rust provides domain-oriented endpoints:
 
@@ -168,7 +168,7 @@ validate → write temporary file → flush/fsync → atomic rename
 
 Readonly mode disables or rejects mutation endpoints. An index lag is visible as status, never silently treated as a successful durable write.
 
-## Indexing strategy
+### Indexing strategy
 
 The indexer is a projection pipeline:
 
@@ -195,7 +195,7 @@ vault files      notes, frontmatter, attachments, and revisions
 
 The `.miku/index/` directory may be deleted at any time. It is never edited by users and is never required to recover note content or placements.
 
-## 0.0.3 delivery order
+### 0.0.3 delivery order
 
 1. Scaffold `miku-web` and build the shell against fixture data.
 2. Test tree selection, tabs, splits, history, command actions, and hoisting.
@@ -211,7 +211,7 @@ Graph maps, scripting, AI panels, sync, encryption, collaboration, native mobile
 
 The implementation is tracked in the frontend source and browser acceptance checks.
 
-## Verification
+### Verification
 
 The design must pass the live browser acceptance workflow before implementation is considered ready. The most important end-to-end proof is:
 
@@ -221,7 +221,7 @@ open vault → select tree note → open clone placement → edit Markdown
 → rebuild projection → recover the same workspace from files
 ```
 
-## Why
+### Why
 
 The former frontend demonstrated that server-rendered HTML can display Markdown, but it does not provide the continuous tree-centered workspace that motivated the Trilium comparison. Its current
 `PageSummary` and SQLite tables also encode a flat page index rather than a note/placement model.
@@ -231,7 +231,7 @@ the target interaction language: hierarchical navigation, focused note work, hoi
 
 The synthesis keeps the ownership boundary from Miku, the browser surface from SilverBullet, the files-first conventions from Tolaria, and the workspace interaction model from Trilium.
 
-## Trade-offs / Rejected
+### Trade-offs / Rejected
 
 - **Keep the current server-rendered frontend** — rejected. It optimizes for a reader page, while 0.0.3 needs a stateful workspace with tabs, splits, tree selection, and coordinated panels.
 - **Keep SQLite as the domain model** — rejected. A relational projection can remain an implementation option, but note identity and placement semantics must be expressed in the domain and

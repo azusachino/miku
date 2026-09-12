@@ -8,12 +8,12 @@ tags: [miku, architecture, adr]
 updated: 2026-07-16
 ---
 
-# Architecture Decision Records
+## Architecture Decision Records
 
 This folder holds the project’s accepted architecture decisions. Superseded records remain here for historical traceability; current behavior is determined by the newest accepted ADR and the
 implementation.
 
-## Convention
+### Convention
 
 - **One file per ADR**, named `NNNN-kebab-title.md` (zero-padded, e.g. `0001-fts-english.md`). The number is permanent, unique, and never reused. The index is ordered by this number, not by title.
 - Every file starts with a status header:
@@ -38,16 +38,16 @@ implementation.
 - Body sections: **Decision**, **Why**, **Trade-offs / Rejected**. Keep it the decision and its forces — not code.
 - **Superseding, never editing.** A verified ADR is immutable. To reverse one, add a new ADR and set the old file's status to `Superseded by ADR-NNNN` (mirror the `supersedes` link in asobi).
 
-## Lifecycle
+### Lifecycle
 
-```
+```text
 proposed decision  →  accepted ADR  →  implementation and tests
 ```
 
 A decision is **verified** when it is accepted by the maintainer, consistent with `architecture.md`'s core invariant, and has no open questions blocking implementation. Implementation builds against
 this folder.
 
-## Index
+### Index
 
 | ADR                                            | Title                                            | Status     | Accepted   |
 | ---------------------------------------------- | ------------------------------------------------ | ---------- | ---------- |
