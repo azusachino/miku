@@ -15,9 +15,6 @@ from ci import (
     integration,
     release,
     scale,
-    ux_browser,
-    ux_smoke,
-    ux_soak,
     validate,
 )
 
@@ -73,9 +70,6 @@ COMMANDS = {
     "compose-experiments": compose_experiments,
     "benchmark": scale,
     "check-blackbox": blackbox,
-    "check-ux-smoke": ux_smoke,
-    "check-ux-soak": ux_soak,
-    "check-ux-browser": ux_browser,
     "release": release,
     "validate": validate,
 }

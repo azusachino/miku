@@ -1,10 +1,14 @@
 .PHONY: dev fmt fmt-check css lint test kb-check check check-all-features check-integration experiments compose-experiments \
-  check-blackbox check-ux-smoke check-ux-soak check-ux-browser benchmark \
+  check-blackbox e2e-soak benchmark \
   benchmark-real-vault release validate
 
 # Browser checks from the playwright-verify skill: make e2e, e2e-probe, e2e-install.
 E2E_DIR := miku-web
 include e2e.mk
+
+# The timed API soak runs only on request (MIKU_UX_SOAK_SECONDS sets its length).
+e2e-soak:
+	cd $(E2E_DIR) && bunx playwright test --project=soak $(ARGS)
 
 dev:
 	uv run python scripts/dev.py
@@ -45,15 +49,6 @@ compose-experiments:
 
 check-blackbox:
 	MIKU_UX_AUTOSTART=1 uv run python scripts/orchestrate.py check-blackbox
-
-check-ux-smoke:
-	MIKU_UX_AUTOSTART=1 uv run python scripts/orchestrate.py check-ux-smoke
-
-check-ux-soak:
-	MIKU_UX_AUTOSTART=1 uv run python scripts/orchestrate.py check-ux-soak
-
-check-ux-browser:
-	MIKU_UX_AUTOSTART=1 uv run python scripts/orchestrate.py check-ux-browser
 
 benchmark:
 	uv run python scripts/orchestrate.py benchmark

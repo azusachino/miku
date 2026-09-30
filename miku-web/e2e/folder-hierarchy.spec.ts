@@ -1,6 +1,6 @@
 // The folder tree is the hierarchy (ADR-0024), checked against the fixture
 // vault in e2e/fixture/miku_docs.
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures";
 
 test("a folder expands to show its notes", async ({ page }) => {
   await page.goto("/p/index.md");

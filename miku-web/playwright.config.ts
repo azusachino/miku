@@ -3,11 +3,11 @@
 // `miku_docs/` vault is the small fixture under e2e/fixture, and the Vite dev
 // server, which proxies /api to it. When a project script has already started
 // the app, it exports E2E_BASE_URL and this config starts no server of its own.
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { defineConfig, devices } from "@playwright/test";
+import { API_PORT, API_URL, PORT } from "./e2e/servers";
 
-const PORT = 5107;
-const API_PORT = 3107;
-const API_URL = `http://127.0.0.1:${API_PORT}`;
 const external = process.env.E2E_BASE_URL;
 const CI = !!process.env.CI;
 // Optional: a Chromium already on disk, for machines where this Playwright
@@ -33,21 +33,29 @@ export default defineConfig({
     trace: "retain-on-failure",
     screenshot: "only-on-failure"
   },
-  // `make e2e` runs the checks; `make e2e-probe` runs only the probe.
+  // `make e2e` runs the checks; `make e2e-probe` runs only the probe;
+  // `make e2e-soak` runs only the timed API soak.
   projects: [
-    { name: "chromium", use: chrome, testIgnore: /probe\.spec\.ts$/ },
-    { name: "probe", use: chrome, testMatch: /probe\.spec\.ts$/ }
+    { name: "chromium", use: chrome, testIgnore: /(probe|soak)\.spec\.ts$/ },
+    { name: "probe", use: chrome, testMatch: /probe\.spec\.ts$/ },
+    { name: "soak", testMatch: /soak\.spec\.ts$/ }
   ],
   // No reuse: a port already in use fails the run instead of testing a server someone else is using.
   webServer: external
     ? undefined
     : [
         {
-          // Read-only with the in-memory index, so a run never writes to the fixture.
+          // The default SQLite index, rebuilt from the fixture in a fresh temporary
+          // file each run; read-only, so a run never writes to the fixture vault.
           command: "cargo run --quiet -p miku",
           cwd: "./e2e/fixture",
           url: `${API_URL}/healthz`,
-          env: { MIKU_BIND: `127.0.0.1:${API_PORT}`, MIKU_INDEX_BACKEND: "memory", MIKU_READONLY: "1" },
+          env: {
+            MIKU_BIND: `127.0.0.1:${API_PORT}`,
+            MIKU_INDEX_BACKEND: "sqlite",
+            MIKU_INDEX_PATH: join(tmpdir(), `miku-e2e-${process.pid}.sqlite`),
+            MIKU_READONLY: "1"
+          },
           reuseExistingServer: false,
           // The first run compiles the server.
           timeout: 300_000

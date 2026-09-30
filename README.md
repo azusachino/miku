@@ -108,7 +108,6 @@ Use the repository Makefile as the stable interface:
 make check                  # formatting, CSS, lint, Python checks, Rust tests
 make check-all-features     # compile and test every Cargo feature combination
 make check-blackbox         # live HTTP checks against a running server
-make check-ux-browser       # Playwright browser acceptance checks
 make e2e                    # Playwright specs against a fixture vault (make e2e-install once)
 make release                # crates.io leaf package dry-runs
 make validate               # check plus release build

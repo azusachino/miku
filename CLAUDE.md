@@ -21,7 +21,6 @@ make dev
 make check
 make check-all-features
 make check-blackbox
-make check-ux-browser
 make e2e
 make validate
 ```

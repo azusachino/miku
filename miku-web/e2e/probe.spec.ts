@@ -3,7 +3,8 @@
 // needs before writing a spec: title, URL, console errors, and the page's ARIA
 // snapshot, whose roles and names become getByRole locators. It also saves a
 // full-page screenshot as probe.png in its test-results folder, and asserts
-// nothing. Run it with `make e2e-probe ROUTE=/path`.
+// nothing. Run it with `make e2e-probe ROUTE=/path`; set PROBE_VIEWPORT=390x844
+// to probe a phone-sized layout.
 import { expect, test } from "@playwright/test";
 
 test("probe", async ({ page }, testInfo) => {
@@ -12,6 +13,9 @@ test("probe", async ({ page }, testInfo) => {
     if (message.type() === "error") errors.push(message.text());
   });
   page.on("pageerror", (error) => errors.push(error.message));
+
+  const viewport = process.env.PROBE_VIEWPORT?.match(/^(\d+)x(\d+)$/);
+  if (viewport) await page.setViewportSize({ width: Number(viewport[1]), height: Number(viewport[2]) });
 
   await page.goto(process.env.PROBE_ROUTE || "/");
   // A client-rendered page paints after the load event: wait for visible text
