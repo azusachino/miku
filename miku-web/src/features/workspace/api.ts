@@ -8,7 +8,6 @@ export type NoteModel = {
   path: string;
   title: string;
   icon: string;
-  parents: string[];
   aliases: string[];
   frontmatter: Record<string, unknown>;
   updated: string;
@@ -26,7 +25,7 @@ export type TreeNodeModel = {
   placementId: string;
   noteId: string;
   parentId: string | null;
-  note: Pick<NoteModel, "id" | "path" | "title" | "identityGenerated" | "parents" | "aliases"> & { order?: number | null };
+  note: Pick<NoteModel, "id" | "path" | "title" | "identityGenerated" | "aliases">;
 };
 
 export function sortTreeNodes(nodes: TreeNodeModel[]): TreeNodeModel[] {
@@ -123,7 +122,6 @@ function normalizeNote(note: Schemas["NoteResponse"]): NoteModel {
     path: note.path,
     title: note.title,
     icon: typeof frontmatter.icon === "string" ? frontmatter.icon : "file-text",
-    parents: Array.isArray(frontmatter.parents) ? frontmatter.parents.filter((parent): parent is string => typeof parent === "string") : [],
     aliases: Array.isArray(frontmatter.aliases) ? frontmatter.aliases.filter((alias): alias is string => typeof alias === "string") : [],
     frontmatter,
     updated: formatUpdatedAt(note.revision.mtime),
@@ -148,9 +146,7 @@ function normalizeTreeNode(node: ApiTreeNode): TreeNodeModel {
       path: node.note.path,
       title: node.note.title,
       identityGenerated: node.note.identity_generated,
-      parents: [],
-      aliases: node.note.aliases,
-      order: node.note.order
+      aliases: node.note.aliases
     }
   };
 }
@@ -225,7 +221,7 @@ export function createWorkspaceClient(onSource: (source: ApiSource) => void) {
         const response = await request<Schemas["ContextResponse"]>(`/api/v1/note-context/${encodePath(id)}`);
         return {
           note: normalizeNote(response.note),
-          parents: response.parents.map((parent) => ({ id: parent.path, path: parent.path, title: parent.title, identityGenerated: parent.identity_generated, parents: [], aliases: parent.aliases, order: parent.order })),
+          parents: response.parents.map((parent) => ({ id: parent.path, path: parent.path, title: parent.title, identityGenerated: parent.identity_generated, aliases: parent.aliases })),
           children: sortTreeNodes(response.children.map((node) => normalizeTreeNode(node as ApiTreeNode))),
           backlinks: response.backlinks.map((backlink) => ({ path: backlink.path, title: backlink.title })),
           outgoing: (response.outgoing ?? []).map((link) => ({ target: link.target, title: link.title, path: link.path, isMissing: link.is_missing }))

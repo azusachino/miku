@@ -69,7 +69,6 @@ pub(super) fn router(state: AppState) -> Router {
             get(http_api::note).put(http_api::save_note),
         )
         .route("/api/v1/note-context/{*id}", get(http_api::note_context))
-        .route("/api/v1/note-children/{*id}", get(http_api::note_children))
         .route("/api/v1/search", get(http_api::search))
         .route("/api/v1/tags", get(http_api::tags))
         .route("/api/v1/tags/{tag}/notes", get(http_api::tag_notes))

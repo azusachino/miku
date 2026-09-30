@@ -4,23 +4,6 @@
  */
 
 export interface paths {
-  "/api/v1/note-children/{id}": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /** Returns direct children for one note. */
-    get: operations["note_children"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
   "/api/v1/note-context/{id}": {
     parameters: {
       query?: never;
@@ -111,7 +94,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
-    /** Returns root or parent-filtered tree placements. */
+    /** Returns the entries of one folder, or of the vault root. */
     get: operations["tree"];
     put?: never;
     post?: never;
@@ -162,17 +145,6 @@ export interface components {
       /** @description Parent notes declared by the selected note. */
       parents: components["schemas"]["NoteSummary"][];
     };
-    /** @description An outgoing link resolved for the selected note. */
-    OutgoingLinkResponse: {
-      /** @description Whether the target note is uncreated/missing. */
-      is_missing: boolean;
-      /** @description Resolved target path. */
-      path: string;
-      /** @description The wikilink target exactly as written in the source, e.g. `[[target]]`. */
-      target: string;
-      /** @description Display title. */
-      title: string;
-    };
     /** @description Full note payload returned to the editor/context panel. */
     NoteResponse: {
       /** @description Markdown body without frontmatter delimiters. */
@@ -198,13 +170,19 @@ export interface components {
       identity_generated: boolean;
       /** @description Stable note identity. */
       note_id: string;
-      /**
-       * Format: int64
-       * @description Sibling ordering from frontmatter.
-       */
-      order?: number | null;
       /** @description Canonical Markdown source path. */
       path: string;
+      /** @description Display title. */
+      title: string;
+    };
+    /** @description An outgoing link resolved for the selected note. */
+    OutgoingLinkResponse: {
+      /** @description Whether the target note is uncreated/missing. */
+      is_missing: boolean;
+      /** @description Resolved target path. */
+      path: string;
+      /** @description The wikilink target exactly as written in the source, e.g. `[[target]]`. */
+      target: string;
       /** @description Display title. */
       title: string;
     };
@@ -229,6 +207,8 @@ export interface components {
       limit?: number | null;
       /** @description Full-text query. */
       q: string;
+      /** @description Search scope: all, title, or content. */
+      scope?: string | null;
     };
     /** @description Search response envelope. */
     SearchResponse: {
@@ -267,7 +247,10 @@ export interface components {
       note: components["schemas"]["NoteSummary"];
       /** @description Stable note content identity. */
       note_id: string;
-      /** @description Parent note identity, absent for a root placement. */
+      /**
+       * @description Folder path for a tree listing, the note path for context children,
+       *     and absent at the vault root.
+       */
       parent_id?: string | null;
       /** @description Stable placement identity derived from note and parent identities. */
       placement_id: string;
@@ -275,14 +258,12 @@ export interface components {
     TreeQuery: {
       /** @description Relative folder path; omitted means the vault root. */
       folder?: string | null;
-      /** @description Deprecated note-parent filter retained for compatibility. */
-      parent_id?: string | null;
     };
-    /** @description Tree response filtered to one parent, or root placements when absent. */
+    /** @description Entries of one folder, or of the vault root when no folder is given. */
     TreeResponse: {
       /** @description Ordered visible placements. */
       nodes: components["schemas"]["TreeNode"][];
-      /** @description Requested parent filter. */
+      /** @description Listed folder path, absent at the vault root. */
       parent_id?: string | null;
     };
     /** @description Workspace bootstrap payload for the separate browser frontend. */
@@ -290,7 +271,7 @@ export interface components {
       /** @description Number of notes whose identity is currently derived from its path. */
       generated_identity_count: number;
       /** @description Current durable and hot projection lifecycle state. */
-      index_phase: "Starting" | "Indexing" | "Ready" | "Degraded";
+      index_phase: string;
       /** @description Number of source notes discovered in the vault. */
       note_count: number;
       /** @description Number of derived tree placements. */
@@ -309,33 +290,6 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
-  note_children: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        id: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["TreeResponse"];
-        };
-      };
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-    };
-  };
   note_context: {
     parameters: {
       query?: never;
@@ -504,7 +458,7 @@ export interface operations {
   tree: {
     parameters: {
       query?: {
-        parent_id?: string;
+        folder?: string;
       };
       header?: never;
       path?: never;

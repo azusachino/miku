@@ -9,7 +9,7 @@
     "format": "prettier --write 'src/**/*.{ts,tsx,css}'",
     "format:check": "prettier --check 'src/**/*.{ts,tsx,css}'",
     "check": "tsc -b --pretty false && vitest run",
-    "generate:api": "openapi-typescript http://127.0.0.1:3000/api/openapi.json -o src/generated/api.ts",
+    "generate:api": "openapi-typescript http://127.0.0.1:3000/api/openapi.json -o src/features/workspace/generated/api.ts",
     "test": "vitest run",
     "test:watch": "vitest"
   },
