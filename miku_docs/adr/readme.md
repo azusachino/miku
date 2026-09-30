@@ -74,5 +74,6 @@ this folder.
 | [0021](0021-canonical-tag-normalization.md)    | Canonical Tag Normalization (#tag)               | Accepted   | 2026-07-29 |
 | [0022](0022-backend-note-context-outgoing-links.md) | Backend-Driven Note Context & Outgoing Links | Accepted   | 2026-07-29 |
 | [0023](0023-reader-first-library-wiki.md)      | Product definition: reader-first library wiki    | Accepted   | 2026-09-30 |
+| [0024](0024-folder-tree-replaces-parents.md)   | Folder tree replaces frontmatter parents/order   | Proposed   |            |
 
 There is no separate staging file. New decisions should be added as a numbered ADR once the boundary is clear enough to implement.
