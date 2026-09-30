@@ -3,12 +3,21 @@ title: Miku Product
 type: product
 status: active
 tags: [miku, product, local-first]
-updated: 2026-07-29
+updated: 2026-09-30
 ---
 
 ## Miku — Product & Positioning
 
 > Design rework written _before_ implementation. Personas drive scope; scope drives the build. See `architecture.md` for the technical contract.
+
+### Product definition (ADR-0023)
+
+**Miku is a self-hosted, reader-first wiki for a large Markdown library.** It turns a folder of Markdown files into a fast, linked, searchable website, and that folder stays the only source of truth.
+
+- **Goals:** fast reading at 10k–100k files; whole-library search including CJK; a computed link graph (links, backlinks, aliases, tags); a rebuild from files that is tested; one binary plus a folder, localhost by default; safe, sufficient editing.
+- **Non-goals:** a daily-capture editor, a Trilium-style workspace (clones, placements, hoisting, splits), plugins or scripting or a query language, multi-user or hosted use, sync, mobile apps, encryption.
+
+Everything below is read through this definition. Where an older section disagrees, ADR-0023 wins.
 
 ### Personas — five lives, one wiki
 
@@ -22,7 +31,7 @@ the capacity note, fixes the doc, and commits all of `miku_docs/` to a private g
 
 #### 2. Tanaka-san — Records & Compliance Officer (municipal office)
 
-Cloud SaaS is a data-sovereignty and procurement problem. Records must live on managed, auditable storage and outlive any vendor. Runs Miku on-prem; the files are the record, Postgres is explicitly
+Cloud SaaS is a data-sovereignty and procurement problem. Records must live on managed, auditable storage and outlive any vendor. Runs Miku on-prem; the files are the record, the index is explicitly
 disposable. Audit is `git log` over the notes directory.
 
 - **Leans on:** filesystem-as-truth, self-hosted, no proprietary format, rebuildable index.
@@ -74,12 +83,12 @@ grep, your editor, your backup) can't touch the data.
 
 - **You own the files.** Plain `.md` in one folder. Delete Miku tomorrow; your knowledge is untouched.
 - **Connections, found for you.** `[[links]]` → backlinks, tags, FTS built in the background. The valuable graph, without hand-maintenance.
-- **The projections are disposable, on purpose.** SQLite search and the MemoryIndex graph are local derived state; Postgres remains optional. Delete a projection and Miku rebuilds it from files.
+- **The projections are disposable, on purpose.** SQLite search and the MemoryIndex graph are local derived state; nothing else is required. Delete a projection and Miku rebuilds it from files.
   Nothing important lives anywhere but your disk.
 - **Self-host or run local.** No account, no telemetry, no cloud.
 - **It gets out of your way.** The React workspace keeps reading primary and opens CodeMirror source editing only when requested.
 
-**One line:** _Obsidian's linking and a real search engine — but the files are unarguably yours, and the index is something you can throw away._
+**One line:** _A fast, linked, searchable website for your Markdown library — the files are unarguably yours, and the index is something you can throw away._
 
 ### Product name — Miku
 
@@ -150,5 +159,5 @@ schema.
 - **No plugin runtime.** React/Vite is the application shell; the supported reader
   surface is explicit and testable rather than an open-ended JavaScript plugin system.
 
-**Deferred:** Dataview-style queries (our Postgres index is the right home for it later), templates (lightweight `templates/` seed files), daily-notes/calendar (a date-named-note convention).
-**Rejected:** a general JS plugin system — that is the Electron-weight tax Miku exists to avoid.
+**Deferred:** templates (lightweight `templates/` seed files), daily-notes/calendar (a date-named-note convention).
+**Rejected:** a general JS plugin system — that is the Electron-weight tax Miku exists to avoid — and Dataview-style queries (ADR-0023).

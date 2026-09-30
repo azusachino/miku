@@ -18,7 +18,6 @@ use crate::http_api;
         http_api::note,
         http_api::save_note,
         http_api::note_context,
-        http_api::note_children,
         http_api::search,
         http_api::tags,
         http_api::tag_notes

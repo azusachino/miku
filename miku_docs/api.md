@@ -28,11 +28,10 @@ All application JSON routes use the /api/v1 prefix.
 | Method | Route                      | Purpose                                   |
 | ------ | -------------------------- | ----------------------------------------- |
 | GET    | /api/v1/workspace          | Workspace capabilities and note count     |
-| GET    | /api/v1/tree               | Root tree; use prefix for folder children |
+| GET    | /api/v1/tree               | Root entries; `?folder=` for one folder   |
 | GET    | /api/v1/notes/{id}         | Read one Markdown note                    |
 | PUT    | /api/v1/notes/{id}         | Save one note with optimistic revision    |
 | GET    | /api/v1/note-context/{id}  | Note, metadata, backlinks, and context    |
-| GET    | /api/v1/note-children/{id} | Child placements for a note               |
 | GET    | /api/v1/search             | Title, content, or combined search        |
 | GET    | /api/v1/tags               | Indexed tags and counts (`limit`/`offset`) |
 | GET    | /api/v1/tags/{tag}/notes   | Notes carrying one tag                    |

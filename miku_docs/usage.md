@@ -80,7 +80,7 @@ For a Postgres deployment, drop or recreate the disposable database and start th
 
 ```bash
 make check
-make check-ux-browser
+make e2e
 ```
 
-The browser acceptance command requires a local Playwright browser installation and verifies the real reader, lazy assets, navigation, tags, editor, and narrow layout behavior.
+`make e2e` runs the Playwright specs in headless Chromium against a fixture vault and verifies the reader, rendering, navigation, tags, search, and narrow layout behavior. Run `make e2e-install` once to install the browser.

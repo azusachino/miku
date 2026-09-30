@@ -218,8 +218,6 @@ impl Vault {
             NoteId::new(Uuid::new_v4().to_string())?,
             path.as_str(),
             title,
-            Vec::new(),
-            None,
             properties,
         )?;
         let document = VaultDocument {
@@ -322,8 +320,6 @@ fn parse_document(path: &VaultPath, raw: &str, mtime: i64) -> Result<VaultDocume
         None => (
             WorkspaceFrontmatter {
                 id: None,
-                parents: Vec::new(),
-                order: None,
                 properties: BTreeMap::new(),
             },
             true,
@@ -331,14 +327,7 @@ fn parse_document(path: &VaultPath, raw: &str, mtime: i64) -> Result<VaultDocume
         ),
     };
     let id = workspace.id.unwrap_or_else(|| path_identity(path.as_str()));
-    let note = Note::new(
-        id,
-        path.as_str(),
-        title,
-        workspace.parents,
-        workspace.order,
-        properties,
-    )?;
+    let note = Note::new(id, path.as_str(), title, properties)?;
     Ok(VaultDocument {
         note,
         body: body.to_string(),
@@ -378,18 +367,6 @@ fn serialize_document(note: &Note, body: &str) -> Result<String, VaultError> {
         "id".to_string(),
         Value::String(note.id.as_str().to_string()),
     );
-    values.insert(
-        "parents".to_string(),
-        Value::Array(
-            note.parents
-                .iter()
-                .map(|parent| Value::String(parent.as_str().to_string()))
-                .collect(),
-        ),
-    );
-    if let Some(order) = note.order {
-        values.insert("order".to_string(), Value::Number(order.into()));
-    }
     let yaml = serde_yaml::to_string(&Value::Object(values))?;
     Ok(format!("---\n{yaml}---\n{body}"))
 }
@@ -599,5 +576,46 @@ mod tests {
             vault.apply_migration(&plan),
             Err(VaultError::MigrationConflict(_))
         ));
+    }
+
+    #[test]
+    fn create_writes_no_parents_or_order_keys() {
+        // ADR-0024: the folder tree is the hierarchy, so Miku no longer adds
+        // placement keys to the files it creates.
+        let root = tempfile::tempdir().unwrap();
+        let vault = Vault::new(root.path());
+        vault
+            .create("Notes/Fresh.md", "Fresh", "body", BTreeMap::new())
+            .unwrap();
+
+        let raw = fs::read_to_string(root.path().join("Notes/Fresh.md")).unwrap();
+        assert!(!raw.contains("parents"), "unexpected parents key: {raw}");
+        assert!(!raw.contains("order"), "unexpected order key: {raw}");
+    }
+
+    #[test]
+    fn migration_keeps_legacy_parents_and_order_as_plain_properties() {
+        // ADR-0024: existing `parents`/`order` keys are ordinary properties,
+        // so a frontmatter rewrite keeps them exactly as the user wrote them.
+        let root = tempfile::tempdir().unwrap();
+        let path = root.path().join("Legacy.md");
+        fs::write(
+            &path,
+            "---\ntitle: Legacy\nparents:\n  - hub\n  - index\norder: 7\n---\nbody\n",
+        )
+        .unwrap();
+        let vault = Vault::new(root.path());
+
+        let plan = vault.plan_migration().unwrap();
+        assert_eq!(vault.apply_migration(&plan).unwrap(), 1);
+
+        let migrated = vault.read("Legacy").unwrap();
+        assert!(!migrated.identity_generated);
+        assert_eq!(
+            migrated.note.properties["parents"],
+            serde_json::json!(["hub", "index"])
+        );
+        assert_eq!(migrated.note.properties["order"], serde_json::json!(7));
+        assert_eq!(migrated.body, "body\n");
     }
 }

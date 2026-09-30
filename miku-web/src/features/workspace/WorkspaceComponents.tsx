@@ -11,7 +11,7 @@ import { extractOutgoingLinks } from "../markdown/noteLinks";
 const MarkdownEditor = lazy(() => import("../markdown/MarkdownEditor"));
 const MarkdownReader = lazy(() => import("../markdown/MarkdownReader").then((module) => ({ default: module.MarkdownReader })));
 const TAG_PAGE_SIZE = 50;
-const FRONTMATTER_ORDER = ["type", "status", "id", "slug", "aliases", "parents", "updated"] as const;
+const FRONTMATTER_ORDER = ["type", "status", "id", "slug", "aliases", "updated"] as const;
 const FRONTMATTER_HIDDEN = new Set(["title", "tags", "icon"]);
 
 export function curatedFrontmatter(frontmatter: Record<string, unknown>): [string, unknown][] {
@@ -514,10 +514,6 @@ export function ContextPanel({
         <div className="property-row">
           <span>revision</span>
           <strong>{note.revision ? note.revision.content_hash.slice(0, 8) : "unavailable"}</strong>
-        </div>
-        <div className="property-row">
-          <span>placements</span>
-          <strong>{note.parents.length || 1}</strong>
         </div>
       </div>
       <div className="context-section">

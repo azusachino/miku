@@ -18,6 +18,8 @@ use std::{
 use tokio::sync::RwLock;
 
 const DOCUMENT_CACHE_CAPACITY: usize = 128;
+/// A folder's own note, as the workspace tree already treats it (ADR-0024).
+const FOLDER_NOTE: &str = "index.md";
 
 struct DocumentCache {
     entries: HashMap<String, VaultDocument>,
@@ -191,6 +193,33 @@ impl FileMikuApplication {
         index
     }
 
+    /// Index every page by its vault-root path, lowercased and without
+    /// `.md`: the key the backlink graph uses for path-qualified links.
+    fn build_path_index(pages: &[PageSummary]) -> HashMap<String, usize> {
+        pages
+            .iter()
+            .enumerate()
+            .map(|(i, page)| {
+                let path = page.path.strip_suffix(".md").unwrap_or(&page.path);
+                (path.to_lowercase(), i)
+            })
+            .collect()
+    }
+
+    /// Resolve a path-qualified target such as `[[projects/alpha]]` by exact
+    /// vault-root path, matching the backlink graph. Targets without a `/`
+    /// are left to the name index.
+    fn resolve_path_target<'a>(
+        target_norm: &str,
+        pages: &'a [PageSummary],
+        index: &HashMap<String, usize>,
+    ) -> Option<&'a PageSummary> {
+        if !target_norm.contains('/') {
+            return None;
+        }
+        index.get(&target_norm.to_lowercase()).map(|&i| &pages[i])
+    }
+
     /// Match a wikilink target against a prebuilt name index, folding
     /// whitespace/hyphen/underscore so that "elden ring" and "elden-ring"
     /// resolve to the same page. Ambiguous matches fall back to the
@@ -303,6 +332,55 @@ impl FileMikuApplication {
     }
 }
 
+impl FileMikuApplication {
+    /// Folder-derived parents (ADR-0024): the `index.md` of every ancestor
+    /// folder that has one, from the vault root to the nearest folder. An
+    /// `index.md` note is its own folder's note, so its chain starts one
+    /// folder up. Costs one index lookup per folder level, not a vault scan.
+    async fn folder_parents(&self, source_path: &str) -> Result<Vec<FileNode>, ApplicationError> {
+        let mut folders: Vec<&str> = source_path.split('/').collect();
+        let is_folder_note = folders.pop() == Some(FOLDER_NOTE);
+        if is_folder_note && folders.pop().is_none() {
+            return Ok(Vec::new());
+        }
+        let mut parents = Vec::new();
+        for depth in 0..=folders.len() {
+            let folder = folders[..depth].join("/");
+            let candidate = if folder.is_empty() {
+                FOLDER_NOTE.to_string()
+            } else {
+                format!("{folder}/{FOLDER_NOTE}")
+            };
+            if let Some(page) = self.index.page(&candidate).await? {
+                parents.push(Self::summary_file_node(&page));
+            }
+        }
+        Ok(parents)
+    }
+
+    /// Folder-derived children (ADR-0024): an `index.md` note's children are
+    /// its folder's entries, the same answer as the tree API, without the
+    /// note itself. Every other note has none.
+    async fn folder_children(&self, source_path: &str) -> Result<Vec<FileNode>, ApplicationError> {
+        let Some(folder) = source_path.strip_suffix(FOLDER_NOTE) else {
+            return Ok(Vec::new());
+        };
+        let folder = match folder {
+            "" => RelativePath::root(),
+            nested => match nested.strip_suffix('/') {
+                Some(folder) => RelativePath::new(folder)?,
+                None => return Ok(Vec::new()),
+            },
+        };
+        let tree = self.file_tree(FileTreeRequest { folder }).await?;
+        Ok(tree
+            .nodes
+            .into_iter()
+            .filter(|node| node.path.as_str() != source_path)
+            .collect())
+    }
+}
+
 #[async_trait]
 impl VaultReader for FileMikuApplication {
     async fn vault_info(&self) -> Result<VaultInfo, ApplicationError> {
@@ -371,36 +449,8 @@ impl VaultReader for FileMikuApplication {
             .list_pages()
             .await
             .map_err(ApplicationError::from)?;
-        let id_map = pages
-            .iter()
-            .filter_map(|page| {
-                page.frontmatter
-                    .get("id")
-                    .and_then(serde_json::Value::as_str)
-                    .map(|id| (id, page))
-            })
-            .collect::<std::collections::HashMap<_, _>>();
-        let parents = document
-            .note
-            .parents
-            .iter()
-            .filter_map(|id| id_map.get(id.as_str()).copied())
-            .map(Self::summary_file_node)
-            .collect();
-        let children = pages
-            .iter()
-            .filter(|page| {
-                page.frontmatter
-                    .get("parents")
-                    .and_then(serde_json::Value::as_array)
-                    .is_some_and(|parents| {
-                        parents
-                            .iter()
-                            .any(|parent| parent.as_str() == Some(document.note.id.as_str()))
-                    })
-            })
-            .map(Self::summary_file_node)
-            .collect();
+        let parents = self.folder_parents(&document.note.source_path).await?;
+        let children = self.folder_children(&document.note.source_path).await?;
         let backlinks = self.index.backlinks(&document.note.source_path).await?;
         let page_projection = miku_indexer::build_page_index(
             &document.note.source_path,
@@ -417,12 +467,14 @@ impl VaultReader for FileMikuApplication {
         let mut outgoing = Vec::new();
         let mut seen = std::collections::HashSet::new();
         let name_index = Self::build_name_index(&pages);
+        let path_index = Self::build_path_index(&pages);
 
         for link in page_projection.links {
             if link.kind != miku_domain::LinkKind::Page {
                 continue;
             }
-            let resolved = Self::resolve_from_index(&link.target, &pages, &name_index);
+            let resolved = Self::resolve_path_target(&link.target_norm, &pages, &path_index)
+                .or_else(|| Self::resolve_from_index(&link.target, &pages, &name_index));
             let (target_path, title, is_missing) = match resolved {
                 Some(page) => (page.path.clone(), page.title.clone(), false),
                 None => {
@@ -1078,6 +1130,62 @@ mod tests {
             "note_context took {elapsed:?} for {LINK_COUNT} links against {} pages -- \
              expected O(links + pages), not O(links * pages)",
             UNRELATED_PAGE_COUNT + LINK_COUNT + 1
+        );
+    }
+
+    #[tokio::test]
+    async fn test_note_context_resolves_path_qualified_links_like_the_backlink_graph() {
+        // `[[folder/note]]` must resolve by vault-root path (case-insensitive,
+        // `.md` optional), matching the backlink graph, while a title that
+        // merely contains a slash still resolves through the name index.
+        let root = tempdir().expect("temporary vault");
+        let vault = Arc::new(Vault::new(root.path()));
+        let hub_body = "[[Projects/Alpha]] [[projects/beta.md]] [[TCP/IP]] [[projects/gone]]";
+        let files = [
+            ("hub.md", "Hub", hub_body),
+            ("projects/alpha.md", "Alpha", "# Alpha"),
+            ("projects/beta.md", "Beta", "# Beta"),
+            ("networking.md", "TCP/IP", "# TCP/IP"),
+        ];
+        for (path, title, body) in files {
+            vault
+                .create(path, title, body, Default::default())
+                .expect("create note");
+        }
+        let workspace: Arc<dyn WorkspaceService> =
+            Arc::new(FileWorkspaceService::new(Arc::clone(&vault), false));
+        let memory = Arc::new(MemoryIndex::new());
+        memory
+            .replace_pages(
+                files
+                    .iter()
+                    .map(|(path, title, body)| {
+                        let raw = format!("---\ntitle: {title}\n---\n{body}\n");
+                        miku_indexer::build_page_index(path, raw.as_bytes(), 1)
+                    })
+                    .collect(),
+            )
+            .await
+            .expect("seed snapshot");
+        let application = FileMikuApplication::new(vault, workspace, IndexApi::from_store(memory));
+
+        let context = application
+            .note_context(NoteRef::Path(crate::NotePath::new("hub.md").unwrap()))
+            .await
+            .expect("fetch note context");
+        let resolved: Vec<(&str, &str, bool)> = context
+            .outgoing
+            .iter()
+            .map(|link| (link.target.as_str(), link.path.as_str(), link.is_missing))
+            .collect();
+        assert_eq!(
+            resolved,
+            vec![
+                ("Projects/Alpha", "projects/alpha.md", false),
+                ("projects/beta.md", "projects/beta.md", false),
+                ("TCP/IP", "networking.md", false),
+                ("projects/gone", "projects/gone.md", true),
+            ]
         );
     }
 }

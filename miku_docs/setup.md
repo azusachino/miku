@@ -55,7 +55,8 @@ make check-integration                 # optional service-backed probes
 make release                           # crates.io leaf package dry-runs
 make validate                          # check + release build
 make check-blackbox                    # live HTTP checks against a running app
-make check-ux-browser                 # Playwright browser acceptance (install Chromium once)
+make e2e                              # Playwright browser and API specs on a fixture vault
+make e2e-soak                         # timed API soak (MIKU_UX_SOAK_SECONDS, default 60)
 MIKU_BENCH_BACKEND=sqlite make benchmark # benchmark a running local SQLite app
 ```
 
@@ -67,8 +68,7 @@ and is invoked with `make check-blackbox`.
 
 Project automation/scripts are Python run via `uv run python scripts/<x>.py` (root `pyproject.toml`), not bash.
 
-The browser acceptance harness uses Playwright against a real local process. Install its browser once with `uv run playwright install chromium`, then run `make check-ux-browser`. Screenshots are
-written to `.artifacts/ux/` (ignored).
+Browser and API acceptance specs live in `miku-web/e2e/` and run with Playwright in headless Chromium. `make e2e` starts the Rust API against the fixture vault in `miku-web/e2e/fixture/` and the Vite dev server, then runs the specs. Install the browser once per Playwright version with `make e2e-install`. Failure screenshots, traces, and attached screenshots are written to `miku-web/test-results/` (ignored). GitHub CI runs the same specs in a separate `e2e` job (`make e2e-install E2E_INSTALL_FLAGS=--with-deps`, then `make e2e` with `CI` set) and uploads `test-results/` as the `playwright-results` artifact when a spec fails.
 
 ### Containers (Postgres/Valkey scale profile only)
 
