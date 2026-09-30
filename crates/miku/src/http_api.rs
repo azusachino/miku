@@ -546,20 +546,6 @@ fn note_response(document: &VaultDocument) -> NoteResponse {
         "id".to_string(),
         serde_json::Value::String(document.note.id.as_str().to_string()),
     );
-    frontmatter.insert(
-        "parents".to_string(),
-        serde_json::Value::Array(
-            document
-                .note
-                .parents
-                .iter()
-                .map(|parent| serde_json::Value::String(parent.as_str().to_string()))
-                .collect(),
-        ),
-    );
-    if let Some(order) = document.note.order {
-        frontmatter.insert("order".to_string(), serde_json::Value::Number(order.into()));
-    }
     NoteResponse {
         note_id: document.note.id.as_str().to_string(),
         path: document.note.source_path.clone(),
@@ -623,17 +609,13 @@ mod tests {
     use miku_domain::workspace::{Note, NoteId, RevisionToken};
     use std::collections::BTreeMap;
 
-    fn document(id: &str, path: &str, parents: Vec<NoteId>, order: Option<i64>) -> VaultDocument {
+    fn document(
+        id: &str,
+        path: &str,
+        properties: BTreeMap<String, serde_json::Value>,
+    ) -> VaultDocument {
         VaultDocument {
-            note: Note::new(
-                NoteId::new(id).unwrap(),
-                path,
-                id,
-                parents,
-                order,
-                BTreeMap::new(),
-            )
-            .unwrap(),
+            note: Note::new(NoteId::new(id).unwrap(), path, id, properties).unwrap(),
             body: String::new(),
             revision: RevisionToken::new("hash", 1).unwrap(),
             identity_generated: false,
@@ -642,11 +624,24 @@ mod tests {
 
     #[test]
     fn note_response_contains_workspace_frontmatter_and_revision() {
-        let document = document("n1", "Notes/N1.md", Vec::new(), Some(3));
+        let document = document("n1", "Notes/N1.md", BTreeMap::new());
         let response = note_response(&document);
         assert_eq!(response.frontmatter["id"], "n1");
-        assert_eq!(response.frontmatter["order"], 3);
         assert_eq!(response.revision.content_hash, "hash");
+        // ADR-0024: no placement keys are synthesized for a file without them.
+        assert!(response.frontmatter.get("parents").is_none());
+        assert!(response.frontmatter.get("order").is_none());
+    }
+
+    #[test]
+    fn note_response_passes_legacy_parents_and_order_through_as_properties() {
+        let properties = BTreeMap::from([
+            ("parents".to_string(), serde_json::json!(["hub"])),
+            ("order".to_string(), serde_json::json!(3)),
+        ]);
+        let response = note_response(&document("n1", "Notes/N1.md", properties));
+        assert_eq!(response.frontmatter["parents"], serde_json::json!(["hub"]));
+        assert_eq!(response.frontmatter["order"], 3);
     }
 
     fn file_node(path: &str) -> FileNode {
