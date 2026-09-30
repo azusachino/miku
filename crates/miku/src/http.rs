@@ -12,6 +12,7 @@ use axum::{
 use std::sync::atomic::{AtomicU64, Ordering};
 use tokio_stream::{wrappers::BroadcastStream, Stream, StreamExt};
 use tower_http::trace::TraceLayer;
+use tracing::Instrument;
 
 static REQUEST_SEQUENCE: AtomicU64 = AtomicU64::new(1);
 
@@ -28,13 +29,15 @@ async fn request_context(mut request: Request, next: middleware::Next) -> Respon
         request_id.parse().expect("request id is valid ASCII"),
     );
     let span = tracing::info_span!("http_request", request_id = %request_id, method = %request.method(), uri = %request.uri());
-    let _entered = span.enter();
-    let mut response = next.run(request).await;
+    // Attach the span to the future rather than holding an `enter()` guard
+    // across `.await`: a guard held while the task is suspended leaks the span
+    // into other work on the same thread, which crashed the server under load.
+    let mut response = next.run(request).instrument(span.clone()).await;
     response.headers_mut().insert(
         "x-miku-request-id",
         request_id.parse().expect("request id is valid ASCII"),
     );
-    tracing::info!(status = %response.status(), "request completed");
+    span.in_scope(|| tracing::info!(status = %response.status(), "request completed"));
     response
 }
 
