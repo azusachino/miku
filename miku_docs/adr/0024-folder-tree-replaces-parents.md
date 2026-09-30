@@ -3,10 +3,10 @@ id: ADR-0024
 type: adr
 title: ADR-0024 — The folder tree replaces frontmatter parents and order
 slug: folder-tree-replaces-parents
-status: Proposed
+status: Accepted
 updated: 2026-09-30
 date-proposed: 2026-09-30
-date-accepted:
+date-accepted: 2026-09-30
 deciders: [haru]
 mirror: asobi:miku:decision:folder-tree-replaces-parents
 supersedes: []
