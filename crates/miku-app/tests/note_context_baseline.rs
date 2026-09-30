@@ -1,11 +1,12 @@
-//! Baseline for `note_context` on a small fixture vault (ADR-0024 step 1).
+//! Baseline for `note_context` on a small fixture vault.
 //!
 //! Files are written to disk as a user would write them, indexed through the
 //! production `miku_indexer::build_page_index`, and served by
-//! `FileMikuApplication`. The assertions pin today's answers so the move to
-//! folder-derived parents and children (ADR-0024) changes only what it is
-//! meant to change. Each backend is also rebuilt from the same files to check
-//! that a fresh projection answers identically (ADR-0023 goal 4).
+//! `FileMikuApplication`. Every backend must give the same answers, and each
+//! backend is also rebuilt from the same files to check that a fresh
+//! projection answers identically (ADR-0023 goal 4). Parents and children
+//! come from folder paths (ADR-0024); frontmatter `parents` is an ordinary
+//! property with no effect on the hierarchy.
 
 use std::path::Path;
 use std::sync::Arc;
@@ -21,6 +22,7 @@ use tempfile::TempDir;
 
 /// The fixture vault: relative path and raw file contents.
 const FIXTURE: &[(&str, &str)] = &[
+    ("index.md", "# Home\n\nStart here.\n"),
     (
         "projects/index.md",
         "---\nid: note-projects\ntitle: Projects\n---\n# Projects\n\nHub for [[alpha]] work.\n",
@@ -40,8 +42,9 @@ const FIXTURE: &[(&str, &str)] = &[
     ("inbox.md", "# Inbox\n\nCapture for [[projects/alpha]].\n"),
 ];
 
-/// The parts of a `NoteContext` this baseline pins, with sets sorted so the
-/// comparison does not depend on backend iteration order.
+/// The parts of a `NoteContext` this baseline pins. Parents keep their
+/// root-to-nearest order; the other sets are sorted so the comparison does
+/// not depend on backend iteration order.
 #[derive(Debug, PartialEq, Eq)]
 struct Summary {
     parents: Vec<String>,
@@ -52,12 +55,11 @@ struct Summary {
 }
 
 fn summarize(context: &NoteContext) -> Summary {
-    let mut parents: Vec<String> = context
+    let parents: Vec<String> = context
         .parents
         .iter()
         .map(|node| node.path.as_str().to_string())
         .collect();
-    parents.sort();
     let mut children: Vec<String> = context
         .children
         .iter()
@@ -145,9 +147,15 @@ async fn context(application: &FileMikuApplication, path: &str) -> Summary {
     summarize(&context)
 }
 
-/// Answers shared by every backend: backlinks and outgoing links.
-async fn assert_link_graph(application: &FileMikuApplication) {
+/// Answers every backend must give.
+async fn assert_context_answers(application: &FileMikuApplication) {
     let alpha = context(application, "projects/alpha.md").await;
+    assert_eq!(
+        alpha.parents,
+        strings(&["index.md", "projects/index.md"]),
+        "alpha parents"
+    );
+    assert!(alpha.children.is_empty(), "alpha children");
     assert_eq!(
         alpha.backlinks,
         strings(&[
@@ -169,6 +177,28 @@ async fn assert_link_graph(application: &FileMikuApplication) {
         "alpha outgoing"
     );
 
+    // Gamma's frontmatter `parents: [note-alpha]` is a plain property now:
+    // its parent is its folder chain, which has only the root index.
+    let gamma = context(application, "ideas/gamma.md").await;
+    assert_eq!(gamma.parents, strings(&["index.md"]), "gamma parents");
+    assert!(gamma.children.is_empty(), "gamma children");
+
+    let projects = context(application, "projects/index.md").await;
+    assert_eq!(projects.parents, strings(&["index.md"]), "projects parents");
+    assert_eq!(
+        projects.children,
+        strings(&["projects/alpha.md", "projects/beta.md"]),
+        "projects children"
+    );
+
+    let home = context(application, "index.md").await;
+    assert!(home.parents.is_empty(), "home parents");
+    assert_eq!(
+        home.children,
+        strings(&["ideas", "inbox.md", "projects"]),
+        "home children"
+    );
+
     let beta = context(application, "projects/beta.md").await;
     assert_eq!(
         beta.backlinks,
@@ -182,6 +212,7 @@ async fn assert_link_graph(application: &FileMikuApplication) {
     );
 
     let inbox = context(application, "inbox.md").await;
+    assert_eq!(inbox.parents, strings(&["index.md"]), "inbox parents");
     assert!(inbox.backlinks.is_empty(), "inbox backlinks");
     // A path-qualified target resolves by vault-root path, the same rule the
     // backlink graph uses (alpha's backlinks above include inbox.md).
@@ -206,16 +237,7 @@ async fn memory_backend_note_context_baseline() {
     write_fixture(root.path());
     let application = application(root.path(), memory_index().await);
 
-    assert_link_graph(&application).await;
-
-    // MemoryIndex drops frontmatter when it stores a page, so today the
-    // memory-only backend resolves no frontmatter parents or children.
-    // ADR-0024 derives both from folder paths instead.
-    let alpha = context(&application, "projects/alpha.md").await;
-    assert!(alpha.parents.is_empty(), "memory alpha parents");
-    assert!(alpha.children.is_empty(), "memory alpha children");
-    let gamma = context(&application, "ideas/gamma.md").await;
-    assert!(gamma.parents.is_empty(), "memory gamma parents");
+    assert_context_answers(&application).await;
 
     let rebuilt = self::application(root.path(), memory_index().await);
     assert_eq!(
@@ -233,34 +255,7 @@ async fn composed_sqlite_backend_note_context_baseline() {
     let first = TempDir::new().expect("index dir");
     let application = application(root.path(), composed_index(first.path()).await);
 
-    assert_link_graph(&application).await;
-
-    // The default runtime reads page summaries from SQLite, which keeps
-    // frontmatter, so frontmatter `parents` still resolve here. These are the
-    // answers ADR-0024 replaces with folder-derived ones.
-    let alpha = context(&application, "projects/alpha.md").await;
-    assert_eq!(
-        alpha.parents,
-        strings(&["projects/index.md"]),
-        "alpha parents"
-    );
-    assert_eq!(
-        alpha.children,
-        strings(&["ideas/gamma.md"]),
-        "alpha children"
-    );
-    let gamma = context(&application, "ideas/gamma.md").await;
-    assert_eq!(
-        gamma.parents,
-        strings(&["projects/alpha.md"]),
-        "gamma parents"
-    );
-    let index = context(&application, "projects/index.md").await;
-    assert_eq!(
-        index.children,
-        strings(&["projects/alpha.md"]),
-        "index children"
-    );
+    assert_context_answers(&application).await;
 
     let second = TempDir::new().expect("rebuilt index dir");
     let rebuilt = self::application(root.path(), composed_index(second.path()).await);

@@ -215,6 +215,10 @@ Every first-party note uses YAML frontmatter for stable metadata. The minimum co
 
 `GET /api/v1/note-context/{id}` assembles a single <15ms response containing `note`, `parents`, `children`, `backlinks`, and `outgoing` link items.
 
+`parents` and `children` come from folder paths (ADR-0024). `parents` is the `index.md` of each ancestor folder, from the vault root to the nearest folder. `children` is non-empty only for an `index.md` note: its folder's entries, as the tree API returns them. Frontmatter `parents` and `order` are ordinary properties.
+
+Path-qualified targets such as `[[projects/alpha]]` resolve by exact vault-root path (case-insensitive, `.md` optional), the same rule the backlink graph uses; other targets resolve by filename, title, or alias.
+
 The backend index (`MemoryIndex` / `SqliteIndex`) resolves target paths for every outgoing link:
 
 - Existing target notes resolve to their exact canonical vault path (`is_missing: false`).
