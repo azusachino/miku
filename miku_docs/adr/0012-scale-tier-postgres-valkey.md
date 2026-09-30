@@ -3,14 +3,14 @@ id: ADR-0012
 type: adr
 title: ADR-0012 — Scale deployment tier with Postgres and Valkey
 slug: scale-tier-postgres-valkey
-status: Accepted
-updated: 2026-07-14
+status: Superseded by ADR-0023
+updated: 2026-09-30
 date-proposed: 2026-07-14
 date-accepted: 2026-07-14
 deciders: [haru]
 mirror: asobi:miku:decision:scale-tier-postgres-valkey
 supersedes: []
-superseded-by:
+superseded-by: [ADR-0023]
 relates-to: [ADR-0009, ADR-0010]
 impacts: [crates/miku-index-postgres, crates/miku-cache-valkey, compose.yml]
 config-keys: [MIKU_TIER, MIKU_PRIMARY, VALKEY_URL, DATABASE_URL]
@@ -18,6 +18,8 @@ tags: [backend, postgres, valkey, scale]
 ---
 
 ## ADR-0012 — Scale deployment tier with Postgres and Valkey
+
+Superseded by ADR-0023. Miku is a single-user, reader-first library wiki, so the scale tier no longer serves a product goal. The crates stay frozen until a separate removal change.
 
 ### Decision
 
