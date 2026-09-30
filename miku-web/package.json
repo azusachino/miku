@@ -8,10 +8,10 @@
     "build": "tsc -b && vite build",
     "format": "prettier --write 'src/**/*.{ts,tsx,css}'",
     "format:check": "prettier --check 'src/**/*.{ts,tsx,css}'",
-    "check": "tsc -b --pretty false && vitest run",
+    "check": "tsc -b --pretty false && vitest run --dir src",
     "generate:api": "openapi-typescript http://127.0.0.1:3000/api/openapi.json -o src/features/workspace/generated/api.ts",
-    "test": "vitest run",
-    "test:watch": "vitest"
+    "test": "vitest run --dir src",
+    "test:watch": "vitest --dir src"
   },
   "dependencies": {
     "@codemirror/lang-markdown": "^6.3.3",
@@ -36,6 +36,7 @@
     "remark-math": "^6.0.0"
   },
   "devDependencies": {
+    "@playwright/test": "1.61.0",
     "@tailwindcss/typography": "^0.5.20",
     "@tailwindcss/vite": "^4.1.11",
     "@testing-library/jest-dom": "^6.6.4",

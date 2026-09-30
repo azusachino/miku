@@ -2,6 +2,10 @@
   check-blackbox check-ux-smoke check-ux-soak check-ux-browser benchmark \
   benchmark-real-vault release validate
 
+# Browser checks from the playwright-verify skill: make e2e, e2e-probe, e2e-install.
+E2E_DIR := miku-web
+include e2e.mk
+
 dev:
 	uv run python scripts/dev.py
 

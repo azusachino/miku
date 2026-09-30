@@ -22,10 +22,11 @@ make check
 make check-all-features
 make check-blackbox
 make check-ux-browser
+make e2e
 make validate
 ```
 
-All daily operations go through the Makefile. Python automation runs through uv and Rust/frontend tools come from the Nix devShell.
+Verify web UI changes with `make e2e`: Playwright specs in miku-web/e2e run headless Chromium against the fixture vault in miku-web/e2e/fixture. Run `make e2e-probe ROUTE=/p/<path>` to see a page's ARIA snapshot before writing a spec, and `make e2e-install` once per Playwright version. All daily operations go through the Makefile. Python automation runs through uv and Rust/frontend tools come from the Nix devShell.
 
 ## Architecture rules
 
