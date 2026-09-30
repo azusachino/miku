@@ -68,7 +68,7 @@ and is invoked with `make check-blackbox`.
 
 Project automation/scripts are Python run via `uv run python scripts/<x>.py` (root `pyproject.toml`), not bash.
 
-Browser and API acceptance specs live in `miku-web/e2e/` and run with Playwright in headless Chromium. `make e2e` starts the Rust API against the fixture vault in `miku-web/e2e/fixture/` and the Vite dev server, then runs the specs. Install the browser once per Playwright version with `make e2e-install`. Failure screenshots, traces, and attached screenshots are written to `miku-web/test-results/` (ignored).
+Browser and API acceptance specs live in `miku-web/e2e/` and run with Playwright in headless Chromium. `make e2e` starts the Rust API against the fixture vault in `miku-web/e2e/fixture/` and the Vite dev server, then runs the specs. Install the browser once per Playwright version with `make e2e-install`. Failure screenshots, traces, and attached screenshots are written to `miku-web/test-results/` (ignored). GitHub CI runs the same specs in a separate `e2e` job (`make e2e-install E2E_INSTALL_FLAGS=--with-deps`, then `make e2e` with `CI` set) and uploads `test-results/` as the `playwright-results` artifact when a spec fails.
 
 ### Containers (Postgres/Valkey scale profile only)
 
