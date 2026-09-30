@@ -191,6 +191,33 @@ impl FileMikuApplication {
         index
     }
 
+    /// Index every page by its vault-root path, lowercased and without
+    /// `.md`: the key the backlink graph uses for path-qualified links.
+    fn build_path_index(pages: &[PageSummary]) -> HashMap<String, usize> {
+        pages
+            .iter()
+            .enumerate()
+            .map(|(i, page)| {
+                let path = page.path.strip_suffix(".md").unwrap_or(&page.path);
+                (path.to_lowercase(), i)
+            })
+            .collect()
+    }
+
+    /// Resolve a path-qualified target such as `[[projects/alpha]]` by exact
+    /// vault-root path, matching the backlink graph. Targets without a `/`
+    /// are left to the name index.
+    fn resolve_path_target<'a>(
+        target_norm: &str,
+        pages: &'a [PageSummary],
+        index: &HashMap<String, usize>,
+    ) -> Option<&'a PageSummary> {
+        if !target_norm.contains('/') {
+            return None;
+        }
+        index.get(&target_norm.to_lowercase()).map(|&i| &pages[i])
+    }
+
     /// Match a wikilink target against a prebuilt name index, folding
     /// whitespace/hyphen/underscore so that "elden ring" and "elden-ring"
     /// resolve to the same page. Ambiguous matches fall back to the
@@ -417,12 +444,14 @@ impl VaultReader for FileMikuApplication {
         let mut outgoing = Vec::new();
         let mut seen = std::collections::HashSet::new();
         let name_index = Self::build_name_index(&pages);
+        let path_index = Self::build_path_index(&pages);
 
         for link in page_projection.links {
             if link.kind != miku_domain::LinkKind::Page {
                 continue;
             }
-            let resolved = Self::resolve_from_index(&link.target, &pages, &name_index);
+            let resolved = Self::resolve_path_target(&link.target_norm, &pages, &path_index)
+                .or_else(|| Self::resolve_from_index(&link.target, &pages, &name_index));
             let (target_path, title, is_missing) = match resolved {
                 Some(page) => (page.path.clone(), page.title.clone(), false),
                 None => {
@@ -1078,6 +1107,62 @@ mod tests {
             "note_context took {elapsed:?} for {LINK_COUNT} links against {} pages -- \
              expected O(links + pages), not O(links * pages)",
             UNRELATED_PAGE_COUNT + LINK_COUNT + 1
+        );
+    }
+
+    #[tokio::test]
+    async fn test_note_context_resolves_path_qualified_links_like_the_backlink_graph() {
+        // `[[folder/note]]` must resolve by vault-root path (case-insensitive,
+        // `.md` optional), matching the backlink graph, while a title that
+        // merely contains a slash still resolves through the name index.
+        let root = tempdir().expect("temporary vault");
+        let vault = Arc::new(Vault::new(root.path()));
+        let hub_body = "[[Projects/Alpha]] [[projects/beta.md]] [[TCP/IP]] [[projects/gone]]";
+        let files = [
+            ("hub.md", "Hub", hub_body),
+            ("projects/alpha.md", "Alpha", "# Alpha"),
+            ("projects/beta.md", "Beta", "# Beta"),
+            ("networking.md", "TCP/IP", "# TCP/IP"),
+        ];
+        for (path, title, body) in files {
+            vault
+                .create(path, title, body, Default::default())
+                .expect("create note");
+        }
+        let workspace: Arc<dyn WorkspaceService> =
+            Arc::new(FileWorkspaceService::new(Arc::clone(&vault), false));
+        let memory = Arc::new(MemoryIndex::new());
+        memory
+            .replace_pages(
+                files
+                    .iter()
+                    .map(|(path, title, body)| {
+                        let raw = format!("---\ntitle: {title}\n---\n{body}\n");
+                        miku_indexer::build_page_index(path, raw.as_bytes(), 1)
+                    })
+                    .collect(),
+            )
+            .await
+            .expect("seed snapshot");
+        let application = FileMikuApplication::new(vault, workspace, IndexApi::from_store(memory));
+
+        let context = application
+            .note_context(NoteRef::Path(crate::NotePath::new("hub.md").unwrap()))
+            .await
+            .expect("fetch note context");
+        let resolved: Vec<(&str, &str, bool)> = context
+            .outgoing
+            .iter()
+            .map(|link| (link.target.as_str(), link.path.as_str(), link.is_missing))
+            .collect();
+        assert_eq!(
+            resolved,
+            vec![
+                ("Projects/Alpha", "projects/alpha.md", false),
+                ("projects/beta.md", "projects/beta.md", false),
+                ("TCP/IP", "networking.md", false),
+                ("projects/gone", "projects/gone.md", true),
+            ]
         );
     }
 }

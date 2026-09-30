@@ -183,14 +183,11 @@ async fn assert_link_graph(application: &FileMikuApplication) {
 
     let inbox = context(application, "inbox.md").await;
     assert!(inbox.backlinks.is_empty(), "inbox backlinks");
-    // KNOWN BUG: the outgoing-link name index holds only filename stems,
-    // titles, and aliases, so a path-qualified `[[projects/alpha]]` is
-    // reported missing even though the file exists and the backlink graph
-    // (see alpha's backlinks above) resolves it. Flip `true` to `false` when
-    // path-qualified targets resolve.
+    // A path-qualified target resolves by vault-root path, the same rule the
+    // backlink graph uses (alpha's backlinks above include inbox.md).
     assert_eq!(
         inbox.outgoing,
-        vec![link("projects/alpha", "projects/alpha.md", true)],
+        vec![link("projects/alpha", "projects/alpha.md", false)],
         "inbox outgoing"
     );
 }
