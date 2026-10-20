@@ -3,6 +3,8 @@
 //! Markdown files remain the source of truth. An [`IndexStore`] stores only a
 //! rebuildable projection used by the HTTP read path and background indexer.
 
+#![allow(clippy::double_must_use)]
+
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 

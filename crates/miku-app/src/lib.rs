@@ -5,6 +5,8 @@
 //! reader half, which keeps backend selection and cache composition outside
 //! the request layer.
 
+#![allow(clippy::double_must_use)]
+
 use miku_domain::{
     Backlink, IndexCapabilities, IndexEvent, IndexReader, IndexStore, IndexWriter, MentionRecord,
     PageIndex, PageSummary, SearchHit, SearchRequest, StoreResult, TagCount,
