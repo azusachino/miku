@@ -5,7 +5,7 @@ aliases:
 type: index
 status: active
 tags: [miku, architecture, adr]
-updated: 2026-07-16
+updated: 2026-09-30
 ---
 
 ## Architecture Decision Records
@@ -62,16 +62,18 @@ this folder.
 | [0009](0009-index-store-composition.md)        | Index store and cache composition                | Accepted   | 2026-07-14 |
 | [0010](0010-workspace-crate-boundaries.md)     | Cargo workspace and crate boundaries             | Accepted   | 2026-07-14 |
 | [0011](0011-local-tier-index.md)               | Local deployment tier                            | Superseded | 2026-07-14 |
-| [0012](0012-scale-tier-postgres-valkey.md)     | Scale deployment tier with Postgres and Valkey   | Accepted   | 2026-07-14 |
+| [0012](0012-scale-tier-postgres-valkey.md)     | Scale deployment tier with Postgres and Valkey   | Superseded | 2026-07-14 |
 | [0013](0013-crates-io-release-surface.md)      | crates.io release surface                        | Accepted   | 2026-07-14 |
 | [0014](0014-native-local-backend.md)           | Native local backend                             | Superseded | 2026-07-14 |
 | [0015](0015-derived-unlinked-mention-index.md) | Derived unlinked-mention index                   | Accepted   | 2026-07-14 |
 | [0016](0016-sqlite-local-index.md)             | SQLite (sqlx) local index                        | Superseded | 2026-07-15 |
-| [0017](0017-web-markdown-workspace.md)         | Web Markdown workspace and file-based note graph | Accepted   | 2026-07-15 |
+| [0017](0017-web-markdown-workspace.md)         | Web Markdown workspace and file-based note graph | Partially superseded | 2026-07-15 |
 | [0018](0018-composed-projections.md)           | Composed durable and hot projections             | Superseded | 2026-07-16 |
 | [0019](0019-document-graph-index.md)           | In-memory document-graph index                   | Accepted   | 2026-07-28 |
 | [0020](0020-sqlite-only-search.md)             | SQLite plain-content search, no FTS5, no Tantivy | Accepted   | 2026-07-28 |
 | [0021](0021-canonical-tag-normalization.md)    | Canonical Tag Normalization (#tag)               | Accepted   | 2026-07-29 |
 | [0022](0022-backend-note-context-outgoing-links.md) | Backend-Driven Note Context & Outgoing Links | Accepted   | 2026-07-29 |
+| [0023](0023-reader-first-library-wiki.md)      | Product definition: reader-first library wiki    | Accepted   | 2026-09-30 |
+| [0024](0024-folder-tree-replaces-parents.md)   | Folder tree replaces frontmatter parents/order   | Accepted   | 2026-09-30 |
 
 There is no separate staging file. New decisions should be added as a numbered ADR once the boundary is clear enough to implement.

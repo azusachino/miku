@@ -19,11 +19,11 @@ The default check covers Rust formatting, generated CSS, Prettier, Ruff, Python 
 
 ```bash
 make check-blackbox
-make check-ux-browser
+make e2e
 make check-all-features
 ```
 
-The browser check may need a one-time `uv run playwright install chromium`.
+The browser check needs a one-time `make e2e-install`.
 
 ## Pull requests
 

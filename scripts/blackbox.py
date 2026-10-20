@@ -94,13 +94,17 @@ def main() -> int:
     start_time = time.monotonic()
     context = json_get(f"/api/v1/note-context/{encoded_id}")
     context_latency_ms = (time.monotonic() - start_time) * 1000
-    if "backlinks" not in context or "outgoing" not in context:
-        raise AssertionError(f"note context missing graph fields: {context}")
+    missing = {"parents", "children", "backlinks", "outgoing"} - context.keys()
+    if missing:
+        raise AssertionError(f"note context missing fields {sorted(missing)}: {context}")
     if context_latency_ms > 200:
         raise AssertionError(f"note-context latency degraded: {context_latency_ms:.2f}ms > 200ms")
     print(f"ok: note-context latency={context_latency_ms:.2f}ms (<200ms)")
 
-    json_get(f"/api/v1/note-children/{encoded_id}")
+    # The folder tree is the hierarchy (ADR-0024): list the note's folder.
+    folder = note_id.rpartition("/")[0]
+    if folder:
+        json_get(f"/api/v1/tree?folder={urllib.parse.quote(folder, safe='')}")
 
     # Vendored geektime-docs note read and context verification
     geektime_candidates = [p for p in candidates if "geektime-docs" in p.parts]

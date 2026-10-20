@@ -20,7 +20,6 @@ function folder(path: string): TreeNodeModel {
       path,
       title: path.split("/").at(-1) ?? path,
       identityGenerated: false,
-      parents: [],
       aliases: []
     }
   };

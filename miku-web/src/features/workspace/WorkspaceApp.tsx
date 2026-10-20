@@ -126,7 +126,6 @@ export function WorkspaceScreen() {
       path: activeId,
       title: context.isPending || context.isFetching ? "Loading note…" : activeId.split("/").pop()?.replace(/\.md$/, "") || "Note unavailable",
       icon: "file-text",
-      parents: [],
       aliases: [],
       frontmatter: {},
       updated: "",

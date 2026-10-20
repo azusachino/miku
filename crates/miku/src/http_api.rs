@@ -43,8 +43,6 @@ pub struct NoteSummary {
     pub path: String,
     /// Display title.
     pub title: String,
-    /// Sibling ordering from frontmatter.
-    pub order: Option<i64>,
     /// Whether this note still uses a path-derived generated identity.
     pub identity_generated: bool,
     /// Frontmatter aliases used during wikilink resolution and navigation.
@@ -60,7 +58,8 @@ pub struct TreeNode {
     pub placement_id: String,
     /// Stable note content identity.
     pub note_id: String,
-    /// Parent note identity, absent for a root placement.
+    /// Folder path for a tree listing, the note path for context children,
+    /// and absent at the vault root.
     pub parent_id: Option<String>,
     /// Note summary shown by the tree shell.
     pub note: NoteSummary,
@@ -68,10 +67,10 @@ pub struct TreeNode {
     pub has_children: bool,
 }
 
-/// Tree response filtered to one parent, or root placements when absent.
+/// Entries of one folder, or of the vault root when no folder is given.
 #[derive(Debug, Serialize, ToSchema)]
 pub struct TreeResponse {
-    /// Requested parent filter.
+    /// Listed folder path, absent at the vault root.
     pub parent_id: Option<String>,
     /// Ordered visible placements.
     pub nodes: Vec<TreeNode>,
@@ -180,6 +179,7 @@ pub struct TagResponse {
 }
 
 #[derive(Debug, Deserialize, IntoParams)]
+#[into_params(parameter_in = Query)]
 pub struct TagQuery {
     /// Maximum tags returned per page (default 50, maximum 200).
     limit: Option<usize>,
@@ -226,8 +226,8 @@ pub async fn workspace(State(state): State<AppState>) -> Result<Json<WorkspaceRe
     }))
 }
 
-/// Returns root or parent-filtered tree placements.
-#[utoipa::path(get, path = "/api/v1/tree", params(("parent_id" = Option<String>, Query)), responses((status = 200, body = TreeResponse)))]
+/// Returns the entries of one folder, or of the vault root.
+#[utoipa::path(get, path = "/api/v1/tree", params(("folder" = Option<String>, Query)), responses((status = 200, body = TreeResponse)))]
 pub async fn tree(
     Query(query): Query<TreeQuery>,
     State(state): State<AppState>,
@@ -244,7 +244,7 @@ pub async fn tree(
         .file_tree(FileTreeRequest { folder })
         .await
         .map_err(application_error)?;
-    let parent_id = tree_parent_id(&tree.folder, query.parent_id.clone());
+    let parent_id = tree_parent_id(&tree.folder);
     Ok(Json(TreeResponse {
         parent_id: parent_id.clone(),
         nodes: tree
@@ -336,30 +336,8 @@ pub async fn note_context(
     }))
 }
 
-/// Returns direct children for one note.
-#[utoipa::path(get, path = "/api/v1/note-children/{id}", params(("id" = String, Path)), responses((status = 200, body = TreeResponse), (status = 404)))]
-pub async fn note_children(
-    Path(id): Path<String>,
-    State(state): State<AppState>,
-) -> Result<Json<TreeResponse>, AppError> {
-    let context = state
-        .application
-        .note_context(note_ref(&id).map_err(application_error)?)
-        .await
-        .map_err(application_error)?;
-    let active_note_id = context.note.note.id.as_str().to_string();
-    Ok(Json(TreeResponse {
-        parent_id: Some(active_note_id.clone()),
-        nodes: context
-            .children
-            .into_iter()
-            .map(|node| tree_node_with_parent(node, Some(active_note_id.clone())))
-            .collect(),
-    }))
-}
-
 /// Searches the current read projection.
-#[utoipa::path(get, path = "/api/v1/search", params(("q" = String, Query), ("limit" = Option<usize>, Query)), responses((status = 200, body = SearchResponse)))]
+#[utoipa::path(get, path = "/api/v1/search", params(("q" = String, Query), ("limit" = Option<usize>, Query), ("scope" = Option<String>, Query)), responses((status = 200, body = SearchResponse)))]
 pub async fn search(
     Query(query): Query<SearchQuery>,
     State(state): State<AppState>,
@@ -440,8 +418,6 @@ pub async fn tag_notes(
 pub struct TreeQuery {
     /// Relative folder path; omitted means the vault root.
     pub folder: Option<String>,
-    /// Deprecated note-parent filter retained for compatibility.
-    pub parent_id: Option<String>,
 }
 
 fn application_error(error: ApplicationError) -> AppError {
@@ -460,12 +436,8 @@ fn application_error(error: ApplicationError) -> AppError {
     }
 }
 
-fn tree_parent_id(folder: &RelativePath, compatibility_parent: Option<String>) -> Option<String> {
-    if folder.as_str().is_empty() {
-        compatibility_parent
-    } else {
-        Some(folder.as_str().to_string())
-    }
+fn tree_parent_id(folder: &RelativePath) -> Option<String> {
+    (!folder.as_str().is_empty()).then(|| folder.as_str().to_string())
 }
 
 /// Builds a `TreeNode`, tagging it with `parent_id` when the caller knows
@@ -492,7 +464,6 @@ fn tree_node_with_parent(node: FileNode, parent_id: Option<String>) -> TreeNode 
             note_id: node_id(&node),
             path: node.path.as_str().to_string(),
             title,
-            order: None,
             identity_generated: node.identity_generated,
             aliases: node.aliases,
         },
@@ -512,7 +483,6 @@ fn note_summary_node(node: FileNode) -> NoteSummary {
         note_id: node_id(&node),
         path: node.path.as_str().to_string(),
         title: node.title.unwrap_or(node.name),
-        order: None,
         identity_generated: node.identity_generated,
         aliases: node.aliases,
     }
@@ -546,20 +516,6 @@ fn note_response(document: &VaultDocument) -> NoteResponse {
         "id".to_string(),
         serde_json::Value::String(document.note.id.as_str().to_string()),
     );
-    frontmatter.insert(
-        "parents".to_string(),
-        serde_json::Value::Array(
-            document
-                .note
-                .parents
-                .iter()
-                .map(|parent| serde_json::Value::String(parent.as_str().to_string()))
-                .collect(),
-        ),
-    );
-    if let Some(order) = document.note.order {
-        frontmatter.insert("order".to_string(), serde_json::Value::Number(order.into()));
-    }
     NoteResponse {
         note_id: document.note.id.as_str().to_string(),
         path: document.note.source_path.clone(),
@@ -623,17 +579,13 @@ mod tests {
     use miku_domain::workspace::{Note, NoteId, RevisionToken};
     use std::collections::BTreeMap;
 
-    fn document(id: &str, path: &str, parents: Vec<NoteId>, order: Option<i64>) -> VaultDocument {
+    fn document(
+        id: &str,
+        path: &str,
+        properties: BTreeMap<String, serde_json::Value>,
+    ) -> VaultDocument {
         VaultDocument {
-            note: Note::new(
-                NoteId::new(id).unwrap(),
-                path,
-                id,
-                parents,
-                order,
-                BTreeMap::new(),
-            )
-            .unwrap(),
+            note: Note::new(NoteId::new(id).unwrap(), path, id, properties).unwrap(),
             body: String::new(),
             revision: RevisionToken::new("hash", 1).unwrap(),
             identity_generated: false,
@@ -642,11 +594,24 @@ mod tests {
 
     #[test]
     fn note_response_contains_workspace_frontmatter_and_revision() {
-        let document = document("n1", "Notes/N1.md", Vec::new(), Some(3));
+        let document = document("n1", "Notes/N1.md", BTreeMap::new());
         let response = note_response(&document);
         assert_eq!(response.frontmatter["id"], "n1");
-        assert_eq!(response.frontmatter["order"], 3);
         assert_eq!(response.revision.content_hash, "hash");
+        // ADR-0024: no placement keys are synthesized for a file without them.
+        assert!(response.frontmatter.get("parents").is_none());
+        assert!(response.frontmatter.get("order").is_none());
+    }
+
+    #[test]
+    fn note_response_passes_legacy_parents_and_order_through_as_properties() {
+        let properties = BTreeMap::from([
+            ("parents".to_string(), serde_json::json!(["hub"])),
+            ("order".to_string(), serde_json::json!(3)),
+        ]);
+        let response = note_response(&document("n1", "Notes/N1.md", properties));
+        assert_eq!(response.frontmatter["parents"], serde_json::json!(["hub"]));
+        assert_eq!(response.frontmatter["order"], 3);
     }
 
     fn file_node(path: &str) -> FileNode {
@@ -672,7 +637,7 @@ mod tests {
 
     #[test]
     fn tree_node_with_parent_tags_children_with_the_owning_note() {
-        // Regression: note_context/note_children previously always mapped
+        // Regression: note_context previously always mapped
         // children through plain tree_node, so parent_id was hardcoded
         // None in every response regardless of the actual relationship.
         let node = tree_node_with_parent(file_node("Notes/Child.md"), Some("parent-1".to_string()));
@@ -683,10 +648,10 @@ mod tests {
     fn folder_scoped_tree_applies_parent_to_the_response_and_every_child() {
         let folder = RelativePath::new("geektime-docs/AI-\u{5927}\u{6570}\u{636e}").unwrap();
         assert_eq!(
-            tree_parent_id(&folder, None),
+            tree_parent_id(&folder),
             Some("geektime-docs/AI-\u{5927}\u{6570}\u{636e}".to_string())
         );
-        assert_eq!(tree_parent_id(&RelativePath::root(), None), None);
+        assert_eq!(tree_parent_id(&RelativePath::root()), None);
     }
 
     #[test]

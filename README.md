@@ -16,7 +16,9 @@ Plain Markdown files. Fast page navigation. Backlinks, tags, and search without 
 
 ## Why Miku Note?
 
-Miku Note is a personal wiki with a deliberately small persistence model:
+Miku Note is a self-hosted, reader-first wiki for a large Markdown library. It turns a folder of Markdown files into a fast, linked, searchable website, and that folder stays the only source of truth. It sits alongside your editor (Obsidian, a text editor, git) rather than replacing it; see [ADR-0023](miku_docs/adr/0023-reader-first-library-wiki.md) for goals and non-goals.
+
+It keeps a deliberately small persistence model:
 
 - Your notes and assets live as ordinary files under `miku_docs/`.
 - The index is derived state. Delete it and Miku can rebuild it from Markdown.
@@ -35,7 +37,7 @@ This makes the vault easy to inspect, back up, version, or edit with another too
 | Knowledge graph | Backlinks, linked mentions, tags, and paginated tag views                                                  |
 | Search          | Metadata quick-switch plus embedded full-text content search powered by Rust's grep/ignore crates          |
 | Editing         | Browser editor, inline reader editing, preview, atomic writes, and conflict-aware saves                    |
-| Runtime         | SQLite search and durable metadata by default; MemoryIndex graph; optional Postgres and Valkey profiles    |
+| Runtime         | SQLite search and durable metadata by default; MemoryIndex graph; Postgres and Valkey profiles are frozen  |
 | UX              | Light/dark themes, reading-width modes, lazy editor/highlighter loading, and a focused command palette     |
 
 ## Quick start
@@ -106,7 +108,7 @@ Use the repository Makefile as the stable interface:
 make check                  # formatting, CSS, lint, Python checks, Rust tests
 make check-all-features     # compile and test every Cargo feature combination
 make check-blackbox         # live HTTP checks against a running server
-make check-ux-browser       # Playwright browser acceptance checks
+make e2e                    # Playwright specs against a fixture vault (make e2e-install once)
 make release                # crates.io leaf package dry-runs
 make validate               # check plus release build
 ```

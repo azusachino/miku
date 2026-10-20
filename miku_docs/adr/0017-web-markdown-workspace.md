@@ -3,14 +3,14 @@ id: ADR-0017
 type: adr
 title: ADR-0017 — Web Markdown workspace and file-based note graph
 slug: web-markdown-workspace
-status: Accepted
-updated: 2026-07-15
+status: Partially superseded by ADR-0023
+updated: 2026-09-30
 date-proposed: 2026-07-15
 date-accepted: 2026-07-15
 deciders: [haru]
 mirror: asobi:miku:decision:web-markdown-workspace
 supersedes: [ADR-0005, ADR-0007, ADR-0016]
-superseded-by:
+superseded-by: [ADR-0023]
 relates-to: [ADR-0002, ADR-0003, ADR-0006, ADR-0010, ADR-0015]
 rejects: [sqlite-as-product-model, server-rendered-reader-shell, path-only-note-tree]
 impacts: [miku-web, crates/miku-domain, crates/miku-app, crates/miku-indexer, crates/miku-markdown, openapi.json]
@@ -19,6 +19,8 @@ tags: [architecture, frontend, markdown, workspace, tree, index, rust]
 ---
 
 ## ADR-0017 — Web Markdown workspace and file-based note graph
+
+Partially superseded by ADR-0023. Still in force: the React frontend boundary, domain-oriented HTTP APIs, and the file-based note graph. Replaced: the Trilium-like workspace identity, tabs and splits, hoisting, bookmarks, and clone placements. Frontmatter `parents` is frozen pending its own ADR.
 
 ### Decision
 
