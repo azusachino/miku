@@ -88,6 +88,16 @@ podman-compose down
 
 The native stack above is preferred for day-to-day local development. Docker Compose can still be used when its compatibility with `compose.yml` is verified separately.
 
+#### Runtime base image (local-only)
+
+`Containerfile` builds the scale-profile image on the workstation's shared runtime base `azusachino.com/media-base:py3.14-trixie-r2` (Debian trixie). That tag is **local-only**: it is not published to
+any registry, it exists only in the workstation's local podman store. On a clean machine or a CI runner, build or import the base first (recipe: `containers/media-base` in harus-workstation;
+floating, refreshed with `REFRESH=1`), otherwise the build fails with *image not known*. Never pull the tag.
+
+```bash
+podman build -t azusachino.com/miku:local .
+```
+
 ### Database
 
 The SQLite index is stored at `miku_docs/.miku-index.sqlite` when `MIKU_INDEX_BACKEND=sqlite` is selected. Postgres migrations live under `crates/miku-index-postgres/migrations/` and are used
