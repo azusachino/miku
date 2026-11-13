@@ -117,6 +117,8 @@ The generated Tailwind stylesheet is committed alongside its input so a checkout
 
 Before opening a pull request, run `make check`. Keep user content, local indexes, `.pgdata/`, screenshots, and other runtime artifacts out of commits.
 
+The scale-profile container image builds on the workstation's shared runtime base `azusachino.com/media-base:py3.14-trixie-r2`, a **local-only** tag — on a clean machine or CI runner, build or import that base first (see [miku_docs/setup.md](miku_docs/setup.md#runtime-base-image-local-only)); never pull it.
+
 ## Project status
 
 Miku Note is an early, actively evolving project. The current milestone is `v0.0.5`; the user-facing changelog is [`miku_docs/changelog.md`](miku_docs/changelog.md). APIs, templates, and configuration
