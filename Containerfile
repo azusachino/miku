@@ -28,12 +28,11 @@ COPY crates ./crates
 RUN cargo build --locked --package miku --bin miku --no-default-features --features postgres-valkey
 
 # ---- Runtime stage ----
-FROM debian:bookworm-slim
+# Shared workstation base (Debian trixie): provides ca-certificates and tini
+# (/usr/bin/tini), so no apt runtime packages are installed here.
+FROM azusachino.com/media-base:py3.14-trixie-r2
 
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates tini \
-    && rm -rf /var/lib/apt/lists/* \
-    && groupadd --system miku \
+RUN groupadd --system miku \
     && useradd --system --gid miku miku
 
 WORKDIR /app
