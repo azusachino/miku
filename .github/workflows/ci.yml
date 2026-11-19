@@ -10,16 +10,16 @@ jobs:
   check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: cachix/install-nix-action@v25
+      - uses: actions/checkout@v7
+      - uses: cachix/install-nix-action@v31
       - run: nix develop --command make check
       - run: nix develop --command make check-all-features
 
   e2e:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: cachix/install-nix-action@v25
+      - uses: actions/checkout@v7
+      - uses: cachix/install-nix-action@v31
       - name: Install frontend dependencies
         run: nix develop --command bun install --frozen-lockfile --cwd miku-web
       - name: Install Chromium and its system libraries
@@ -33,7 +33,7 @@ jobs:
         run: nix develop --command make e2e
       - name: Upload Playwright results
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: playwright-results
           path: miku-web/test-results/
