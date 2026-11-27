@@ -8,9 +8,9 @@
     "build": "tsc -b && vite build",
     "format": "prettier --write 'src/**/*.{ts,tsx,css}'",
     "format:check": "prettier --check 'src/**/*.{ts,tsx,css}'",
-    "check": "tsc -b --pretty false && vitest run --dir src",
+    "check": "tsc -b --pretty false && NODE_OPTIONS=--no-experimental-webstorage vitest run --dir src",
     "generate:api": "openapi-typescript http://127.0.0.1:3000/api/openapi.json -o src/features/workspace/generated/api.ts",
-    "test": "vitest run --dir src",
+    "test": "NODE_OPTIONS=--no-experimental-webstorage vitest run --dir src",
     "test:watch": "vitest --dir src"
   },
   "dependencies": {
